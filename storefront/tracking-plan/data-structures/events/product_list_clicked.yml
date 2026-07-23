@@ -1,0 +1,33 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: event
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Marker event for selecting a product from a rail or collection list.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: product_list_clicked
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    list_id:
+      type: string
+      maxLength: 128
+      description: Stable identifier for the list the user clicked from.
+    list_name:
+      type: string
+      maxLength: 256
+      description: Human-readable name of the source merchandised list.
+    product_id:
+      type: string
+      maxLength: 128
+      description: Stable identifier of the selected product.
+  required:
+    - list_id
+    - list_name
+    - product_id
+  additionalProperties: false

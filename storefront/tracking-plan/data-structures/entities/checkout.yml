@@ -1,0 +1,40 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Checkout context attached to checkout journey events.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: checkout
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    checkout_step:
+      type: string
+      maxLength: 32
+      description: The currently viewed checkout step.
+    item_count:
+      type: integer
+      minimum: 0
+      maximum: 1000
+      description: Number of items in the checkout.
+    order_value:
+      type: number
+      minimum: 0
+      maximum: 100000
+      description: Current order value at this step.
+    currency:
+      type: string
+      maxLength: 3
+      description: ISO currency code.
+  required:
+    - checkout_step
+    - item_count
+    - order_value
+    - currency
+  additionalProperties: false
