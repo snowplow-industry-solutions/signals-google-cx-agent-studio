@@ -41,6 +41,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const parsed = JSON.parse(stored) as CartLineItem[];
       if (parsed.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- deferred localStorage load must run post-hydration so SSR markup matches the first client render
         setLineItems(parsed);
       }
     } catch {
