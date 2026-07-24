@@ -18,10 +18,10 @@ Prepare everything that can be done *before* the Snowplow Free Trial org exists,
 
 ## Acceptance criteria
 
-- [ ] Storefront tracker reads collector URL + app ID from env; `.env.example` documents every required var
-- [ ] Publish script runs with env-supplied credentials, exits with a clear error when they're absent, and dry-run validates config locally
-- [ ] Runbook skeleton covers org creation → credentials → env setup → publish → verification, with explicit placeholders for live values
-- [ ] No credentials or org-specific values committed
+- [x] Storefront tracker reads collector URL + app ID from env; `.env.example` documents every required var
+- [x] Publish script runs with env-supplied credentials, exits with a clear error when they're absent, and dry-run validates config locally
+- [x] Runbook skeleton covers org creation → credentials → env setup → publish → verification, with explicit placeholders for live values
+- [x] No credentials or org-specific values committed
 
 ## Blocked by
 
