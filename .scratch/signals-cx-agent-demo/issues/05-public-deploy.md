@@ -1,6 +1,7 @@
 # 05 — Public deploy to Vercel
 
 Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 
@@ -9,6 +10,8 @@ Status: ready-for-agent
 ## What to build
 
 Deploy the storefront to Vercel so the agent-facing endpoints are reachable over public HTTPS (the OpenAPI tool requirement) and the demo site itself is publicly browsable. Signals credentials and the shared secret configured as server-side env vars; tracker pointed at the trial collector in the deployed environment.
+
+**Agent constraint:** prepare everything (Vercel config, env var documentation, deploy scripts, runbook steps) but do **not** execute the public deploy. The deploy itself is human-triggered — the acceptance criteria below are verified by the human after they run the deploy.
 
 ## Acceptance criteria
 

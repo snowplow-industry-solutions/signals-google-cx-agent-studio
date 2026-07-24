@@ -1,6 +1,7 @@
 # 07 — Chat widget end-to-end
 
 Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 

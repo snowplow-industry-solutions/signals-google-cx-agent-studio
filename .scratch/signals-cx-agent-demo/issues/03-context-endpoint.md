@@ -1,6 +1,7 @@
 # 03 — Agent context endpoint (core tracer)
 
 Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 
@@ -37,4 +38,4 @@ Test at the route-handler seam (Request in, Response out) with the Signals SDK m
 ## Blocked by
 
 - `01-storefront-foundation.md`
-- `02-live-pipeline.md`
+- `02b-trial-org.md`
