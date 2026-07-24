@@ -1,6 +1,6 @@
 # 04 — Catalog search endpoint
 
-Status: ready-for-agent
+Status: awaiting-human-test
 
 ## Parent
 
