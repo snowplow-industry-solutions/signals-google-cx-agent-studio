@@ -82,15 +82,16 @@ export function SnowplowProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const collectorUrl = process.env.NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL;
-    if (!collectorUrl) {
+    const appId = process.env.NEXT_PUBLIC_SNOWPLOW_APP_ID;
+    if (!collectorUrl || !appId) {
       logSignalsDemo(
-        "NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL is not set; Snowplow tracking disabled"
+        "NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL or NEXT_PUBLIC_SNOWPLOW_APP_ID is not set; Snowplow tracking disabled"
       );
       return;
     }
 
     newTracker(TRACKER_NAME, collectorUrl, {
-      appId: "signals-workshop-fashion-demo",
+      appId,
       platform: "web",
       contexts: {
         webPage: true,
