@@ -118,9 +118,9 @@ export const products: Product[] = [
     occasion: "Evening",
     material: "Brushed steel",
     image:
-      "https://images.unsplash.com/photo-1681091639085-c6d0f85e39a3?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1508962914676-134849a727f0?auto=format&fit=crop&w=1200&q=80",
     thumbnail:
-      "https://images.unsplash.com/photo-1681091639085-c6d0f85e39a3?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1508962914676-134849a727f0?auto=format&fit=crop&w=800&q=80",
     collections: ["city-after-dark", "accessory-atelier"],
     complementaryCategories: ["Tailoring", "Dresses", "Accessories"],
     stylingNotes: ["Pairs elegantly with sharp black suiting.", "Use as a single focal accessory."],
@@ -378,16 +378,16 @@ export const products: Product[] = [
   },
   {
     id: "p16",
-    slug: "rose-toned-chronograph",
+    slug: "rose-toned-dress-watch",
     sku: "ACC-WAT-015",
-    name: "Rose-Toned Chronograph",
+    name: "Rose-Toned Dress Watch",
     designer: "Arc Studio",
     category: "Watches",
     price: 1560,
     currency: "USD",
-    description: "A warm-toned timepiece with sub-dial precision.",
+    description: "A warm-toned dress watch with a clean, unadorned dial.",
     longDescription:
-      "A refined chronograph with a brushed rose-gold case, ivory dial, and Italian leather strap. Three sub-dials lend it technical credibility without sacrificing elegance.",
+      "A refined dress watch with a brushed rose-gold case, minimal ivory dial, and Italian leather strap. Slim baton markers keep the face quiet enough to sit beneath a shirt cuff.",
     colorFamily: "Silver",
     silhouette: "Sculptural",
     occasion: "City",
@@ -399,7 +399,7 @@ export const products: Product[] = [
     collections: ["accessory-atelier", "city-uniform"],
     complementaryCategories: ["Tailoring", "Knitwear", "Bags"],
     stylingNotes: ["A singular wrist statement — skip the bracelet.", "Warm tones pair naturally with camel and ivory."],
-    tags: ["watch", "chronograph", "accessories", "city"],
+    tags: ["watch", "dress-watch", "accessories", "city"],
   },
   {
     id: "p17",

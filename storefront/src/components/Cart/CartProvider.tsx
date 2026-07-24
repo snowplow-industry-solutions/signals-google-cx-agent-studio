@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -26,24 +27,35 @@ interface CartContextValue {
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [lineItems, setLineItems] = useState<CartLineItem[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
+  // Start empty on both server and client so SSR markup matches the first
+  // client render; the stored cart is loaded after hydration.
+  const [lineItems, setLineItems] = useState<CartLineItem[]>([]);
+  const hasHydratedCart = useRef(false);
 
+  useEffect(() => {
     const stored = window.localStorage.getItem("atelier-signals-cart");
     if (!stored) {
-      return [];
+      return;
     }
 
     try {
-      return JSON.parse(stored) as CartLineItem[];
+      const parsed = JSON.parse(stored) as CartLineItem[];
+      if (parsed.length > 0) {
+        setLineItems(parsed);
+      }
     } catch {
-      return [];
+      // Ignore malformed stored carts.
     }
-  });
+  }, []);
 
   useEffect(() => {
+    // Skip the initial empty render so the stored cart isn't overwritten
+    // before it has been loaded.
+    if (!hasHydratedCart.current) {
+      hasHydratedCart.current = true;
+      return;
+    }
+
     window.localStorage.setItem("atelier-signals-cart", JSON.stringify(lineItems));
   }, [lineItems]);
 

@@ -32,3 +32,9 @@ None - can start immediately
 - Removed hardcoded fallback to the internal sales prod collector in `SnowplowProvider.tsx`; tracker now no-ops with a console note when `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` is unset (tests stub the env var).
 - Documented all six env vars in `storefront/.env.example`.
 - Verified: 25/25 tests, lint clean, build green, all five page types render 200 with graceful Signals-degradation (503 + console warning, no crash) when creds absent.
+
+**2026-07-24 (agent, after manual review feedback):**
+
+- Fixed cart hydration error: `CartProvider` read `localStorage` in its `useState` initializer, so SSR markup said `Cart (0)` while a client with a stored cart hydrated to a different count. Cart now starts empty and loads from storage after hydration (first persist skipped so the stored cart isn't wiped). Verified in browser: add item → reload → zero console errors, count persists.
+- p5 (Sculpted Silver Cuff Watch) image was a plain cuff, not a watch; replaced with a logo-free silver watch-dial macro (quadrant-inspected at full res).
+- p16 renamed Rose-Toned Chronograph → Rose-Toned Dress Watch (image has no sub-dials); slug, description, longDescription, and tags updated to dress-watch copy. No references outside `products.ts`.
