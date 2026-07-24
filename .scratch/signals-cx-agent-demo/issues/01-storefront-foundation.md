@@ -1,6 +1,6 @@
 # 01 — Storefront foundation
 
-Status: ready-for-human
+Status: done
 
 ## Parent
 
