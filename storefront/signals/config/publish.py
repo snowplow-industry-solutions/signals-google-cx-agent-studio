@@ -8,7 +8,23 @@ from signals.config.interventions import build_stylist_intervention
 from signals.config.services import build_service
 
 
+REQUIRED_ENV_VARS = [
+    "SIGNALS_DEPLOYED_URL",
+    "SNOWPLOW_CONSOLE_API_KEY",
+    "SNOWPLOW_CONSOLE_API_KEY_ID",
+    "SNOWPLOW_CONSOLE_ORG_ID",
+]
+
+
 def build_client():
+    missing = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name)]
+    if missing:
+        raise SystemExit(
+            "Missing required environment variable(s) for Signals publish: "
+            f"{', '.join(missing)}. Set them in .env.local (see .env.example), "
+            "or run with --dry-run to validate the config without credentials."
+        )
+
     return Signals(
         api_url=os.environ["SIGNALS_DEPLOYED_URL"],
         api_key=os.environ["SNOWPLOW_CONSOLE_API_KEY"],
