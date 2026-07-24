@@ -102,6 +102,7 @@ describe("SnowplowProvider", () => {
       "NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL",
       "https://collector.example.test"
     );
+    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_APP_ID", "signals-workshop-fashion-demo-dev");
     container = document.createElement("div");
     document.body.appendChild(container);
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -139,11 +140,27 @@ describe("SnowplowProvider", () => {
     });
 
     expect(newTrackerMock).toHaveBeenCalledTimes(1);
+    expect(newTrackerMock).toHaveBeenCalledWith(
+      "fashion_demo",
+      "https://collector.example.test",
+      expect.objectContaining({ appId: "signals-workshop-fashion-demo-dev" })
+    );
     expect(trackDemoPageViewMock).toHaveBeenCalledTimes(1);
     expect(trackDemoPageViewMock).toHaveBeenCalledWith("/");
     expect(newTrackerMock.mock.invocationCallOrder[0]).toBeLessThan(
       trackDemoPageViewMock.mock.invocationCallOrder[0]
     );
+  });
+
+  it("disables tracking when the app ID env var is not set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_APP_ID", "");
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SnowplowProvider>ready</SnowplowProvider>);
+    });
+
+    expect(newTrackerMock).not.toHaveBeenCalled();
   });
 
   it("resolves tracker readiness after provider initialization", async () => {
