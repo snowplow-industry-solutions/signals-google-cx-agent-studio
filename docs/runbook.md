@@ -56,7 +56,39 @@ Never commit real values. They live only in `storefront/.env.local`
 3. Browse a few product pages, add something to cart, so the pipeline has
    traffic to publish against.
 
-## 4. Publish the Signals config
+## 4. Seed the org with the tracking plan (data structures + data products)
+
+A fresh trial org has none of the demo's custom schemas, and the Signals
+publish hard-fails without them (404 `Schema for event 'product_viewed'
+(vendor: 'com.snowplow_demo.fashion', ...) was not found or not in
+production`). The whole tracking plan lives in the repo as config-as-code
+under `storefront/tracking-plan/`; seed the org with
+[snowplow-cli](https://docs.snowplow.io/docs/data-product-studio/snowplow-cli/)
+(`brew install snowplow-product/taps/snowplow-cli` — auth uses the same
+`SNOWPLOW_CONSOLE_*` env vars captured in step 2).
+
+From `storefront/` with `.env.local` sourced
+(`set -a; . ./.env.local; set +a`):
+
+1. Validate first (read-only; also confirms the credentials work):
+   ```
+   snowplow-cli data-structures validate ./tracking-plan/data-structures
+   ```
+   Expect a `will create` line per structure (8 events + 4 entities, vendor
+   `com.snowplow_demo.fashion`).
+2. Publish to dev, then promote to prod — Signals only accepts schemas that
+   are **in production**:
+   ```
+   snowplow-cli data-structures publish dev ./tracking-plan/data-structures
+   snowplow-cli data-structures publish prod ./tracking-plan/data-structures
+   ```
+3. Register the data product + source applications (not required by Signals,
+   but keeps the org's tracking scenarios in sync with the repo):
+   ```
+   snowplow-cli data-products publish ./tracking-plan/data-products
+   ```
+
+## 5. Publish the Signals config
 
 From `storefront/`, with `.env.local` populated:
 
@@ -84,7 +116,7 @@ From `storefront/`, with `.env.local` populated:
 4. Confirm the command prints the published object names/versions with no
    error.
 
-## 5. End-to-end verification
+## 6. End-to-end verification
 
 1. In a browser, load the storefront pointed at the trial collector, browse
    several products across at least one category, and add one to cart.
@@ -100,6 +132,10 @@ From `storefront/`, with `.env.local` populated:
 
 ## Troubleshooting
 
+- **Signals publish fails with 404 "Schema for event ... was not found or not
+  in production"** — the org's schema registry is missing the tracking plan,
+  or the structures were only published to dev. Run step 4, including the
+  `publish prod` promotion.
 - **Publish script exits with "Missing required environment variable(s)"** —
   one of the four credential vars isn't set in the current shell; re-run with
   `set -a; . ./.env.local; set +a;` prefixed, or export them directly.
