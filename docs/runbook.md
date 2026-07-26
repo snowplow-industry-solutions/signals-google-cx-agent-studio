@@ -60,7 +60,15 @@ Never commit real values. They live only in `storefront/.env.local`
 
 From `storefront/`, with `.env.local` populated:
 
-1. Dry run first — validates the attribute group, service, and intervention
+1. Install the publish script's Python dependencies (needs Python 3.11+; the
+   script imports `snowplow_signals`, declared in `storefront/pyproject.toml`):
+   ```
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+   On later visits just re-activate the venv (`source .venv/bin/activate`).
+2. Dry run first — validates the attribute group, service, and intervention
    objects locally without calling the live API. Works even without
    credentials set:
    ```
@@ -68,12 +76,12 @@ From `storefront/`, with `.env.local` populated:
    ```
    Confirm the printed objects look right (attribute group name
    `fashion_ecommerce_session_attributes`, service `fashion_ecommerce_demo`).
-2. Real publish — requires all four credential env vars; the script exits
+3. Real publish — requires all four credential env vars; the script exits
    with a clear error naming any that are missing:
    ```
    set -a; . ./.env.local; set +a; npm run signals:publish
    ```
-3. Confirm the command prints the published object names/versions with no
+4. Confirm the command prints the published object names/versions with no
    error.
 
 ## 5. End-to-end verification
