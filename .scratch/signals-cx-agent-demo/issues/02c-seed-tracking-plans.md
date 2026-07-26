@@ -1,6 +1,6 @@
 # 02c — Deterministic tracking-plan seeding script + tracking-assets rename
 
-Status: ready-for-agent
+Status: awaiting-human-test
 Checkpoint: human-test-required
 
 ## Parent
