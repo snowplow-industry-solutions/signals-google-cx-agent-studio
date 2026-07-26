@@ -3,3 +3,5 @@ node_modules/
 !.env.example
 .next/
 .vercel/
+.claude/worktrees/
+.claude/settings.local.json
