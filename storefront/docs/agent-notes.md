@@ -32,8 +32,8 @@
 ## Snowplow Assets
 
 - Tracking plan YAML:
-  - `tracking-plan/data-structures`
-  - `tracking-plan/data-products`
+  - `tracking-assets/data-structures`
+  - `tracking-assets/tracking-plans`
 
 - Signals Python SDK config:
   - `signals/config/attribute_keys.py`
