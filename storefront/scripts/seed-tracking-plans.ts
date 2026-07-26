@@ -181,8 +181,8 @@ function planCommands(buildDir: string): Array<{ command: string; args: string[]
   ];
 }
 
-function runCommand(command: string, args: string[], cwd: string): void {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit" });
+function runCommand(command: string, args: string[], cwd: string, env: Env): void {
+  const result = spawnSync(command, args, { cwd, stdio: "inherit", env: env as NodeJS.ProcessEnv });
   if (result.error) {
     throw result.error;
   }
@@ -236,7 +236,7 @@ function main(): void {
     }
 
     for (const { command, args } of commands) {
-      runCommand(command, args, STOREFRONT_ROOT);
+      runCommand(command, args, STOREFRONT_ROOT, env);
     }
   } finally {
     rmSync(buildDir, { recursive: true, force: true });
