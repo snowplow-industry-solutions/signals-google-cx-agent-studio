@@ -1,6 +1,6 @@
 apiVersion: v1
 resourceType: data-product
-resourceName: 97eaf53e-c18b-4bd8-8872-753250ce0a1a
+resourceName: dfcf9c19-564c-4677-8af1-8079ac481ac4
 data:
   name: Atelier Signals Ecommerce Demo
   domain: Product
@@ -12,7 +12,7 @@ data:
   sourceApplications:
     - $ref: ./source-applications/fashion_storefront.yml
   eventSpecifications:
-    - resourceName: 73a6e22d-bec6-4245-82c1-8ea2860f3bda
+    - resourceName: fc829dc5-648d-4978-a3f9-e28971499509
       name: Product list viewed
       description: Fires when a merchandising rail, homepage feature grid, or collection listing is viewed.
       triggers:
@@ -27,7 +27,7 @@ data:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 1
         enriched: []
-    - resourceName: 63aafc8b-ef54-48d4-ae54-c158a7e2797d
+    - resourceName: 455b0287-916f-49c3-92f1-0fb9f26c865e
       name: Product list clicked
       description: Fires when a shopper selects a product from a collection or curated rail.
       triggers:
@@ -43,7 +43,7 @@ data:
             minCardinality: 1
             maxCardinality: 1
         enriched: []
-    - resourceName: 881ab873-c14d-4ebb-bc1f-f5746e2cabfe
+    - resourceName: 8a9d950c-f78a-4cc9-9e58-acf5538c6679
       name: Product viewed
       description: Fires on product detail page loads for fashion items.
       triggers:
@@ -59,7 +59,7 @@ data:
             minCardinality: 1
             maxCardinality: 1
         enriched: []
-    - resourceName: b4d40bd1-90cb-45df-a9ab-0e7746033813
+    - resourceName: 2d53b8a3-05eb-48e3-add1-68427a23479e
       name: Cart viewed
       description: Fires when the shopper opens the dedicated cart experience.
       triggers:
@@ -77,7 +77,7 @@ data:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 0
         enriched: []
-    - resourceName: 7386e103-3864-49cb-ae2d-c5dee4458901
+    - resourceName: c510a99b-9d55-4d9f-9285-a74516d07694
       name: Cart updated
       description: Fires when an item is added, removed, or updated in the cart.
       triggers:
@@ -96,7 +96,7 @@ data:
             minCardinality: 1
             maxCardinality: 1
         enriched: []
-    - resourceName: 9b6591b4-d9d4-4fbe-acc6-b0be1edccacb
+    - resourceName: 3b1d6cf2-f864-4687-9fd4-1e9600c0b07a
       name: Checkout started
       description: Fires when the shopper enters the checkout journey from cart.
       triggers:
@@ -114,7 +114,7 @@ data:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 0
         enriched: []
-    - resourceName: a258931b-cac7-4fff-a76e-6f93635e918c
+    - resourceName: fb0edc08-3507-4ca5-a88d-2dafca9a7742
       name: Checkout step viewed
       description: Fires when a shopper views an individual checkout step such as shipping or payment.
       triggers:
@@ -132,7 +132,7 @@ data:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 0
         enriched: []
-    - resourceName: 7a587e2b-3010-4f41-8301-72d59bc014c2
+    - resourceName: c84ee829-32e7-4138-ad1b-cde890d773de
       name: Checkout completed
       description: Fires when the shopper completes the demo order flow.
       triggers:

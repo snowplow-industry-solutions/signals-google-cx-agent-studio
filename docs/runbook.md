@@ -83,10 +83,15 @@ From `storefront/` with `.env.local` sourced
    snowplow-cli data-structures publish prod ./tracking-plan/data-structures
    ```
 3. Register the data product + source applications (not required by Signals,
-   but keeps the org's tracking scenarios in sync with the repo):
+   but keeps the org's tracking scenarios in sync with the repo). Source app,
+   data product, and event spec IDs are **globally unique across all orgs** —
+   IDs ever published from a previous org fail with `Source application with
+   given id already exists`. Re-mint them first when seeding a fresh org:
    ```
+   python3 ./tracking-plan/remint-ids.py
    snowplow-cli data-products publish ./tracking-plan/data-products
    ```
+   Commit the re-minted IDs so the repo tracks what the current org uses.
 
 ## 5. Publish the Signals config
 
@@ -132,6 +137,10 @@ From `storefront/`, with `.env.local` populated:
 
 ## Troubleshooting
 
+- **Data products publish fails with "Source application with given id already
+  exists"** — the tracking plan's UUIDs were already claimed by another org
+  (they're global primary keys). Run `python3 ./tracking-plan/remint-ids.py`
+  and re-publish.
 - **Signals publish fails with 404 "Schema for event ... was not found or not
   in production"** — the org's schema registry is missing the tracking plan,
   or the structures were only published to dev. Run step 4, including the

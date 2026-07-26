@@ -1,6 +1,6 @@
 apiVersion: v1
 resourceType: source-application
-resourceName: 1e0850e2-1e13-4637-b612-03cbf6639bcd
+resourceName: 0871f451-97f6-4d92-9dd0-4dc94294f736
 data:
   name: Atelier Signals Storefront
   domain: Product
