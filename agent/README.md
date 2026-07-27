@@ -8,8 +8,18 @@ simulator verification happen in the console, by a human. See
 `.scratch/signals-cx-agent-demo/issues/06-cx-agent-and-tools.md` for the
 acceptance criteria.
 
-- `instructions.md` -- the concierge persona and tool-use instructions,
-  pasted verbatim into the agent's instructions field in the console.
+- `instructions.console.txt` -- the **live console copy**: the persona and
+  tool-use contract in CX Agent Studio's structured format, with
+  `{@TOOL: ...}` references resolving to the attached tools
+  (`getUserContext_getUserContext` / `searchCatalog_searchCatalog` — the
+  toolset-qualified names). Paste this verbatim into the **Root Agent
+  node's instructions field** (not Settings → Advanced; that's the
+  app-wide `globalInstruction`). If the console flags the tool references,
+  re-insert them with the editor's `@` picker rather than hand-typing.
+- `instructions.md` -- the human-readable source for the same contract.
+  Behavioural changes start here, then get mirrored into
+  `instructions.console.txt` (reformatting via the console's Gemini
+  assistant is fine — diff the result against this file before accepting).
 - `tools/get-user-context.openapi.yaml` -- OpenAPI schema for the
   `getUserContext` tool (`GET /api/agent/context`), imported as an OpenAPI
   tool in CX Agent Studio.

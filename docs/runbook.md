@@ -234,14 +234,23 @@ storefront already deployed per §7 (a public HTTPS URL and a minted
 
 1. In CX Agent Studio, create a new customer-facing agent in the sandbox
    project.
-2. Paste the full contents of `agent/instructions.md` into the **Root
-   Agent node's own instructions field** (on the canvas), verbatim — it
-   defines the concierge persona, the one-call-per-turn tool contract, and
-   the degraded-session fallback behaviour. Not Settings → Advanced: that
-   is the app-wide `globalInstruction`, which applies to every agent in
-   the app — it works while the app has a single agent, but the persona
-   would leak into any later-added agent. Reserve it for genuinely
-   app-wide policy.
+2. Paste the full contents of `agent/instructions.console.txt` into the
+   **Root Agent node's own instructions field** (on the canvas), verbatim
+   — it defines the concierge persona, the one-call-per-turn tool
+   contract, and the degraded-session fallback behaviour, in the console's
+   structured format with `{@TOOL: ...}` references. Not Settings →
+   Advanced: that is the app-wide `globalInstruction`, which applies to
+   every agent in the app — it works while the app has a single agent,
+   but the persona would leak into any later-added agent. Reserve it for
+   genuinely app-wide policy.
+
+   The `{@TOOL: ...}` references must resolve against the attached tools
+   (do §8.3 first). If the editor flags "tool not found", delete the
+   reference and re-insert it with the editor's `@` picker — the
+   resolvable names are toolset-qualified
+   (`getUserContext_getUserContext`, `searchCatalog_searchCatalog`).
+   `agent/instructions.md` is the human-readable source for the same
+   contract; edit there first and mirror changes into the console copy.
 
 ### 8.3 Import the two OpenAPI tools
 
