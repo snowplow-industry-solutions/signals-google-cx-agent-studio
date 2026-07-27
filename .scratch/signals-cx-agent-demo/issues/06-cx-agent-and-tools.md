@@ -21,9 +21,9 @@ Verify-at-build items from the PRD land here: session-context variable naming in
 
 - [ ] Agent exists in the sandbox project; required APIs enabled; applicable resources labelled per policy
 - [ ] Both tools defined from OpenAPI schemas (schemas stored in the repo's agent directory) and calling the deployed endpoints successfully
-- [ ] Session id flows from a session context variable into the context tool request
+- [x] Session id flows from a session context variable into the context tool request
 - [ ] In the simulator with a freshly browsed session id: agent greets/responds with correct real-time context (favourite designer, cart contents) and recommends real catalog products
-- [ ] Agent handles the degraded (unknown session) payload gracefully — generic concierge behaviour, no error talk
+- [x] Agent handles the degraded (unknown session) payload gracefully — generic concierge behaviour, no error talk
 - [x] Setup steps + agent instructions captured in the repo (agent directory + runbook)
 
 ## Blocked by

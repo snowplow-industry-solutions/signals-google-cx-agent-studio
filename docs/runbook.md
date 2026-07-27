@@ -321,7 +321,22 @@ simulator.
    `agent/instructions.md`'s degraded-session section — no mention of
    errors, missing data, or anything technical.
 5. Record the result (pass/fail + timestamp) here:
-   `<PLACEHOLDER: simulator verification run log>`.
+   - 2026-07-27 ~23:00 UTC, live-context run: variable set (via its
+     temporary default value) to a freshly-browsed session id. Trace shows
+     `getUserContext` called with `args: {}` (session id injected, not
+     model-produced), endpoint returned the session's real profile
+     (favourite designer Maison Cendre, Camel Cashmere Wrap Coat added to
+     cart), and the agent's reply reflected it in persona. PASS.
+   - 2026-07-27 ~23:03 UTC, degraded run: variable unset. Endpoint
+     returned the empty payload; agent fell back to generic warm concierge
+     behaviour ("still getting to know your style"), no error talk. PASS.
+   - Setup gotchas hit on the way (both now in Troubleshooting): the CES
+     service agent needed `secretmanager.secretAccessor` on the shared
+     secret, and re-importing the OpenAPI schema detached the tools from
+     the Root agent node, leaving only the built-in `end_session`
+     (symptom: agent "calls" the right tool per its reasoning but the
+     trace shows `end_session` with placeholder args, and the
+     conversation silently ends).
 
 ## Troubleshooting
 
@@ -356,6 +371,33 @@ simulator.
 - **CX Agent Studio tool test returns 401** — the API-key header name isn't
   exactly `x-agent-api-key`, or the key value doesn't match the deployed
   `AGENT_SHARED_SECRET` (§7's Vercel value, not a local one).
+- **Tool test fails with "Failed to get secret ... please check that the
+  service account has the Secret Manager Secret Accessor role"** — the
+  Customer Engagement Suite service agent can't read the secret backing
+  the tool's API key. Grant it on that one secret (project *number*, not
+  ID, in the member):
+  ```
+  gcloud secrets add-iam-policy-binding <secret-name> \
+    --project=<project-id> \
+    --member="serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-ces.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+  ```
+- **Agent reasons about calling a tool but the trace shows `end_session`
+  with placeholder args, then the conversation silently ends** — the
+  OpenAPI tools are no longer attached to the Root agent node (re-importing
+  a tool schema can detach them, leaving only the built-in `end_session`).
+  On the agent canvas, re-attach `getUserContext` and `searchCatalog` via
+  the node's **+**; if the re-import created duplicate tool entries, attach
+  the copy whose schema carries the `x-ces-session-context` line and delete
+  the orphan.
+- **Tool tester returns the blank/degraded payload despite a session id in
+  the test input** — the tester only feeds model-produced parameters; with
+  `x-ces-session-context` present, `session_id` is context-injected and the
+  tester has no conversation context, so the request goes out without it.
+  Test injection in the simulator instead, presetting the variable via its
+  "Set a default value at the start of the conversation" option (untick it
+  once verified — in production the widget populates the variable, and a
+  leftover default masks broken widget wiring).
 - **Simulator shows the agent asking the shopper who they are / to repeat
   browsing** — the session-context variable binding from §8.4 isn't
   reaching the tool; check the tool's request trace in the console for an
