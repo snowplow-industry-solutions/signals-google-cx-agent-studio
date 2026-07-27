@@ -127,6 +127,78 @@ From `storefront/`, with `.env.local` populated:
 5. Record the result (pass/fail + timestamp) here or in the issue comments:
    `<PLACEHOLDER: verification run log>`.
 
+## 7. Deploy the storefront to Vercel (public)
+
+Covers `.scratch/signals-cx-agent-demo/issues/05-public-deploy.md`: makes the
+site and the `/api/agent/*` tool endpoints reachable over public HTTPS for the
+CX Agent Studio OpenAPI tool and the webinar recording. Prep (this section,
+`storefront/vercel.json`, `npm run verify:deploy`) is agent-doable; **the
+deploy itself is human-triggered** — Vercel account access and a public deploy
+are outside this sandbox.
+
+1. **Import the repo into Vercel** (dashboard → Add New → Project, or `vercel
+   link` from `storefront/` with the Vercel CLI installed). Set **Root
+   Directory** to `storefront` — the repo root's `package.json` is unrelated
+   pipeline tooling, not the Next.js app. Framework preset auto-detects as
+   Next.js once the root directory is set; `storefront/vercel.json` adds
+   `Cache-Control: no-store` / `X-Robots-Tag: noindex` headers on
+   `/api/agent/*` so tool responses are never cached or indexed.
+
+2. **Configure environment variables** (Project → Settings → Environment
+   Variables, Production scope). Same five credential vars as step 2/3 above,
+   plus the three `NEXT_PUBLIC_*` vars:
+
+   | Var | Client-exposed? | Notes |
+   |---|---|---|
+   | `SNOWPLOW_CONSOLE_API_KEY` | No — mark Sensitive | from step 2 |
+   | `SNOWPLOW_CONSOLE_API_KEY_ID` | No — mark Sensitive | from step 2 |
+   | `SNOWPLOW_CONSOLE_ORG_ID` | No — mark Sensitive | from step 2 |
+   | `SIGNALS_DEPLOYED_URL` | No — mark Sensitive | from step 2 |
+   | `AGENT_SHARED_SECRET` | No — mark Sensitive | mint a fresh long random value for the deployed environment (don't reuse a local `.env.local` value); mirror this exact value in the CX Agent Studio OpenAPI tool's API-key auth config (issue 06) |
+   | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` | Yes, by design | from step 2 |
+   | `NEXT_PUBLIC_SNOWPLOW_APP_ID` | Yes, by design | use `signals-workshop-fashion-demo` (not the `-dev` variant) so the deployed site is treated as the "live" demo app |
+   | `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` | Yes, by design | from step 2, if set |
+
+   Only `NEXT_PUBLIC_*`-prefixed vars reach the browser bundle — Next.js's own
+   build-time convention, not something this app has to enforce. Everything
+   else is read with `process.env.*` exclusively inside server-side route
+   handlers (`src/app/api/**`) and the shared-secret check
+   (`src/utils/agentAuth.ts`) — never in a `"use client"` component.
+
+3. **Deploy** — via the connected git integration (push to the branch Vercel
+   tracks) or `vercel --prod` from `storefront/`. Human-triggered; not run
+   from this sandbox.
+
+4. **Verify** the deployed environment:
+   ```
+   cd storefront
+   AGENT_SHARED_SECRET=<the value set in Vercel> npm run verify:deploy -- https://<deployed-url>
+   ```
+   Checks site reachability, that both agent endpoints reject requests
+   without the shared-secret header (401), and that authorized requests
+   return the expected payload shape (200 with `profile` /
+   `recent_activity` / `agent_instructions`, or `results`).
+
+   Then repeat the browser walkthrough from step 6, against the deployed
+   URL instead of localhost: browse products, add to cart, grab
+   `domain_sessionid`, and confirm `/api/agent/context` reflects that
+   session's live attributes within a few seconds.
+
+5. Record the deployed URL and verification result here:
+   - Deployed URL: https://signals-google-gecx-storefront.vercel.app (deployed 2026-07-27 via Vercel CLI, no git integration yet)
+   - 2026-07-27 secret-free checks: `/` 200; `/api/agent/context` and
+     `/api/agent/catalog` both 401 without auth header; `Cache-Control:
+     no-store` + `X-Robots-Tag: noindex` present on agent routes. PASS.
+   - 2026-07-27 `npm run verify:deploy` (with shared secret): all 5 checks
+     PASS — site 200, both agent endpoints 401 unauthorized, context and
+     catalog 200 with expected payload shape for authorized requests.
+   - 2026-07-27 browser walkthrough: browsed deployed site (4 product views,
+     2 add-to-carts), queried `/api/agent/context` with the live
+     `domain_sessionid` (via Paw) — 200 with populated profile attributes
+     matching the session and fresh `recent_activity` events. PASS.
+     Note: `active_cart_line_count` returned 0 despite `total_add_to_cart: 2`
+     — check that attribute's definition if the demo narrates cart contents.
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
@@ -147,3 +219,13 @@ From `storefront/`, with `.env.local` populated:
   `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` or `NEXT_PUBLIC_SNOWPLOW_APP_ID` is unset.
 - **Trial expired mid-project** — re-run this whole runbook against a fresh
   trial org; nothing here depends on the previous org's identifiers.
+- **Vercel build fails or serves the wrong app** — the repo root has its own
+  `package.json` (pipeline tooling, not the storefront); confirm the Vercel
+  project's Root Directory is set to `storefront`.
+- **`verify:deploy` reports FAIL on the authorized context/catalog checks
+  only** (unauthorized checks still pass) — the `AGENT_SHARED_SECRET` value
+  passed to the script doesn't match the one set in Vercel's environment
+  variables; re-check for copy/paste drift, or rotate and redeploy.
+- **`verify:deploy` reports FAIL on "Site is publicly reachable"** — deploy
+  hasn't finished, the Root Directory isn't set to `storefront`, or the URL
+  is wrong; check the Vercel deployment logs.
