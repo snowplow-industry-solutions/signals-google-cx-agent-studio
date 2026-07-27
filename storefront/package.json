@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "snowtype:generate": "sh -ac 'set -a; [ -f ./.env.local ] && . ./.env.local; set +a; snowtype generate --config snowtype.config.json'",
     "signals:publish": "sh -ac 'set -a; [ -f ./.env.local ] && . ./.env.local; set +a; .venv/bin/python -m signals.config.publish \"$@\"' --",
-    "seed:tracking-plans": "tsx scripts/seed-tracking-plans.ts"
+    "seed:tracking-plans": "tsx scripts/seed-tracking-plans.ts",
+    "verify:deploy": "tsx scripts/verify-deploy.ts"
   },
   "dependencies": {
     "@snowplow/browser-tracker": "^4.6.9",
