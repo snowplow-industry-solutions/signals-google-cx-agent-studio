@@ -1,6 +1,6 @@
 # 06 — CX Agent Studio agent + OpenAPI tools
 
-Status: awaiting-human-test
+Status: done
 Checkpoint: human-test-required
 
 ## Parent
@@ -19,7 +19,7 @@ Verify-at-build items from the PRD land here: session-context variable naming in
 
 ## Acceptance criteria
 
-- [ ] Agent exists in the sandbox project; required APIs enabled; applicable resources labelled per policy
+- [x] Agent exists in the sandbox project; required APIs enabled; applicable resources labelled per policy
 - [x] Both tools defined from OpenAPI schemas (schemas stored in the repo's agent directory) and calling the deployed endpoints successfully
 - [x] Session id flows from a session context variable into the context tool request
 - [x] In the simulator with a freshly browsed session id: agent greets/responds with correct real-time context (favourite designer, cart contents) and recommends real catalog products
@@ -96,3 +96,23 @@ sandbox).
   `npm --prefix storefront run lint` both still pass (nothing there was
   touched, but the acceptance criteria step required both to be green
   before finishing).
+
+**2026-07-28 (human test):** All criteria verified in the live console/simulator:
+
+- Agent created in `engineering-sandbox`; both OpenAPI tools imported and
+  attached to the Root agent; API-key auth working after granting the CES
+  service agent `secretmanager.secretAccessor` on the backing secret.
+- Session-context unknown resolved: `x-ces-session-context:
+  $context.variables.snowplow_session_id` schema extension (no console UI
+  setting exists) — trace shows `args: {}` with the injected id reaching the
+  deployed endpoint.
+- Simulator runs (logged in `docs/runbook.md` §8.5): live-context PASS,
+  degraded-session PASS (no error talk), recommendation turn PASS —
+  including graceful recovery from an empty `searchCatalog` result by
+  broadening the filter; only real catalog products recommended.
+- Labels: CX Agent Studio apps don't support GCP labels (documented §8.1/§8.4
+  finding); the backing Secret Manager secret is labelled
+  `system=signals-gecx-demo, snowplow-owner=cc017, environment=dev`; shared
+  `engineering-sandbox` project labels left untouched deliberately.
+- Console gotchas captured as runbook troubleshooting entries (secret IAM,
+  tools detaching on schema re-import, tool tester vs context injection).
