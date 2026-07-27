@@ -24,7 +24,7 @@ Verify-at-build items from the PRD land here: session-context variable naming in
 - [ ] Session id flows from a session context variable into the context tool request
 - [ ] In the simulator with a freshly browsed session id: agent greets/responds with correct real-time context (favourite designer, cart contents) and recommends real catalog products
 - [ ] Agent handles the degraded (unknown session) payload gracefully — generic concierge behaviour, no error talk
-- [ ] Setup steps + agent instructions captured in the repo (agent directory + runbook)
+- [x] Setup steps + agent instructions captured in the repo (agent directory + runbook)
 
 ## Blocked by
 
@@ -57,3 +57,42 @@ No code was written and nothing was committed.
 **2026-07-27 (human/assistant):** Un-parked. Added the Agent constraint above
 (mirroring issue 05's prep-only carve-out) and `Checkpoint: human-test-required`,
 per the implementer's recommendation. Re-queued as ready-for-agent.
+
+## Comments
+
+**2026-07-27 (agent):** Prepped on branch `sandcastle/06-cx-agent-and-tools`,
+per the Agent constraint above (no live GCP console/simulator work from this
+sandbox).
+
+- `agent/tools/get-user-context.openapi.yaml` + `agent/tools/search-catalog.openapi.yaml`:
+  OpenAPI 3.0 schemas for the two tools, matching the actual
+  `src/app/api/agent/{context,catalog}/route.ts` request/response shapes
+  (including the `catalog` endpoint's category/occasion/color enums pulled
+  from `src/types/commerce.ts`). Both point `servers[0].url` at the deployed
+  storefront and declare an `apiKey` security scheme on `x-agent-api-key`
+  with no secret value committed. `session_id`'s description flags that it
+  should bind to the session-context variable once confirmed (see below).
+- `agent/instructions.md`: the concierge persona and full tool-use contract —
+  fetch context once per turn, ground recommendations in real `searchCatalog`
+  results, never mention tools/sessions/Signals to the shopper, and a
+  specific fallback behaviour for the degraded/unknown-session payload
+  (treat it like meeting a new customer, no error talk).
+- `agent/README.md`: short index of the directory for whoever runs the
+  console setup.
+- `docs/runbook.md` new "§8 CX Agent Studio setup" section: API
+  enablement + resource labels, agent creation, tool import (table mapping
+  each schema file to its console tool), API-key auth wiring (reusing the
+  §7 `AGENT_SHARED_SECRET`), and a dedicated §8.4 for the session-context
+  variable unknown — documents the candidate variable-name patterns to try
+  and the concrete check (inspect the tool's request trace for a non-empty
+  `session_id`) rather than guessing a name, per the constraint. §8.5 gives
+  the simulator verification steps for both the live-session and
+  degraded-session criteria. Matching troubleshooting entries added.
+- Ticked only the one criterion doable from this sandbox ("Setup steps +
+  agent instructions captured in the repo"). The other five all require the
+  live console/simulator and are left unchecked for the human checkpoint,
+  per the Agent constraint and `Checkpoint: human-test-required`.
+- No `storefront/` app code changed; `npm --prefix storefront test` and
+  `npm --prefix storefront run lint` both still pass (nothing there was
+  touched, but the acceptance criteria step required both to be green
+  before finishing).
