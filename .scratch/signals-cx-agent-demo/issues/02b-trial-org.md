@@ -1,6 +1,6 @@
 # 02b — Live pipeline: trial org signup + live publish + end-to-end proof
 
-Status: ready-for-human
+Status: done
 
 ## Parent
 

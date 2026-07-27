@@ -1,6 +1,6 @@
 # 02c — Deterministic tracking-plan seeding script + tracking-assets rename
 
-Status: awaiting-human-test
+Status: done
 Checkpoint: human-test-required
 
 ## Parent
@@ -69,8 +69,10 @@ Agent-verifiable:
 
 Human-verified (checkpoint):
 
-- [ ] Real run against the trial org publishes data structures (dev + prod) and the tracking plan without ID collision
-- [ ] Second run is idempotent: same derived IDs, resources updated not duplicated (org still shows 1 source app, 1 tracking plan)
+- [x] Real run against the trial org publishes data structures (dev + prod) and the tracking plan without ID collision
+- [x] Second run is idempotent: same derived IDs, resources updated not duplicated (org still shows 1 source app, 1 tracking plan)
+
+**2026-07-27 (human test):** First run seeded org (verified via `snowplow-cli data-products download`: 1 source app, 1 tracking plan, all 10 derived IDs matching dry-run prediction). Second run reported "no changes detected, nothing to apply"; re-download byte-identical. Merged to main.
 
 ## Blocked by
 

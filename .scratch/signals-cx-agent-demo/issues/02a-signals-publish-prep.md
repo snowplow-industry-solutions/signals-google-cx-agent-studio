@@ -1,6 +1,6 @@
 # 02a — Live pipeline prep: env wiring, publish dry-run, runbook skeleton
 
-Status: awaiting-human-test
+Status: done
 
 ## Parent
 
