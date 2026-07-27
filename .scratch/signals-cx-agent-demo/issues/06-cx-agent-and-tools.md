@@ -1,6 +1,7 @@
 # 06 — CX Agent Studio agent + OpenAPI tools
 
-Status: needs-human
+Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 
@@ -13,6 +14,8 @@ The Google side: a concierge agent in CX Agent Studio (Snowplow-managed sandbox 
 Verify in the console simulator by supplying a real session id manually (widget wiring is the next slice). GCP resources labelled `system=signals-gecx-demo`, `snowplow-owner=cc017`, `environment=dev` where labels apply.
 
 Verify-at-build items from the PRD land here: session-context variable naming in tool definitions, CX Agent Studio availability in the sandbox project/region.
+
+**Agent constraint:** prepare everything that lives in the repo — the two OpenAPI schema files (get-user-context, search-catalog) in the agent directory pointing at `https://signals-google-gecx-storefront.vercel.app/api/agent/*` with `x-agent-api-key` API-key auth (secret value itself never committed), the concierge persona / agent instructions as a repo file, and a runbook section covering console setup (agent creation, tool import, session-context variable wiring, API enablement, resource labels per policy). Do **not** touch the live GCP console — agent creation, tool configuration, and simulator verification are human-triggered; the acceptance criteria needing the live console are verified by the human afterwards. Where the PRD flags verify-at-build unknowns (session-context variable naming), document the options and the check the human should perform rather than guessing.
 
 ## Acceptance criteria
 
@@ -51,3 +54,6 @@ This is the same category of blocker as issue 05 (public deploy) — live creden
 No code was written and nothing was committed.
 
 <promise>BLOCKED</promise>
+**2026-07-27 (human/assistant):** Un-parked. Added the Agent constraint above
+(mirroring issue 05's prep-only carve-out) and `Checkpoint: human-test-required`,
+per the implementer's recommendation. Re-queued as ready-for-agent.
