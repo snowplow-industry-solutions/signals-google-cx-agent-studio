@@ -1,6 +1,6 @@
 # 06 — CX Agent Studio agent + OpenAPI tools
 
-Status: ready-for-agent
+Status: awaiting-human-test
 Checkpoint: human-test-required
 
 ## Parent
