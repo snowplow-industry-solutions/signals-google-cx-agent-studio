@@ -9,7 +9,7 @@ Atelier Signals is a high-end fashion retail ecommerce demo built to showcase Sn
 - Personalization workflows such as look completion, accessory pairing, and collection reordering
 - Demo-safe observability via `[Signals Demo]` console logs and an in-app debug panel
 - A "highlight personalization" mode for before/after presentations
-- Local tracking-plan YAML plus repo-managed Signals Python SDK configuration
+- Local tracking-assets YAML plus repo-managed Signals Python SDK configuration
 
 ## App Structure
 
@@ -20,7 +20,7 @@ Atelier Signals is a high-end fashion retail ecommerce demo built to showcase Sn
 - `src/components/Cart`: cart state and interactions
 - `src/data`: mock catalog and collection data
 - `src/utils`: tracking helpers, session utilities, and personalization logic
-- `tracking-plan`: local Snowplow data structures, source application, and data product
+- `tracking-assets`: local Snowplow data structures, source application, and tracking plan
 - `signals/config`: Python SDK definitions for attribute keys, attribute groups, and services
 
 ## Run The App
@@ -88,17 +88,17 @@ These logs call out:
 
 ## Tracking Plan Workflow
 
-Local tracking assets live under `tracking-plan/`.
+Local tracking assets live under `tracking-assets/`.
 
-- Data structures: `tracking-plan/data-structures`
-- Source application: `tracking-plan/data-products/source-applications/fashion_storefront.yml`
-- Data product: `tracking-plan/data-products/fashion_ecommerce.yml`
+- Data structures: `tracking-assets/data-structures`
+- Source application: `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
+- Tracking plan: `tracking-assets/tracking-plans/fashion_ecommerce.yml`
 
 To validate them with the Snowplow MCP/CLI, use the configured validation workflow from the workspace tooling. The implementation in this repo was validated against:
 
-- `tracking-plan/data-structures`
-- `tracking-plan/data-products/fashion_ecommerce.yml`
-- `tracking-plan/data-products/source-applications/fashion_storefront.yml`
+- `tracking-assets/data-structures`
+- `tracking-assets/tracking-plans/fashion_ecommerce.yml`
+- `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
 
 ## Signals Configuration In Python
 

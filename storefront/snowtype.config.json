@@ -2,7 +2,7 @@
   "igluCentralSchemas": [],
   "dataStructures": [],
   "repositories": [
-    "./tracking-plan/data-structures"
+    "./tracking-assets/data-structures"
   ],
   "eventSpecificationIds": [],
   "dataProductIds": [

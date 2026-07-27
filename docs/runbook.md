@@ -49,49 +49,41 @@ Never commit real values. They live only in `storefront/.env.local`
    - `NEXT_PUBLIC_SNOWPLOW_APP_ID` — use `signals-workshop-fashion-demo-dev`
      for local runs, `signals-workshop-fashion-demo` for anything the trial
      pipeline should treat as the "live" demo app (both are pre-registered in
-     `storefront/tracking-plan/data-products/source-applications/fashion_storefront.yml`).
+     `storefront/tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`).
    - `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` — Signals interventions
      endpoint, if the trial org exposes one (Signals → API access).
 2. Install deps and run locally: `npm --prefix storefront install && npm --prefix storefront run dev`.
 3. Browse a few product pages, add something to cart, so the pipeline has
    traffic to publish against.
 
-## 4. Seed the org with the tracking plan (data structures + data products)
+## 4. Seed the org with the tracking plan (data structures + tracking plans)
 
 A fresh trial org has none of the demo's custom schemas, and the Signals
 publish hard-fails without them (404 `Schema for event 'product_viewed'
 (vendor: 'com.snowplow_demo.fashion', ...) was not found or not in
 production`). The whole tracking plan lives in the repo as config-as-code
-under `storefront/tracking-plan/`; seed the org with
+under `storefront/tracking-assets/`; seed the org with
 [snowplow-cli](https://docs.snowplow.io/docs/data-product-studio/snowplow-cli/)
 (`brew install snowplow-product/taps/snowplow-cli` — auth uses the same
 `SNOWPLOW_CONSOLE_*` env vars captured in step 2).
 
-From `storefront/` with `.env.local` sourced
-(`set -a; . ./.env.local; set +a`):
+From `storefront/`, with `.env.local` populated:
 
 1. Validate first (read-only; also confirms the credentials work):
    ```
-   snowplow-cli data-structures validate ./tracking-plan/data-structures
+   npm run seed:tracking-plans -- --dry-run
    ```
-   Expect a `will create` line per structure (8 events + 4 entities, vendor
-   `com.snowplow_demo.fashion`).
-2. Publish to dev, then promote to prod — Signals only accepts schemas that
-   are **in production**:
+   No credentials required for `--dry-run`; it builds the temp publish tree,
+   prints the template→derived UUID mapping, and prints the commands it
+   would run without executing anything.
+2. Real seed — requires all three credential env vars; the script exits with
+   a clear error naming any that are missing:
    ```
-   snowplow-cli data-structures publish dev ./tracking-plan/data-structures
-   snowplow-cli data-structures publish prod ./tracking-plan/data-structures
+   npm run seed:tracking-plans
    ```
-3. Register the data product + source applications (not required by Signals,
-   but keeps the org's tracking scenarios in sync with the repo). Source app,
-   data product, and event spec IDs are **globally unique across all orgs** —
-   IDs ever published from a previous org fail with `Source application with
-   given id already exists`. Re-mint them first when seeding a fresh org:
-   ```
-   python3 ./tracking-plan/remint-ids.py
-   snowplow-cli data-products publish ./tracking-plan/data-products
-   ```
-   Commit the re-minted IDs so the repo tracks what the current org uses.
+   This validates and publishes data structures (dev, then prod — Signals
+   only accepts schemas that are **in production**), then publishes the
+   tracking plan from a derived-ID build tree, stopping on first failure.
 
 ## 5. Publish the Signals config
 
@@ -137,10 +129,11 @@ From `storefront/`, with `.env.local` populated:
 
 ## Troubleshooting
 
-- **Data products publish fails with "Source application with given id already
-  exists"** — the tracking plan's UUIDs were already claimed by another org
-  (they're global primary keys). Run `python3 ./tracking-plan/remint-ids.py`
-  and re-publish.
+- **Tracking plan IDs are derived per-org automatically** — `npm run
+  seed:tracking-plans` derives a stable UUIDv5 per resource from the org ID,
+  so a fresh org never collides with IDs published from a previous org, and
+  re-running the same org updates the same resources rather than duplicating
+  them.
 - **Signals publish fails with 404 "Schema for event ... was not found or not
   in production"** — the org's schema registry is missing the tracking plan,
   or the structures were only published to dev. Run step 4, including the

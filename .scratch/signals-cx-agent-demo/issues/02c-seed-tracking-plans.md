@@ -60,12 +60,12 @@ Pure functions only (command runner stays a thin untested shell): env-file parse
 
 Agent-verifiable:
 
-- [ ] Rename complete via `git mv`; no references to `tracking-plan/` or `data-products/` paths remain outside `.sandcastle/logs/`, `.next/`, and this issue's history
-- [ ] `npm run seed:tracking-plans -- --dry-run` (from `storefront/`) prints a consistent template→derived mapping for all 10 UUIDs and the four planned commands, touches no committed files (`git status` clean), and exits 0 without credentials
-- [ ] Missing-env failure names the missing variables and exits non-zero (non-dry-run path)
-- [ ] uuidv5 implementation passes an RFC 4122 known-answer test
-- [ ] `npm test` and `npm run lint` green in `storefront/`
-- [ ] `remint-ids.py` deleted; runbook §4 + troubleshooting updated
+- [x] Rename complete via `git mv`; no references to `tracking-plan/` or `data-products/` paths remain outside `.sandcastle/logs/`, `.next/`, and this issue's history
+- [x] `npm run seed:tracking-plans -- --dry-run` (from `storefront/`) prints a consistent template→derived mapping for all 10 UUIDs and the four planned commands, touches no committed files (`git status` clean), and exits 0 without credentials
+- [x] Missing-env failure names the missing variables and exits non-zero (non-dry-run path)
+- [x] uuidv5 implementation passes an RFC 4122 known-answer test
+- [x] `npm test` and `npm run lint` green in `storefront/`
+- [x] `remint-ids.py` deleted; runbook §4 + troubleshooting updated
 
 Human-verified (checkpoint):
 
