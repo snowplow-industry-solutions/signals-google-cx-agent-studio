@@ -17,7 +17,7 @@
   "dependencies": {
     "@snowplow/browser-tracker": "^4.6.9",
     "@snowplow/signals-browser-plugin": "^0.2.2",
-    "@snowplow/signals-node": "^0.3.0",
+    "@snowplow/signals-node": "^0.4.0",
     "next": "16.1.7",
     "react": "19.2.3",
     "react-dom": "19.2.3"
