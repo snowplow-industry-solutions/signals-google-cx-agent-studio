@@ -185,7 +185,19 @@ are outside this sandbox.
    session's live attributes within a few seconds.
 
 5. Record the deployed URL and verification result here:
-   `<PLACEHOLDER: deployed URL + verification run log>`.
+   - Deployed URL: https://signals-google-gecx-storefront.vercel.app (deployed 2026-07-27 via Vercel CLI, no git integration yet)
+   - 2026-07-27 secret-free checks: `/` 200; `/api/agent/context` and
+     `/api/agent/catalog` both 401 without auth header; `Cache-Control:
+     no-store` + `X-Robots-Tag: noindex` present on agent routes. PASS.
+   - 2026-07-27 `npm run verify:deploy` (with shared secret): all 5 checks
+     PASS — site 200, both agent endpoints 401 unauthorized, context and
+     catalog 200 with expected payload shape for authorized requests.
+   - 2026-07-27 browser walkthrough: browsed deployed site (4 product views,
+     2 add-to-carts), queried `/api/agent/context` with the live
+     `domain_sessionid` (via Paw) — 200 with populated profile attributes
+     matching the session and fresh `recent_activity` events. PASS.
+     Note: `active_cart_line_count` returned 0 despite `total_add_to_cart: 2`
+     — check that attribute's definition if the demo narrates cart contents.
 
 ## Troubleshooting
 
