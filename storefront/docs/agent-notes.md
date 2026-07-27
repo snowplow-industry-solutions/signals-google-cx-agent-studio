@@ -38,6 +38,7 @@
 - Signals Python SDK config:
   - `signals/config/attribute_keys.py`
   - `signals/config/attribute_groups.py`
+  - `signals/config/event_logs.py`
   - `signals/config/services.py`
   - `signals/config/publish.py`
 

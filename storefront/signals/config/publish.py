@@ -4,6 +4,7 @@ import os
 from snowplow_signals import Signals
 
 from signals.config.attribute_groups import build_stream_attribute_group
+from signals.config.event_logs import build_event_log
 from signals.config.interventions import build_stylist_intervention
 from signals.config.services import build_service
 
@@ -37,7 +38,8 @@ def build_objects():
     attribute_group = build_stream_attribute_group()
     service = build_service(attribute_group)
     intervention = build_stylist_intervention()
-    return [attribute_group, service, intervention]
+    event_log = build_event_log()
+    return [attribute_group, service, intervention, event_log]
 
 
 def main():
@@ -49,14 +51,19 @@ def main():
     )
     parser.add_argument(
         "--only",
-        choices=["all", "intervention"],
+        choices=["all", "intervention", "event_log"],
         default="all",
-        help="Publish only a subset of objects. Use 'intervention' to skip the already-published attribute group and service.",
+        help=(
+            "Publish only a subset of objects. Use 'intervention' or 'event_log' to "
+            "skip the already-published attribute group and service."
+        ),
     )
     args = parser.parse_args()
 
     if args.only == "intervention":
         objects = [build_stylist_intervention()]
+    elif args.only == "event_log":
+        objects = [build_event_log()]
     else:
         objects = build_objects()
 
