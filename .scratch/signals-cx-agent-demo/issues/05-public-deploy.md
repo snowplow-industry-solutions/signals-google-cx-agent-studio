@@ -1,6 +1,6 @@
 # 05 — Public deploy to Vercel
 
-Status: awaiting-human-test
+Status: done
 Checkpoint: human-test-required
 
 ## Parent
@@ -15,10 +15,10 @@ Deploy the storefront to Vercel so the agent-facing endpoints are reachable over
 
 ## Acceptance criteria
 
-- [ ] Site publicly reachable; browse flow works and events land in the trial pipeline from the deployed site
-- [ ] Context and catalog endpoints respond over public HTTPS with correct auth enforcement
+- [x] Site publicly reachable; browse flow works and events land in the trial pipeline from the deployed site
+- [x] Context and catalog endpoints respond over public HTTPS with correct auth enforcement
 - [x] No Signals credentials or shared secret exposed client-side
-- [ ] End-to-end check: browse deployed site → context endpoint returns that session's live attributes
+- [x] End-to-end check: browse deployed site → context endpoint returns that session's live attributes
 - [x] Deploy steps documented in the runbook
 
 ## Blocked by
@@ -36,3 +36,11 @@ Deploy the storefront to Vercel so the agent-facing endpoints are reachable over
 - No-client-side-exposure criterion ticked by inspection, not just assumption: grepped the five sensitive var names across `src/`, `signals/`, and `scripts/` — every reference is in a server-side route handler (`src/app/api/**`), `src/utils/agentAuth.ts`, or the Python publish config; none appear in any `"use client"` component.
 - The three criteria needing a live public URL (reachability + live traffic, endpoints over public HTTPS, live session e2e check) stay unchecked — verified by the human after they run the deploy, per this issue's Agent constraint and Checkpoint.
 - `npm --prefix storefront test` (87/87 passed) and `npm --prefix storefront run lint` (clean) both green.
+
+**2026-07-27 (human test):** Deployed via Vercel CLI (no git integration yet) to
+https://signals-google-gecx-storefront.vercel.app. `npm run verify:deploy`: all
+5 checks PASS. Browser walkthrough: live session attributes returned by
+`/api/agent/context` for the real `domain_sessionid`. All remaining acceptance
+criteria ticked; full log in `docs/runbook.md` §7. Follow-up noted there:
+`active_cart_line_count` returned 0 despite 2 add-to-carts — check the
+attribute definition if the demo narrates cart contents.
