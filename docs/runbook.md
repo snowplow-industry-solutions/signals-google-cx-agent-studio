@@ -330,6 +330,12 @@ simulator.
    - 2026-07-27 ~23:03 UTC, degraded run: variable unset. Endpoint
      returned the empty payload; agent fell back to generic warm concierge
      behaviour ("still getting to know your style"), no error talk. PASS.
+   - 2026-07-27 ~23:11 UTC, recommendation run: follow-up turn asking for
+     matching accessories. Agent called `searchCatalog` scoped to the
+     shopper's profile (designer + category + occasion), got zero results,
+     then recovered by broadening (dropped the designer filter) and
+     recommended two real catalog products with correct names, prices, and
+     designers — no invented items. PASS.
    - Setup gotchas hit on the way (both now in Troubleshooting): the CES
      service agent needed `secretmanager.secretAccessor` on the shared
      secret, and re-importing the OpenAPI schema detached the tools from
