@@ -29,6 +29,7 @@ const DEGRADED_PAYLOAD: ContextPayload = {
 interface AgenticContextJson {
   summary?: string;
   prompt?: string;
+  events?: Record<string, unknown>[];
 }
 
 function getSignalsClient(): Signals | null {
@@ -42,6 +43,30 @@ function getSignalsClient(): Signals | null {
   }
 
   return new Signals({ baseUrl, apiKey, apiKeyId, organizationId });
+}
+
+function renderEventValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.map(renderEventValue).join(", ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, entryValue]) => `${key}: ${renderEventValue(entryValue)}`)
+      .join(", ");
+  }
+  return String(value);
+}
+
+function renderEventLines(events: Record<string, unknown>[]): string[] {
+  return events.map((event) => {
+    const pairs = Object.entries(event)
+      .filter(([, value]) => value !== null && value !== undefined)
+      .map(([key, value]) => `${key}: ${renderEventValue(value)}`);
+    return `- ${pairs.join(", ")}`;
+  });
 }
 
 function flattenProfile(attributes: Record<string, unknown>): FlatProfile {
@@ -101,6 +126,7 @@ export async function GET(request: NextRequest) {
     signals.getAgenticContext({
       name: EVENT_LOG_NAME,
       identifier: sessionId,
+      format: "json",
     }),
   ]);
 
@@ -115,7 +141,9 @@ export async function GET(request: NextRequest) {
   let agentInstructions = "";
   if (contextResult.status === "fulfilled") {
     const context = contextResult.value as AgenticContextJson;
-    recentActivity = context.summary ?? "";
+    recentActivity = [context.summary ?? "", ...renderEventLines(context.events ?? [])]
+      .filter(Boolean)
+      .join("\n");
     agentInstructions = context.prompt ?? "";
   } else {
     console.error("[Signals Demo] Failed to fetch agentic context", contextResult.reason);

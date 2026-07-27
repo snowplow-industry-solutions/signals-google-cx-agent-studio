@@ -132,7 +132,55 @@ describe("GET /api/agent/context", () => {
       expect(getAgenticContextMock).toHaveBeenCalledWith({
         name: "fashion_session_activity",
         identifier: "abc-123",
+        format: "json",
       });
+    });
+
+    it("renders buffered events into recent_activity beneath the summary line", async () => {
+      getServiceAttributesMock.mockResolvedValue({});
+      getAgenticContextMock.mockResolvedValue({
+        summary: "Last activity 23 seconds ago. Session started 403 seconds ago.",
+        prompt: "Speak as a luxury concierge.",
+        events: [
+          {
+            seconds_since_start_of_session: 12,
+            event: "product_viewed",
+            url: "https://storefront.example/products/p18",
+            event_context: { product_name: "Silk Scarf", designer: "Arc Studio" },
+          },
+          {
+            seconds_since_start_of_session: 47,
+            event: "cart_updated",
+            url: "https://storefront.example/cart",
+            event_context: { action: "add", product_name: "Silk Scarf" },
+          },
+        ],
+      });
+
+      const response = await GET(authedRequest("?session_id=abc-123"));
+      const body = await response.json();
+
+      expect(body.recent_activity).toBe(
+        [
+          "Last activity 23 seconds ago. Session started 403 seconds ago.",
+          "- seconds_since_start_of_session: 12, event: product_viewed, url: https://storefront.example/products/p18, event_context: product_name: Silk Scarf, designer: Arc Studio",
+          "- seconds_since_start_of_session: 47, event: cart_updated, url: https://storefront.example/cart, event_context: action: add, product_name: Silk Scarf",
+        ].join("\n"),
+      );
+    });
+
+    it("keeps recent_activity as the summary alone when no events are buffered", async () => {
+      getServiceAttributesMock.mockResolvedValue({});
+      getAgenticContextMock.mockResolvedValue({
+        summary: "No events buffered.",
+        prompt: "Speak as a luxury concierge.",
+        events: [],
+      });
+
+      const response = await GET(authedRequest("?session_id=abc-123"));
+      const body = await response.json();
+
+      expect(body.recent_activity).toBe("No events buffered.");
     });
 
     it("joins array-valued attributes into a human-readable string, not a raw array", async () => {
