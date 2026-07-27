@@ -266,25 +266,40 @@ the simulator — before moving on.
 
 ### 8.4 Wire the session-context variable
 
-This is the PRD's flagged verify-at-build unknown (design doc risk #1):
-the exact mapping from the ces-messenger widget's `setQueryParameters`
-call to a `$context.*`-style variable name usable inside a CX Agent Studio
-tool's request parameters isn't confirmed against the live product.
+Resolved 2026-07-27 (was the PRD's flagged verify-at-build unknown, design
+doc risk #1). There is **no console UI setting** for this — the binding
+lives in the tool's OpenAPI schema itself, via the `x-ces-session-context`
+extension on the parameter
+([OpenAPI tools docs](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/open-api)).
 
-1. In the `getUserContext` tool's parameter mapping for `session_id`, look
-   for a session-context / conversation-context variable picker (naming
-   varies by console version — candidates to check first: something under
-   a "session parameters" or "query parameters" section tied to
-   `setQueryParameters`, or a generic `$session.params.*` /
-   `$context.*`-style reference).
-2. **Check to perform**: bind `session_id` to whatever variable the
-   console exposes, then in the simulator manually supply a value for
-   that same variable (see §8.5) and confirm the tool actually receives
-   it — inspect the tool's request in the console's execution trace/log,
-   not just the agent's reply. If the trace shows an empty or missing
-   `session_id`, the binding is wrong; try the next candidate.
-3. Record here which variable name worked, once confirmed:
-   `<PLACEHOLDER: confirmed session-context variable name>`.
+**Do not bind to the built-in `$context.session_id`** — that is CX Agent
+Studio's own conversation session id, not the Snowplow `domain_sessionid`;
+it would always produce degraded payloads. Use a custom agent variable
+referenced as `$context.variables.<name>`.
+
+1. In the agent's Variables section, declare a variable
+   `snowplow_session_id`, type Text.
+2. In the `getUserContext` tool's schema, the `session_id` parameter
+   carries (already present in the repo copy
+   `agent/tools/get-user-context.openapi.yaml` — re-paste the schema if
+   the console copy predates it):
+   ```yaml
+   x-ces-session-context: $context.variables.snowplow_session_id
+   ```
+   With the extension present the model no longer produces the value; it
+   is injected from the variable at call time.
+3. **Check to perform**: in the simulator, set `snowplow_session_id` to a
+   real freshly-browsed session id (see §8.5) and confirm the tool
+   actually receives it — inspect the tool's request in the console's
+   execution trace/log, not just the agent's reply. If the simulator has
+   no way to preset the variable, verify in two stages: temporarily
+   remove the extension so the model passes a session id pasted into the
+   chat (proves the live-context path), then restore it and verify the
+   variable injection end-to-end during issue 07's widget wiring.
+4. Confirmed binding: `x-ces-session-context:
+   $context.variables.snowplow_session_id` (schema-level extension;
+   console-UI picker does not exist). Widget-side population of the
+   variable remains issue 07's verify-at-build item.
 
 Widget wiring itself (the storefront calling `setQueryParameters` with the
 real `domain_sessionid`) is issue `07-widget-end-to-end.md`, not this
@@ -344,7 +359,10 @@ simulator.
 - **Simulator shows the agent asking the shopper who they are / to repeat
   browsing** — the session-context variable binding from §8.4 isn't
   reaching the tool; check the tool's request trace in the console for an
-  empty `session_id` and try a different variable-name candidate.
+  empty `session_id`. Confirm the console copy of the schema carries the
+  `x-ces-session-context: $context.variables.snowplow_session_id` line and
+  that the `snowplow_session_id` variable is declared on the agent and set
+  for the session.
 - **CX Agent Studio isn't offered / agent creation fails in the sandbox
   project** — check the project's region and enabled-API list (§8.1);
   this was flagged as a verify-at-build availability risk before the

@@ -29,13 +29,16 @@ paths:
           required: true
           description: >
             The shopper's Snowplow session identifier (`domain_sessionid`).
-            Bind this to the session-context variable the CX Agent Studio
-            session carries after the ces-messenger widget calls
-            `setQueryParameters` on page load -- see
-            `docs/runbook.md` (CX Agent Studio setup) for the exact
-            variable name once confirmed against the live console.
+            Injected from the `snowplow_session_id` agent variable via the
+            `x-ces-session-context` extension below (not model-produced).
+            NOT the built-in `$context.session_id`, which is CX Agent
+            Studio's own conversation session id, not the Snowplow one.
+            The variable must be declared on the agent (type Text) and is
+            populated by the widget (issue 07); in the simulator, set it
+            manually. See `docs/runbook.md` (CX Agent Studio setup).
           schema:
             type: string
+          x-ces-session-context: $context.variables.snowplow_session_id
       responses:
         "200":
           description: Context payload (degraded/empty on unknown session).
