@@ -6,8 +6,8 @@ when standing up a fresh one. Covers `.scratch/signals-cx-agent-demo/issues/02a-
 (prep, agent-doable) and `02b-trial-org.md` (execution, human-only — browser
 signup and live credentials can't happen in this sandbox).
 
-GCP/CX Agent Studio setup (the agent + OpenAPI tool side) is out of scope here;
-see the issue for that stage once it exists.
+GCP/CX Agent Studio setup (the agent + OpenAPI tool side) is covered in §8
+below, once the storefront is deployed (§7).
 
 ## 1. Create the Snowplow Free Trial org
 
@@ -199,6 +199,115 @@ are outside this sandbox.
      Note: `active_cart_line_count` returned 0 despite `total_add_to_cart: 2`
      — check that attribute's definition if the demo narrates cart contents.
 
+## 8. CX Agent Studio setup (agent + OpenAPI tools)
+
+Covers `.scratch/signals-cx-agent-demo/issues/06-cx-agent-and-tools.md`:
+creates the customer-facing concierge agent in CX Agent Studio and wires it
+to the two deployed tool endpoints. The OpenAPI schema files
+(`agent/tools/*.openapi.yaml`) and the persona (`agent/instructions.md`)
+are prepared in the repo; **everything below is human-triggered** — agent
+creation, tool import, session-context wiring, and simulator verification
+all require the live console and are outside this sandbox. Requires the
+storefront already deployed per §7 (a public HTTPS URL and a minted
+`AGENT_SHARED_SECRET`).
+
+### 8.1 Enable APIs and label resources
+
+1. In the Snowplow-managed sandbox GCP project, confirm CX Agent Studio
+   (Gemini Enterprise for CX) is available/allowlisted for the project's
+   region — this is a verify-at-build unknown (design doc risk #3); if the
+   console doesn't offer agent creation, check the project's enabled APIs
+   / region settings before assuming it's a wider outage.
+2. Enable any APIs the console prompts for during agent creation (Gemini
+   Enterprise / Discovery Engine / Dialogflow CX-family APIs, depending on
+   what CX Agent Studio calls itself in the console at the time).
+3. Label every resource this creates (agent, any associated data
+   store/app) with the project's standard tags, where the resource type
+   supports labels:
+   ```
+   system=signals-gecx-demo
+   snowplow-owner=cc017
+   environment=dev
+   ```
+
+### 8.2 Create the agent
+
+1. In CX Agent Studio, create a new customer-facing agent in the sandbox
+   project.
+2. Paste the full contents of `agent/instructions.md` into the agent's
+   instructions field verbatim — it defines the concierge persona, the
+   one-call-per-turn tool contract, and the degraded-session fallback
+   behaviour.
+
+### 8.3 Import the two OpenAPI tools
+
+For each schema file, create a new OpenAPI tool in the agent and import
+the file directly (console supports upload or paste):
+
+| Tool | Schema file | Operation |
+|---|---|---|
+| `getUserContext` | `agent/tools/get-user-context.openapi.yaml` | `GET /api/agent/context` |
+| `searchCatalog` | `agent/tools/search-catalog.openapi.yaml` | `GET /api/agent/catalog` |
+
+Both schemas already declare `servers[0].url` as the deployed storefront
+URL (`https://signals-google-gecx-storefront.vercel.app`) and an `apiKey`
+security scheme on the `x-agent-api-key` header — if the deployed URL
+changes, update `servers[0].url` in both files and re-import rather than
+overriding it only in the console.
+
+For each tool's authentication config, choose **API key** auth and set:
+- Header name: `x-agent-api-key`
+- Value: the exact `AGENT_SHARED_SECRET` value configured on the Vercel
+  deployment in §7 (not a local `.env.local` value — they may differ).
+
+Confirm each tool calls the deployed endpoint successfully once configured
+— e.g. the console's tool-test/try-it affordance, or a manual test turn in
+the simulator — before moving on.
+
+### 8.4 Wire the session-context variable
+
+This is the PRD's flagged verify-at-build unknown (design doc risk #1):
+the exact mapping from the ces-messenger widget's `setQueryParameters`
+call to a `$context.*`-style variable name usable inside a CX Agent Studio
+tool's request parameters isn't confirmed against the live product.
+
+1. In the `getUserContext` tool's parameter mapping for `session_id`, look
+   for a session-context / conversation-context variable picker (naming
+   varies by console version — candidates to check first: something under
+   a "session parameters" or "query parameters" section tied to
+   `setQueryParameters`, or a generic `$session.params.*` /
+   `$context.*`-style reference).
+2. **Check to perform**: bind `session_id` to whatever variable the
+   console exposes, then in the simulator manually supply a value for
+   that same variable (see §8.5) and confirm the tool actually receives
+   it — inspect the tool's request in the console's execution trace/log,
+   not just the agent's reply. If the trace shows an empty or missing
+   `session_id`, the binding is wrong; try the next candidate.
+3. Record here which variable name worked, once confirmed:
+   `<PLACEHOLDER: confirmed session-context variable name>`.
+
+Widget wiring itself (the storefront calling `setQueryParameters` with the
+real `domain_sessionid`) is issue `07-widget-end-to-end.md`, not this
+stage — for now, the human supplies a session id manually in the
+simulator.
+
+### 8.5 Verify in the simulator
+
+1. Browse the deployed storefront (§7 step 4's walkthrough) to get a real,
+   freshly-browsed `domain_sessionid`.
+2. In the CX Agent Studio simulator, set the session-context variable from
+   §8.4 to that session id, then open the chat.
+3. Confirm: the agent's first response reflects that session's real
+   context (correct favourite designer, cart contents) without the human
+   needing to state anything about their browsing, and any product
+   recommendation is a real, matching catalog item (not invented).
+4. Repeat with an unknown/made-up session id (or the variable unset).
+   Confirm: the agent falls back to generic warm concierge behaviour per
+   `agent/instructions.md`'s degraded-session section — no mention of
+   errors, missing data, or anything technical.
+5. Record the result (pass/fail + timestamp) here:
+   `<PLACEHOLDER: simulator verification run log>`.
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
@@ -229,3 +338,14 @@ are outside this sandbox.
 - **`verify:deploy` reports FAIL on "Site is publicly reachable"** — deploy
   hasn't finished, the Root Directory isn't set to `storefront`, or the URL
   is wrong; check the Vercel deployment logs.
+- **CX Agent Studio tool test returns 401** — the API-key header name isn't
+  exactly `x-agent-api-key`, or the key value doesn't match the deployed
+  `AGENT_SHARED_SECRET` (§7's Vercel value, not a local one).
+- **Simulator shows the agent asking the shopper who they are / to repeat
+  browsing** — the session-context variable binding from §8.4 isn't
+  reaching the tool; check the tool's request trace in the console for an
+  empty `session_id` and try a different variable-name candidate.
+- **CX Agent Studio isn't offered / agent creation fails in the sandbox
+  project** — check the project's region and enabled-API list (§8.1);
+  this was flagged as a verify-at-build availability risk before the
+  agent existed.
