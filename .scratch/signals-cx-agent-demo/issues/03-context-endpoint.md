@@ -1,6 +1,6 @@
 # 03 — Agent context endpoint (core tracer)
 
-Status: ready-for-agent
+Status: awaiting-human-test
 Checkpoint: human-test-required
 
 ## Parent
