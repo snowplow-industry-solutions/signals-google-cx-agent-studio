@@ -1,6 +1,6 @@
 # 08 — Demo polish + recording
 
-Status: ready-for-agent
+Status: in-progress
 Checkpoint: human-test-required
 
 ## Parent
