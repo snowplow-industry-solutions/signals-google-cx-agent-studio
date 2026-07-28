@@ -25,3 +25,11 @@ Turn the working integration into the webinar deliverable. Write the demo script
 ## Blocked by
 
 - `07-widget-end-to-end.md`
+
+## Comments
+
+**2026-07-28 (human/assistant):** Pre-recording sweep item carried over from
+the 07 live walkthrough: remove the temporary `http://localhost:3000` entry
+from the chat channel's allowed origins in the CX Agent Studio console (it
+was added for local testing only). Human/console step — fold it into the
+rehearsal checklist.

@@ -22,3 +22,13 @@ Skip without ceremony if the timeline to the 7 August recording is at risk.
 ## Blocked by
 
 - `07-widget-end-to-end.md`
+
+## Comments
+
+**2026-07-28 (human/assistant):** Overlaps new issue
+`11-rich-response-widgets.md` — same wow-beat via the chat channel's *native*
+rich response widgets (product carousel / product details) instead of the
+`registerClientSideFunction` custom-render path here. Native path is the
+simpler, supported route; issue 11 carries a disposition criterion for this
+issue (close `wontfix` if superseded, or feed findings back here if native
+widgets can't do what we need). Check 11's outcome before starting this.

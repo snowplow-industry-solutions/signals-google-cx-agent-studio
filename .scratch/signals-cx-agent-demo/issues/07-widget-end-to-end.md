@@ -1,6 +1,6 @@
 # 07 — Chat widget end-to-end
 
-Status: awaiting-human-test
+Status: done
 Checkpoint: human-test-required
 
 ## Parent
@@ -20,11 +20,11 @@ Verify-at-build item from the PRD lands here: pin the widget generation (`ces-me
 ## Acceptance criteria
 
 - [x] Tracker bumped to `^4.10.0`; existing tracking unaffected (tests + lint green)
-- [ ] Widget renders on the deployed site, styled acceptably against the luxury theme
-- [ ] Session id read via `getDomainSessionId()` and delivered to the agent session automatically
-- [ ] Full flow works on the deployed site: browse products → add to cart → open chat → agent references actual browsing/cart behaviour unprompted
-- [ ] Context freshness acceptable: activity seconds old is reflected in the conversation
-- [ ] New/cookieless visitor gets graceful generic concierge behaviour
+- [x] Widget renders on the deployed site, styled acceptably against the luxury theme
+- [x] Session id read via `getDomainSessionId()` and delivered to the agent session automatically
+- [x] Full flow works on the deployed site: browse products → add to cart → open chat → agent references actual browsing/cart behaviour unprompted
+- [x] Context freshness acceptable: activity seconds old is reflected in the conversation
+- [x] New/cookieless visitor gets graceful generic concierge behaviour
 - [x] Embed + wiring steps documented in the runbook
 
 ## Blocked by
@@ -120,3 +120,18 @@ first parked run drew), "Full flow works on the deployed site", "Context
 freshness acceptable", and "New/cookieless visitor gets graceful generic
 concierge behaviour" (the code fallback is in place and unit-tested; the
 agent's actual behaviour is a live-agent check, covered in runbook §9.5).
+
+**2026-07-28 (human test):** Jordan's live walkthrough on the deployed site
+passed — all remaining criteria verified, after the fix batch merged in
+`4de2a60`, `8557549`, `8222b6c` (text-only widget defaults, channel Recaptcha
+off, debug panel moved bottom-left, `ces-messenger-loaded` listened on
+`window` so `setQueryParameters` actually fires, Reset Chat control,
+theme-accent primary colour — troubleshooting entries in `docs/runbook.md`).
+Widget renders styled against the luxury theme; session id delivered
+automatically and the agent references real browsing/cart behaviour
+unprompted; freshness acceptable; cookieless visitor gets generic concierge
+behaviour. Status set to done — unblocks 08/09/10/11.
+
+Carried to 08 (comment added there): remove the temporary
+`http://localhost:3000` entry from the channel's allowed origins before
+recording.
