@@ -1,6 +1,6 @@
 # 11 — Rich response widgets in chat (polish)
 
-Status: in-progress
+Status: awaiting-human-test
 Checkpoint: human-test-required
 
 ## Parent
