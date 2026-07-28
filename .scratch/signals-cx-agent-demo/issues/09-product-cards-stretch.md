@@ -54,3 +54,40 @@ added to **Blocked by**, so the pipeline won't pick this up until 11 reaches
 `done` (which includes its 09-disposition criterion: `wontfix` here if native
 widgets suffice, or findings fed back here if they don't). No scope change to
 this issue. Re-queued as ready-for-agent behind that gate.
+
+**2026-07-28 (11's implementer) — disposition: kept, not `wontfix`, pending
+a live check.** 11 prepared the repo-side artifacts for the native
+`productCarousel` / `productDetails` rich response widgets (widget-tool
+Parameters schemas, agent-instructions updates, runbook §10), confirmed
+against official CX Agent Studio docs
+([rich-response-widget](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/rich-response-widget),
+[widget tools](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/widget)).
+But whether the native widgets actually render on this repo's pinned chat
+component is a genuine open question, not yet resolvable from the sandbox:
+
+- The demo is pinned to the **open-source `ces-messenger`** component
+  (not the hosted `chat-messenger` build) specifically because only it
+  documents `setQueryParameters()`, the mechanism issues 06/07's
+  session-context wiring depends on (runbook §9.1).
+- A Google developer-forum thread
+  ([discuss.google.dev](https://discuss.google.dev/t/hosted-versus-open-source-ces-messenger-web-component/334696))
+  documents that the hosted `chat-messenger` build ships rich message
+  templates — the thread names "the Product Carousel" specifically — that
+  are **not available** in the open-source `ces-messenger` repo, with no
+  confirmed sync between the two release cycles as of that thread
+  (Feb–Mar 2026; no newer public source found either confirming or
+  denying parity since).
+- This sandbox has no browser/console access to test live rendering, so
+  11 could not confirm or deny whether its widgets actually render on the
+  pinned component — see runbook §10.2 for the full citation trail and
+  §10.5 for the exact human check.
+
+**Disposition: keep this issue open, not `wontfix`.** If runbook §10.5's
+live check shows the native widgets don't render acceptably on
+`ces-messenger` (plain text/raw JSON instead of a card, or a rendering
+error), this issue's `registerClientSideFunction` custom-render path is
+the fallback and should proceed from here, still gated behind that
+finding rather than started speculatively. If §10.5 instead confirms
+native rendering works, this issue can be closed `wontfix` as superseded
+at that point (a human decision once the live finding is in, not made by
+this implementer).
