@@ -1,6 +1,6 @@
 # 07 — Chat widget end-to-end
 
-Status: ready-for-agent
+Status: needs-human
 Checkpoint: human-test-required
 
 ## Parent
@@ -66,3 +66,23 @@ deployed site — no credentials, no mutations, no Vercel/console changes. Also
 rolled in the tracker bump to `^4.10.0` to use the new `getDomainSessionId()`
 getter (introduced 4.9.0; verified against the type definitions) instead of
 hand-parsing the `_sp_id` cookie. Re-queued as ready-for-agent.
+## Parked by pipeline (2026-07-28 12:06)
+
+Implementer flagged a spec conflict / blocker:
+
+-to-end.md` has a `Checkpoint: human-test-required` line (so the host anticipates human verification), but unlike issues `05-public-deploy.md` and the amended `06-cx-agent-and-tools.md`, it has **no "Agent constraint" section** scoping what prep work is authorized versus reserved for the human. Walking each acceptance criterion:
+
+1. **"Widget renders on the deployed site, styled acceptably against the luxury theme"** — requires the actual deployed Vercel site (from issue 05) plus a live CES managed token broker configured for public access (a GCP/CES console step, same category as 06's live agent creation). Cannot be rendered or visually verified from this sandbox.
+2. **"Session id read from the Snowplow cookie and delivered to the agent session automatically"** — the cookie-read + `setQueryParameters` call is pure code, but "delivered to the agent session" can only be confirmed by exercising the live widget against the live agent from issue 06 — a browser/console verification step.
+3. **"Full flow works on the deployed site: browse → cart → chat → agent references actual behaviour unprompted"** — explicitly a live, deployed, end-to-end browser verification. Cannot be executed here.
+4. **"Context freshness acceptable: activity seconds old is reflected in the conversation"** — same live end-to-end dependency as #3.
+5. **"New/cookieless visitor gets graceful generic concierge behaviour"** — verifiable in principle from agent instructions (already written in issue 06), but as stated here it's part of the same live widget/agent flow being asked for, not an isolated repo check.
+6. **"Embed + wiring steps documented in the runbook"** — the one criterion that's pure repo documentation and doable in isolation.
+
+This mirrors exactly what happened with issue 06 before it was amended: the core deliverable (embedding the widget against a live token broker, and proving the live browse→chat flow against the live agent from 06) requires GCP/CES console configuration and a live deployed site — resources this sandbox doesn't have. Also worth flagging per the PRD's own verify-at-build note: pinning `ces-messenger` vs `chat-messenger` for `setQueryParameters` support against *our* agent deployment is itself something that needs to be checked against the live agent, not assumed in code.
+
+**Recommendation:** add an **Agent constraint** section (mirroring 05/06's pattern) scoping the agent to repo-only prep — e.g., the page-level cookie-read + `setQueryParameters` wiring script, the widget embed markup/component with configuration driven by env vars, brand/theme CSS for the widget container, and a new runbook section covering token-broker console setup + widget embed steps — while leaving the live-render, live-session-delivery, and live end-to-end criteria unchecked for the human checkpoint. As written, no such carve-out exists, so per Step 1 I should not guess at scope and write partial code.
+
+No code was written and nothing was committed.
+
+<promise>BLOCKED</promise>
