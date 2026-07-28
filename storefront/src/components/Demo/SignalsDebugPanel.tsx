@@ -7,7 +7,21 @@ import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { useSignals } from "@/components/Signals/SignalsProvider";
 import { products } from "@/data/products";
+import type { CesMessengerElement } from "@/types/ces-messenger";
 import { deriveDebugSummary } from "@/utils/personalization";
+
+// Between demo takes: the widget persists the conversation in per-tab session
+// storage (a refresh reconnects to the same chat by design), so a fresh
+// conversation needs the component's own clearStorage() reset.
+function resetChatConversation() {
+  const ces = document.querySelector<CesMessengerElement>("ces-messenger");
+  if (!ces) {
+    return;
+  }
+  ces.endSession?.();
+  ces.clearStorage?.({});
+  window.location.reload();
+}
 
 interface SignalsDebugPanelProps {
   currentProductId?: string;
@@ -74,6 +88,13 @@ export function SignalsDebugPanel({
           className="rounded-full border border-[var(--accent)]/35 px-3 py-2 text-[10px] uppercase tracking-[0.24em] text-[var(--accent)] disabled:opacity-40"
         >
           Trigger Nudge
+        </button>
+        <button
+          type="button"
+          onClick={resetChatConversation}
+          className="rounded-full border border-[var(--accent)]/35 px-3 py-2 text-[10px] uppercase tracking-[0.24em] text-[var(--accent)]"
+        >
+          Reset Chat
         </button>
       </div>
 

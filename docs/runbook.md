@@ -663,3 +663,13 @@ via `custom-css` from there.
   a default (or any agent edit) only reaches the widget after you add a new
   version and point the channel at it. The simulator tests the draft, the
   widget tests the pinned version — they can disagree.
+- **Chat history survives refresh / no way to start a new conversation** —
+  intended widget behaviour: the conversation lives in per-tab session
+  storage and "Start conversation" reconnects to it. The component's reset
+  is `clearStorage()`; the demo panel's **Reset Chat** button wraps
+  `endSession()` + `clearStorage()` + reload for a clean take between
+  rehearsals. A new tab or incognito window is also always fresh.
+- **Widget buttons render Vue-green instead of the theme accent** — the
+  shadow styles default `--host-primary-color` to `#42b883`; the embed sets
+  that variable to the site's `--accent` on the host element, and the
+  `custom-css` attribute is the hook for any further shadow-DOM styling.

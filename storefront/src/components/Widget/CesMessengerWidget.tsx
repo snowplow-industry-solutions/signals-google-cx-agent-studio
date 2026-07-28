@@ -18,6 +18,18 @@ const WIDGET_SCRIPT_SRC =
 // agent/tools/get-user-context.openapi.yaml (docs/runbook.md §8.4).
 const SESSION_CONTEXT_VARIABLE = "snowplow_session_id";
 
+// The widget's shadow styles fall back to Vue-green (#42b883) for
+// --host-primary-color, which clashes hard with the luxury palette; pick up
+// the site accent instead. custom-css is injected into the shadow DOM and is
+// the sanctioned hook for anything the CSS variable doesn't reach.
+const WIDGET_HOST_STYLE = {
+  "--host-primary-color": "var(--accent)",
+} as React.CSSProperties;
+
+const WIDGET_CUSTOM_CSS = `
+  button { letter-spacing: 0.08em; }
+`;
+
 export function CesMessengerWidget() {
   const elementRef = useRef<CesMessengerElement | null>(null);
   const deploymentId = process.env.NEXT_PUBLIC_CES_DEPLOYMENT_ID;
@@ -84,6 +96,8 @@ export function CesMessengerWidget() {
         theme-id="dark"
         audio-input-mode="NONE"
         audio-output-mode="DISABLED"
+        custom-css={WIDGET_CUSTOM_CSS}
+        style={WIDGET_HOST_STYLE}
         className="fixed bottom-4 right-4 z-50"
       />
     </>

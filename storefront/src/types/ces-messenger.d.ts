@@ -8,6 +8,8 @@ import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
 export interface CesMessengerElement extends HTMLElement {
   setQueryParameters(params: Record<string, string>): void;
+  endSession?(): void;
+  clearStorage?(args: { clearAuthentication?: boolean }): void;
 }
 
 type CesMessengerAttributes = HTMLAttributes<CesMessengerElement> & {
@@ -18,6 +20,7 @@ type CesMessengerAttributes = HTMLAttributes<CesMessengerElement> & {
   "auto-open-chat"?: boolean;
   "audio-input-mode"?: "DEFAULT_ON" | "DEFAULT_OFF" | "SPACE_BAR_TO_TALK" | "NONE";
   "audio-output-mode"?: "ALWAYS_ON" | "DEFAULT_ON" | "DEFAULT_OFF" | "DISABLED";
+  "custom-css"?: string;
 };
 
 declare module "react" {
