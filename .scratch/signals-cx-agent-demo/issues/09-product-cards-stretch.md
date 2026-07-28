@@ -1,6 +1,6 @@
 # 09 — Product cards in chat (stretch)
 
-Status: needs-human
+Status: ready-for-agent
 
 ## Parent
 
@@ -22,6 +22,7 @@ Skip without ceremony if the timeline to the 7 August recording is at risk.
 ## Blocked by
 
 - `07-widget-end-to-end.md`
+- `11-rich-response-widgets.md` (disposition decides whether this issue runs at all)
 
 ## Comments
 
@@ -33,7 +34,7 @@ simpler, supported route; issue 11 carries a disposition criterion for this
 issue (close `wontfix` if superseded, or feed findings back here if native
 widgets can't do what we need). Check 11's outcome before starting this.
 
-## Parked by pipeline (2026-07-28 16:08)
+## Parked by pipeline (2026-07-28 16:08) — resolved, see comment below
 
 Implementer flagged a spec conflict / blocker:
 
@@ -46,3 +47,10 @@ This is a human-decision dependency, not something resolvable by reading more co
 **Blocker:** Issue 09 explicitly requires checking issue 11's disposition before starting, and issue 11 has not yet been implemented or checkpointed (still `ready-for-agent` / `human-test-required`, added in the immediately preceding commit with no PR file). There is no recorded outcome to check — 11 may supersede 09 entirely (`wontfix`) or may feed back findings requiring a different scope for 09. Proceeding would risk building the `registerClientSideFunction` card-rendering path that gets thrown away if native rich response widgets (issue 11) turn out sufficient.
 
 <promise>BLOCKED</promise>
+
+**2026-07-28 (human/assistant):** Un-parked — the implementer's reading is
+correct, and the dependency is now encoded structurally: `11-rich-response-widgets.md`
+added to **Blocked by**, so the pipeline won't pick this up until 11 reaches
+`done` (which includes its 09-disposition criterion: `wontfix` here if native
+widgets suffice, or findings fed back here if they don't). No scope change to
+this issue. Re-queued as ready-for-agent behind that gate.

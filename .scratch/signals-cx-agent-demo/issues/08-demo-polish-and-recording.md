@@ -1,6 +1,7 @@
 # 08 — Demo polish + recording
 
-Status: needs-human
+Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 
@@ -11,6 +12,25 @@ Status: needs-human
 Turn the working integration into the webinar deliverable. Write the demo script with browse-before-chat choreography (products browsed and carted before the widget opens, so attributes are in the Profile Store — no dead air). Prepare a seeded fallback session with known-good attributes in case the pipeline hiccups during recording. Verify the on-page debug panel shows live attribute values for the "prove it's real" beat. Sweep all presenter-facing material for correct current Google product naming. Rehearse, record the session, deliver.
 
 **Hard deadline: recording delivered by Thursday 7 August 2026.**
+
+**Agent constraint:** prepare everything that lives in the repo — the demo
+script as a repo doc (scene-by-scene choreography, talking points, the
+"prove it's real-time" beat), the Google product-naming sweep across
+presenter-facing material *in this repo* (demo script, runbook, storefront
+UI copy such as the debug panel; slides or other material outside the repo
+are the human's), completion of `docs/runbook.md` end-to-end (someone else
+could re-create the demo after trial expiry), a rehearsal checklist in the
+runbook that folds in the console allowed-origins cleanup noted in the
+comments, and a documented, human-runnable procedure for preparing and
+verifying the seeded fallback session (exact steps/commands and the
+verification call to run — not a live run). **Permitted live access —
+outbound, read-only:** unauthenticated HTTP GETs against the deployed site
+(`https://signals-google-gecx-storefront.vercel.app`); no credentials are
+available in the sandbox and none should be requested. Do **not** attempt to
+seed or verify a live Signals session, verify the debug panel against the
+live flow, rehearse, record, deliver, or touch the CX Agent Studio console
+or Vercel project — those criteria are human-verified afterwards, per the
+checkpoint.
 
 ## Acceptance criteria
 
@@ -34,7 +54,7 @@ from the chat channel's allowed origins in the CX Agent Studio console (it
 was added for local testing only). Human/console step — fold it into the
 rehearsal checklist.
 
-## Parked by pipeline (2026-07-28 16:06)
+## Parked by pipeline (2026-07-28 16:06) — resolved, see comment below
 
 Implementer flagged a spec conflict / blocker:
 
@@ -54,3 +74,13 @@ Unlike issues 05, 06, and 07, `08-demo-polish-and-recording.md` has no **Agent c
 No code was written and nothing was committed.
 
 <promise>BLOCKED</promise>
+
+**2026-07-28 (human/assistant):** Un-parked. Added the Agent constraint above
+(mirroring the 05/06/07 prep-only carve-out) and `Checkpoint:
+human-test-required`, per the implementer's recommendation. Also resolved the
+"on-screen material" ambiguity: scope for the naming sweep is this repo only
+(script, runbook, storefront UI copy); anything outside the repo stays with
+the human. Seeded fallback session is scoped to a documented human-runnable
+procedure — no live seeding/verification from the sandbox. Rehearsal,
+recording, delivery, debug-panel live check, and console origin cleanup all
+remain human checkpoint work. Re-queued as ready-for-agent.
