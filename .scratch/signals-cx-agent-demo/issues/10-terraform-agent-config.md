@@ -1,6 +1,6 @@
 # 10 — Terraform the CX Agent Studio config
 
-Status: in-progress
+Status: awaiting-human-test
 Checkpoint: human-test-required
 
 ## Parent
