@@ -1,6 +1,6 @@
 # 10 — Terraform the CX Agent Studio config
 
-Status: ready-for-agent
+Status: needs-human
 
 ## Parent
 
@@ -37,3 +37,30 @@ Known constraints from the research doc:
 ## Blocked by
 
 - `07-widget-end-to-end.md` (deployment/public-access config must be settled before codifying it)
+
+## Parked by pipeline (2026-07-28 16:12)
+
+Implementer flagged a spec conflict / blocker:
+
+ance criteria mix two categories of work without a scoping boundary between them:
+
+**Agent-doable (no live credentials needed):**
+- Write `.tf` files for `google_ces_app`, `google_ces_agent` (instruction via `file("agent/instructions.md")`), `google_ces_app_root_agent_association`, `google_ces_toolset` (OpenAPI spec via `file("agent/tools/*.openapi.yaml")`), `google_ces_app_version`, `google_ces_deployment`
+- Runbook section on what Terraform owns vs. stays manual
+
+**Requires live GCP credentials this sandbox does not have:**
+- "Existing console-built resources imported; `terraform plan` clean against live state" — `terraform import` needs the real resource IDs of the console-built app/agent/toolset/deployment that already exist in the Snowplow-managed sandbox GCP project (created via console in issues 06/07), plus an authenticated GCP provider to run `plan` against
+- "`apps.exportApp` JSON snapshot captured and stored" — a live call to the CES v1 API against that same real app
+- "Tagging policy applied to project/supporting resources" — actually *applying* labels to the live project, as opposed to just writing the resource
+
+This is the identical situation that got issue 08 parked on 2026-07-28: acceptance criteria bundle agent-doable prep with live-credential/console-verification work, and the issue has **no `Agent constraint` section** carving out which pieces are safe to implement now versus reserved for a human checkpoint (unlike issues 05/06/07, which had explicit constraints scoping the agent to prep work). Issue 08's blocked note explicitly recommends adding that carve-out before re-queuing rather than letting the agent guess. Guessing here has real cost: if I write `import` blocks or "confirm plan clean" against placeholder resource IDs I invent, or fabricate an `apps.exportApp` JSON snapshot without a live call, that's worse than not writing it — it would misrepresent live state that doesn't exist in this sandbox and could get checked in as if it were verified.
+
+I could write just the Terraform authoring + runbook piece and leave the rest unticked, but per the issue-08 precedent this repo's convention is to park and request an explicit `Agent constraint` rather than have the agent unilaterally decide the scope split.
+
+**Recommendation:** add an `Agent constraint` section to `10-terraform-agent-config.md` mirroring 05/06/07/08's pattern, e.g.:
+
+> Write the Terraform config (`app`, `agent`, `toolset`, `app_version`, `deployment` resources) referencing the existing `agent/instructions.md` and `agent/tools/*.openapi.yaml` files, and update the runbook with the ownership boundary and tagging-gap note. Do **not** attempt `terraform import` against live resources, run `terraform plan`/`apply`, call `apps.exportApp`, or apply labels to the live project — those require live GCP credentials this sandbox doesn't have and are verified by a human afterwards, per a checkpoint.
+
+No code was written and nothing was committed.
+
+<promise>BLOCKED</promise>
