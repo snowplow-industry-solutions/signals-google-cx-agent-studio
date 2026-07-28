@@ -36,8 +36,11 @@ export function SignalsDebugPanel({
     [attributes, collectionName, currentProductId, lineItems]
   );
 
+  // bottom-LEFT: the ces-messenger launcher pins itself bottom-right via its
+  // own shadow-DOM fixed positioning; at the same corner and z-index the
+  // later-in-DOM panel paints over it and hides the chat bubble.
   return (
-    <aside className="fixed bottom-4 right-4 z-50 max-w-sm rounded-[1.5rem] border border-[var(--accent)]/25 bg-[color:color-mix(in_srgb,var(--background)_92%,black)] p-4 shadow-2xl backdrop-blur-xl">
+    <aside className="fixed bottom-4 left-4 z-50 max-w-sm rounded-[1.5rem] border border-[var(--accent)]/25 bg-[color:color-mix(in_srgb,var(--background)_92%,black)] p-4 shadow-2xl backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.4em] text-[var(--muted)]">

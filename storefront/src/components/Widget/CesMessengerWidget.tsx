@@ -62,12 +62,18 @@ export function CesMessengerWidget() {
   return (
     <>
       <Script src={WIDGET_SCRIPT_SRC} strategy="afterInteractive" />
+      {/* Text-only: the component defaults audio-output-mode to ALWAYS_ON
+          (agent speaks) and audio-input-mode to DEFAULT_ON (mic active); the
+          console channel's "Interaction type: Text" setting does not reach a
+          hand-authored embed. */}
       <ces-messenger
         ref={elementRef}
         deployment-id={deploymentId}
         chat-title="Atelier Concierge"
         token-broker-url="MANAGED"
         theme-id="dark"
+        audio-input-mode="NONE"
+        audio-output-mode="DISABLED"
         className="fixed bottom-4 right-4 z-50"
       />
     </>

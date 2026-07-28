@@ -439,7 +439,15 @@ widget deployment exists (§9.2) and the storefront is embedding it (§9.3):
    - Enable origin checking, and add the deployed storefront's exact origin
      (`https://signals-google-gecx-storefront.vercel.app`, or the current
      deployed URL from §7) to the allowed-origins list.
-   - Enable reCAPTCHA if offered (recommended for a public webinar demo).
+   - Leave **Recaptcha OFF**. The `ces-messenger` component has no reCAPTCHA
+     support (no `recaptcha-site-key`-style attribute; verified against its
+     README 2026-07-28) — with the channel toggle on, the widget calls
+     `generateChatToken` without a `recaptcha_token` and the broker rejects
+     every session with `400 INVALID_ARGUMENT: "Recaptcha token is missing."`.
+     (The `enableRecaptcha` option in Google's web-widget docs belongs to the
+     other widget generation, `chat-messenger`, which we can't use — §9.1.)
+     Public access + origin verification is the protection level for this
+     short-lived demo deployment.
 3. Confirm the managed token broker option is selected — no separate broker
    infrastructure is needed; `token-broker-url="MANAGED"` in the embed
    (§9.4) is backed by Google's own `sessions.generateChatToken`.
@@ -481,6 +489,8 @@ renders nothing if it's unset). For reference, the equivalent static markup:
   chat-title="Atelier Concierge"
   token-broker-url="MANAGED"
   theme-id="dark"
+  audio-input-mode="NONE"
+  audio-output-mode="DISABLED"
 ></ces-messenger>
 ```
 
@@ -619,3 +629,21 @@ via `custom-css` from there.
   `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is set in the Vercel environment (§9.3)
   and that the deploy actually picked it up (the component renders nothing
   when that var is unset, by design).
+- **Widget loads and authorizes but no chat bubble is visible** — check for
+  another `position: fixed` element occupying the bottom-right corner. The
+  launcher pins itself bottom-right via the widget's own shadow-DOM styles
+  (host-element classes don't move it); anything later in the DOM at the
+  same corner and z-index paints over it. This is why `SignalsDebugPanel`
+  sits bottom-*left*. Diagnose with
+  `document.querySelector("ces-messenger").shadowRoot` (launcher present?)
+  vs `document.elementFromPoint(...)` at the corner (who's on top?).
+- **"Start conversation" fails; console shows `No token received from token
+  broker` with `400 INVALID_ARGUMENT: "Recaptcha token is missing."`** —
+  the channel's Recaptcha toggle is on. Turn it off (§9.2); `ces-messenger`
+  cannot mint reCAPTCHA tokens. Takes effect without a redeploy.
+- **Agent replies with spoken audio / mic prompt appears despite the
+  channel's "Interaction type: Text"** — that console setting doesn't reach
+  a hand-authored embed; the component itself defaults to
+  `audio-output-mode="ALWAYS_ON"` and `audio-input-mode="DEFAULT_ON"`. The
+  embed in §9.4 (and `CesMessengerWidget.tsx`) pins both off
+  (`NONE`/`DISABLED`) for the text-only demo.

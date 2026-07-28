@@ -16,6 +16,8 @@ type CesMessengerAttributes = HTMLAttributes<CesMessengerElement> & {
   "token-broker-url"?: string;
   "theme-id"?: "light" | "dark";
   "auto-open-chat"?: boolean;
+  "audio-input-mode"?: "DEFAULT_ON" | "DEFAULT_OFF" | "SPACE_BAR_TO_TALK" | "NONE";
+  "audio-output-mode"?: "ALWAYS_ON" | "DEFAULT_ON" | "DEFAULT_OFF" | "DISABLED";
 };
 
 declare module "react" {
