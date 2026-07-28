@@ -16,7 +16,7 @@
     "verify:deploy": "tsx scripts/verify-deploy.ts"
   },
   "dependencies": {
-    "@snowplow/browser-tracker": "^4.6.9",
+    "@snowplow/browser-tracker": "^4.10.0",
     "@snowplow/signals-browser-plugin": "^0.2.2",
     "@snowplow/signals-node": "^0.4.0",
     "next": "16.1.7",
