@@ -19,6 +19,14 @@ describe("buildChecks", () => {
     }
   });
 
+  it("builds a text-format check for the ces-messenger widget embed", () => {
+    const checks = buildChecks("secret", "session-1");
+    const widgetCheck = checks.find((check) => check.name.includes("ces-messenger"));
+    expect(widgetCheck?.path).toBe("/");
+    expect(widgetCheck?.expectedStatus).toBe(200);
+    expect(widgetCheck?.bodyFormat).toBe("text");
+  });
+
   it("builds authorized checks for context and catalog carrying the shared-secret header", () => {
     const checks = buildChecks("my-secret", "session-1");
     const authorized = checks.filter((check) => check.headers?.["x-agent-api-key"] === "my-secret");
@@ -51,7 +59,7 @@ describe("evaluateResult", () => {
   });
 
   it("fails when the body validator reports a problem", () => {
-    const contextCheck = buildChecks("secret", "session-1")[2];
+    const contextCheck = buildChecks("secret", "session-1")[3];
     const result = evaluateResult(contextCheck, 200, { profile: {} });
     expect(result.pass).toBe(false);
     expect(result.detail).toContain("recent_activity");
@@ -59,7 +67,7 @@ describe("evaluateResult", () => {
   });
 
   it("passes when the body validator finds every required key", () => {
-    const contextCheck = buildChecks("secret", "session-1")[2];
+    const contextCheck = buildChecks("secret", "session-1")[3];
     const result = evaluateResult(contextCheck, 200, {
       profile: {},
       recent_activity: "",
@@ -69,15 +77,41 @@ describe("evaluateResult", () => {
   });
 
   it("fails the catalog check when results is present but not an array", () => {
-    const catalogCheck = buildChecks("secret", "session-1")[4];
+    const catalogCheck = buildChecks("secret", "session-1")[5];
     const result = evaluateResult(catalogCheck, 200, { results: "not-an-array" });
     expect(result.pass).toBe(false);
     expect(result.detail).toBe('"results" is not an array');
   });
 
   it("passes the catalog check when results is an array", () => {
-    const catalogCheck = buildChecks("secret", "session-1")[4];
+    const catalogCheck = buildChecks("secret", "session-1")[5];
     const result = evaluateResult(catalogCheck, 200, { results: [] });
+    expect(result.pass).toBe(true);
+  });
+
+  it("fails the widget-embed check when the script or element is missing", () => {
+    const widgetCheck = buildChecks("secret", "session-1")[1];
+    const result = evaluateResult(widgetCheck, 200, "<html><body>no widget here</body></html>");
+    expect(result.pass).toBe(false);
+    expect(result.detail).toContain("ces-messenger script (found: false)");
+    expect(result.detail).toContain("<ces-messenger> element (found: false)");
+  });
+
+  it("fails the widget-embed check when only the script is present", () => {
+    const widgetCheck = buildChecks("secret", "session-1")[1];
+    const html = '<script src="https://www.gstatic.com/ces-console/fast/ces-messenger/ces-messenger.js"></script>';
+    const result = evaluateResult(widgetCheck, 200, html);
+    expect(result.pass).toBe(false);
+    expect(result.detail).toContain("ces-messenger script (found: true)");
+    expect(result.detail).toContain("<ces-messenger> element (found: false)");
+  });
+
+  it("passes the widget-embed check when both the script and element are present", () => {
+    const widgetCheck = buildChecks("secret", "session-1")[1];
+    const html =
+      '<script src="https://www.gstatic.com/ces-console/fast/ces-messenger/ces-messenger.js"></script>' +
+      '<ces-messenger deployment-id="projects/p/locations/l/apps/a/deployments/d"></ces-messenger>';
+    const result = evaluateResult(widgetCheck, 200, html);
     expect(result.pass).toBe(true);
   });
 });

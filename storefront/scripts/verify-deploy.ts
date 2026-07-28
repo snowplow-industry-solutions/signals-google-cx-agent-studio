@@ -1,12 +1,15 @@
 #!/usr/bin/env tsx
 /**
- * Post-deploy smoke test for the agent-facing tool endpoints (issue 05).
+ * Post-deploy smoke test for the agent-facing tool endpoints (issue 05) and
+ * the ces-messenger widget embed (issue 07).
  *
  * A human runs this after triggering the Vercel deploy, against the public
- * HTTPS URL Vercel assigns, to confirm the site is reachable and that
+ * HTTPS URL Vercel assigns, to confirm the site is reachable, that
  * /api/agent/context + /api/agent/catalog enforce the shared-secret header
- * and return the expected payload shape. It does not replace the browser
- * walkthrough (browse -> context reflects that session) from the runbook.
+ * and return the expected payload shape, and that the homepage HTML embeds
+ * the ces-messenger script and element. It does not replace the browser
+ * walkthrough (browse -> context reflects that session, widget delivers the
+ * session id to a live agent turn) from the runbook.
  *
  * Usage: AGENT_SHARED_SECRET=<secret> npm run verify:deploy -- <base-url> [session_id]
  */
@@ -21,6 +24,7 @@ export interface Check {
   path: string;
   headers?: Record<string, string>;
   expectedStatus: number;
+  bodyFormat?: "json" | "text";
   validateBody?: (body: unknown) => string | null;
 }
 
@@ -28,6 +32,22 @@ export interface CheckResult {
   name: string;
   pass: boolean;
   detail: string;
+}
+
+// Keep this substring in sync with WIDGET_SCRIPT_SRC in
+// src/components/Widget/CesMessengerWidget.tsx.
+const WIDGET_SCRIPT_MARKER = "ces-messenger.js";
+
+function checkWidgetEmbed(html: unknown): string | null {
+  const body = typeof html === "string" ? html : "";
+  const hasScript = body.includes(WIDGET_SCRIPT_MARKER);
+  const hasElement = /<ces-messenger[\s>]/i.test(body);
+
+  if (hasScript && hasElement) {
+    return null;
+  }
+
+  return `expected the homepage HTML to include both the ces-messenger script (found: ${hasScript}) and a <ces-messenger> element (found: ${hasElement})`;
 }
 
 function hasKeys(body: unknown, keys: readonly string[]): string | null {
@@ -47,6 +67,13 @@ export function buildChecks(apiKey: string, sessionId: string): Check[] {
       name: "Site is publicly reachable",
       path: "/",
       expectedStatus: 200,
+    },
+    {
+      name: "ces-messenger widget embed is present on the homepage",
+      path: "/",
+      expectedStatus: 200,
+      bodyFormat: "text",
+      validateBody: checkWidgetEmbed,
     },
     {
       name: "Context endpoint rejects requests without the shared secret",
@@ -96,7 +123,7 @@ async function runCheck(baseUrl: string, check: Check): Promise<CheckResult> {
   const response = await fetch(new URL(check.path, baseUrl), { headers: check.headers });
   let body: unknown = null;
   try {
-    body = await response.json();
+    body = check.bodyFormat === "text" ? await response.text() : await response.json();
   } catch {
     body = null;
   }
