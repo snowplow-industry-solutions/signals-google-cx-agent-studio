@@ -5,3 +5,12 @@ node_modules/
 .vercel/
 .claude/worktrees/
 .claude/settings.local.json
+
+# Terraform (terraform/) -- never commit state or real variable values
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
+terraform/crash.log
+terraform/crash.*.log

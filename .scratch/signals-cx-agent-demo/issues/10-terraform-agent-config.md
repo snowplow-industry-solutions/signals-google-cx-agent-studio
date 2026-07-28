@@ -51,12 +51,12 @@ afterwards, per the checkpoint.
 
 ## Acceptance criteria
 
-- [ ] Terraform config in repo covering app, root agent (instruction from file), toolset with Signals OpenAPI spec, app version, deployment with public-access settings
+- [x] Terraform config in repo covering app, root agent (instruction from file), toolset with Signals OpenAPI spec, app version, deployment with public-access settings
 - [ ] Existing console-built resources imported; `terraform plan` clean against live state
-- [ ] Agent instructions and OpenAPI spec live as files in the repo, referenced by the TF config
+- [x] Agent instructions and OpenAPI spec live as files in the repo, referenced by the TF config
 - [ ] `apps.exportApp` JSON snapshot captured and stored
 - [ ] Tagging policy applied to project/supporting resources; `ces_app` label gap noted
-- [ ] Runbook updated: what Terraform owns, what stays manual (GE enablement, beta security settings), how to re-apply after trial expiry
+- [x] Runbook updated: what Terraform owns, what stays manual (GE enablement, beta security settings), how to re-apply after trial expiry
 
 ## Blocked by
 
@@ -99,3 +99,61 @@ documented input variables, and the import/plan/exportApp steps are written
 up as exact human-runnable commands rather than executed or faked. Import,
 clean-plan confirmation, snapshot capture, and live labels stay with the
 human checkpoint. Re-queued as ready-for-agent.
+
+**2026-07-28 (agent):** Prepped on branch `sandcastle/10-terraform-agent-config`,
+per the Agent constraint above (no live GCP access from this sandbox).
+
+- `terraform/` — new directory: `google_ces_app` (app shell + the
+  `snowplow_session_id` variable declaration, no default value per the
+  §8.4/§9.1 finding that a default masks a missing session id),
+  `google_ces_agent` (root agent, `instruction = file("../agent/instructions.md")`),
+  `google_ces_app_root_agent_association`, two `google_ces_toolset`
+  resources (`open_api_schema` via `file(...)` from `agent/tools/*.openapi.yaml`),
+  `google_ces_app_version`, and `google_ces_deployment` with the
+  public-access/origin-check/no-recaptcha settings from issue 07. Every
+  live resource ID (project, app, agent, toolset, app-version, deployment)
+  is a required input variable with no default — see
+  `terraform/variables.tf` and `terraform/terraform.tfvars.example`.
+  `versions.tf` pins `hashicorp/google >= 7.31.0`.
+- Validated the config's schema (attribute/block names, required vs.
+  optional) with `terraform init -backend=false` + `terraform validate`
+  against the real provider (installed v7.41.0) — this only checks HCL
+  against the provider's schema, no GCP credentials or live state involved,
+  so it stayed inside the read-only/no-live-access constraint. It passed
+  clean; `terraform plan`/`apply`/`import` were not run, per the constraint.
+- `terraform/secrets.tf` — a labelled Secret Manager secret backing both
+  toolsets' API-key auth (`google_ces_toolset`'s `api_key_config` requires a
+  secret *version resource*, unlike the console's raw-value form — see
+  `terraform/README.md` "Secret reconciliation" for the resulting human
+  decision at import time) plus the CES service-agent IAM grant already
+  known from issue 06's troubleshooting notes.
+- `terraform/README.md` — directory index and the ownership boundary:
+  what Terraform owns vs. stays manual (GE enablement/licensing,
+  beta-only `google_ces_security_settings`), the `ces_app`/`ces_agent`
+  label gap (neither exposes `labels`; only the new Secret Manager secret
+  in this config can carry them), and the provider bug #26231 status
+  (confirmed still open) with a note that this config avoids the exact
+  repro (model_settings only set on the agent, not the app).
+- `docs/runbook.md` new §10 ("Terraform: codify, import, and re-apply") —
+  the ownership-boundary summary, a table mapping each variable to where
+  its live value is found, the full `terraform import` sequence in
+  dependency order, the clean-plan check command, the `apps.exportApp`
+  capture command (deliberately left with an explicit `<confirm from the
+  API reference>` host placeholder rather than a guessed hostname — the
+  research doc's citations don't pin down the REST host and this sandbox
+  has no live access to check it), the project-level tagging `gcloud`
+  command (`ces_app`/`ces_agent` have no labels field, so this can't be a
+  Terraform resource), and the re-apply-after-trial-expiry / publish-a-new-version
+  steps (app versions are immutable — a content change needs a new
+  `google_ces_app_version` + repointing the deployment, not editing the
+  existing one in place). Five new Troubleshooting entries.
+- `.gitignore` — ignores `terraform/.terraform/`, `terraform/*.tfstate*`,
+  and `terraform/*.tfvars` (keeping `terraform.tfvars.example`).
+- Ticked the two criteria fully satisfiable from this sandbox (the `.tf`
+  config itself, and instructions/OpenAPI referenced by file()) plus the
+  runbook criterion. Left unticked: import + clean plan, the `exportApp`
+  snapshot, and "tagging policy **applied**" (the secret's labels and the
+  `ces_app` gap note are done in code/docs, but nothing live got labelled)
+  — all four require the live sandbox project, per the Agent constraint.
+- `npm --prefix storefront test` and `npm --prefix storefront run lint`
+  both pass (no `storefront/` app code touched by this issue).

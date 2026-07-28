@@ -546,6 +546,171 @@ via `custom-css` from there.
 7. Record the result (pass/fail + timestamp) here:
    `<PLACEHOLDER: widget end-to-end verification run log>`.
 
+## 10. Terraform: codify, import, and re-apply
+
+Covers `.scratch/signals-cx-agent-demo/issues/10-terraform-agent-config.md`:
+backs the console-built app/agent/toolsets/deployment from §8–9 with
+Terraform (`terraform/`, `google_ces_*` resources,
+`docs/research/cx-agent-studio-terraform.md`), so the demo survives console
+drift and can be re-created after the trial expires. The `.tf` files, the
+`agent/instructions.md`/`agent/tools/*.openapi.yaml` references, and the
+ownership-boundary documentation are prepared in the repo (see
+`terraform/README.md`); **everything below that touches the live project —
+import, `terraform plan`, the `apps.exportApp` snapshot call, and applying
+labels to the live project — is human-triggered**, outside this sandbox.
+Requires the console-built resources from §8 and §9 to already exist.
+
+### 10.1 Ownership boundary
+
+See `terraform/README.md` for the full breakdown. Summary: Terraform owns
+the app, root agent (instructions from file), the app/root-agent
+association, both OpenAPI toolsets (schemas from file), the app version,
+the web-widget deployment's public-access settings, and a labelled Secret
+Manager secret for the shared API key. Stays manual permanently: Gemini
+Enterprise for CX enablement/licensing/allowlisting, and
+`google_ces_security_settings` (beta-provider-only — this repo pins the GA
+`google` provider). Neither `google_ces_app` nor `google_ces_agent` exposes
+a `labels` field, so the baseline tagging policy
+(`system=signals-gecx-demo`, `snowplow-owner=cc017`, `environment=dev`)
+reaches only the Secret Manager secret Terraform introduces; project-level
+labels are applied out-of-band (10.6).
+
+### 10.2 Finding the real resource IDs
+
+Every ID below is a required `terraform/variables.tf` input with no
+default — fill in `terraform/terraform.tfvars` (gitignored; copy from
+`terraform/terraform.tfvars.example`) before running anything.
+
+| Variable | Where to find it |
+|---|---|
+| `project_id` | Snowplow-managed sandbox GCP project ID (IAM & Admin → Settings) |
+| `location` | The app's resource-name location segment — console URL when viewing the app, or the `name` field in an `apps.exportApp` response (10.5) |
+| `app_id` | Console → app settings, or the `name` field's `apps/{app_id}` segment |
+| `agent_id` | Console → Root Agent node settings, or the agent's resource name |
+| `context_toolset_id` | Console → the `getUserContext` toolset's settings |
+| `catalog_toolset_id` | Console → the `searchCatalog` toolset's settings |
+| `app_version_id` | The version currently pinned to the live deployment's channel — console → deployment → pinned Agent Version (see §9's note that the channel serves a version snapshot, not the draft) |
+| `deployment_display_name` | Console → the web-widget deployment's display name |
+| `model_name` | Console → Root Agent → model settings — read the live value, don't guess |
+
+`terraform/secrets.tf`'s `agent_shared_secret_id`/`agent_shared_secret_value`
+are a separate decision — see 10.4 before importing anything toolset-related.
+
+### 10.3 Import sequence
+
+From `terraform/`, with `terraform.tfvars` filled in and
+`terraform init` run once:
+
+```
+PROJECT_ID=<project_id>
+LOCATION=<location>
+APP_ID=<app_id>
+AGENT_ID=<agent_id>
+CONTEXT_TOOLSET_ID=<context_toolset_id>
+CATALOG_TOOLSET_ID=<catalog_toolset_id>
+APP_VERSION_ID=<app_version_id>
+DEPLOYMENT_ID=<deployment_id, from NEXT_PUBLIC_CES_DEPLOYMENT_ID's final path segment>
+
+terraform import google_ces_app.this \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}"
+
+terraform import google_ces_toolset.context \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/toolsets/${CONTEXT_TOOLSET_ID}"
+
+terraform import google_ces_toolset.catalog \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/toolsets/${CATALOG_TOOLSET_ID}"
+
+terraform import google_ces_agent.root \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/agents/${AGENT_ID}"
+
+terraform import google_ces_app_root_agent_association.this \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/agents/${AGENT_ID}"
+
+terraform import google_ces_app_version.current \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/versions/${APP_VERSION_ID}"
+
+terraform import google_ces_deployment.web_widget \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/deployments/${DEPLOYMENT_ID}"
+```
+
+Import the shared secret too (only if reconciling with the console's hidden
+secret — the other option in `terraform/README.md` "Secret reconciliation"
+skips this and creates a fresh one on `apply` instead):
+
+```
+SECRET_ID=<the secret backing the console tools' API-key auth>
+SECRET_VERSION=<its live version number, e.g. 1>
+
+terraform import google_secret_manager_secret.agent_shared_secret \
+  "projects/${PROJECT_ID}/secrets/${SECRET_ID}"
+
+terraform import google_secret_manager_secret_version.agent_shared_secret \
+  "projects/${PROJECT_ID}/secrets/${SECRET_ID}/versions/${SECRET_VERSION}"
+```
+
+### 10.4 Confirm a clean plan
+
+```
+TF_VAR_agent_shared_secret_value=<the live AGENT_SHARED_SECRET value> \
+  terraform plan
+```
+
+**Expected result:** no changes, or only the accepted secret-reconciliation
+diff from `terraform/README.md` if the fresh-secret path was chosen. Any
+other diff means a variable value or a `.tf` argument doesn't match live
+state — reconcile before treating this config as authoritative. Record the
+result here: `<PLACEHOLDER: clean-plan verification run log>`.
+
+### 10.5 Capture the `apps.exportApp` snapshot
+
+Belt-and-braces drift/backup artefact, independent of the Terraform state.
+Confirm the exact request host and path against the [CES v1 API
+reference](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/reference/rest/v1/projects.locations.apps/exportApp)
+before running — not guessed here:
+
+```
+curl -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  "<CES_API_HOST, confirm from the API reference above>/v1/projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}:exportApp" \
+  -d '{"exportFormat": "JSON"}' \
+  -o "agent/export/app-export-$(date +%Y%m%d).json"
+```
+
+Commit the resulting file under `agent/export/` (create the directory) —
+same treatment as `agent/instructions.console.txt`: a checked-in snapshot of
+live console state, not something the app reads at runtime. Record the
+capture here: `<PLACEHOLDER: exportApp snapshot capture log — date, file
+path, any drift noticed vs. the `.tf` sources>`.
+
+### 10.6 Tagging: apply at the project level
+
+`google_ces_app`/`google_ces_agent` have no `labels` field (10.1), so the
+baseline policy is applied directly to the project, not through Terraform:
+
+```
+gcloud projects update "${PROJECT_ID}" \
+  --update-labels=system=signals-gecx-demo,snowplow-owner=cc017,environment=dev
+```
+
+Confirm with `gcloud projects describe "${PROJECT_ID}" --format='value(labels)'`.
+Record here: `<PLACEHOLDER: project-labelling verification log>`.
+
+### 10.7 Re-apply after trial expiry / re-publish a change
+
+1. Re-run §1–9 against the fresh trial org/project to get new console-built
+   resources (Terraform doesn't create these greenfield — see
+   `terraform/README.md`; it manages what already exists).
+2. Update `terraform.tfvars` with the new project/app/agent/toolset/version/
+   deployment IDs, re-run 10.3–10.4 against the new project.
+3. **For a content-only change** (e.g. edited `agent/instructions.md`) on an
+   already-imported project: don't edit `google_ces_app_version.current` in
+   place — app versions are immutable. Add a new
+   `google_ces_app_version` resource with a new `app_version_id`, point
+   `google_ces_deployment.web_widget.app_version` at it, `apply`, then
+   remove the old version resource once the deployment's cutover is
+   confirmed in the console.
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
@@ -673,3 +838,21 @@ via `custom-css` from there.
   shadow styles default `--host-primary-color` to `#42b883`; the embed sets
   that variable to the site's `--accent` on the host element, and the
   `custom-css` attribute is the hook for any further shadow-DOM styling.
+- **`terraform plan` shows a diff on the toolsets' `api_authentication`
+  after import** — expected if the fresh-secret path in `terraform/README.md`
+  ("Secret reconciliation") was chosen instead of importing the console's
+  hidden secret; clears after applying and re-pointing both tools' console
+  auth config at the new Secret Manager secret version.
+- **`terraform apply` on `google_ces_app`/`google_ces_agent` 400s with a
+  model-availability error** — check provider issue
+  [#26231](https://github.com/hashicorp/terraform-provider-google/issues/26231)
+  (open as of 2026-07-28): `gemini-3-flash` + `temperature` in the `us`
+  location. This config only sets `model_settings` on `google_ces_agent`,
+  not `google_ces_app`, but the underlying restriction may still apply.
+- **Import fails with "resource already managed" or a format error on the
+  resource ID** — double-check the ID format against the specific
+  resource's accepted forms (they differ slightly — e.g. `google_ces_app`
+  takes `projects/{project}/locations/{location}/apps/{name}`, `google_ces_agent`
+  adds an `/agents/{name}` suffix); the provider doc source files under
+  `website/docs/r/ces_*.html.markdown` in the `terraform-provider-google`
+  repo list every accepted format per resource.

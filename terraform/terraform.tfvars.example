@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars (gitignored) and fill in with real values read
+# from the console / apps.exportApp -- see README.md "Finding the real
+# resource IDs". Never commit terraform.tfvars.
+#
+# agent_shared_secret_value is intentionally left out of this file even as
+# a placeholder -- pass it at apply time instead:
+#   TF_VAR_agent_shared_secret_value=<value> terraform apply
+
+project_id = "<PLACEHOLDER: Snowplow-managed sandbox GCP project ID>"
+location   = "<PLACEHOLDER: e.g. us -- confirm, don't assume>"
+
+app_id              = "<PLACEHOLDER: existing console-built app ID>"
+agent_id            = "<PLACEHOLDER: existing console-built root agent ID>"
+context_toolset_id  = "<PLACEHOLDER: existing getUserContext toolset ID>"
+catalog_toolset_id  = "<PLACEHOLDER: existing searchCatalog toolset ID>"
+
+app_version_id           = "<PLACEHOLDER: existing app version ID currently live on the deployment>"
+app_version_display_name = "<PLACEHOLDER: e.g. v1>"
+
+deployment_display_name = "<PLACEHOLDER: existing deployment's display name>"
+
+model_name        = "<PLACEHOLDER: model the live agent currently uses, e.g. gemini-3.0-flash-001>"
+model_temperature = null
