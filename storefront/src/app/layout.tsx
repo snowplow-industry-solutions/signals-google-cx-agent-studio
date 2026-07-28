@@ -9,6 +9,7 @@ import { Header } from "@/components/Header";
 import { StylistNudge } from "@/components/Interventions/StylistNudge";
 import { SignalsBootstrap } from "@/components/Signals/SignalsBootstrap";
 import { SignalsProvider } from "@/components/Signals/SignalsProvider";
+import { CesMessengerWidget } from "@/components/Widget/CesMessengerWidget";
 import "./globals.css";
 
 const display = Cormorant_Garamond({
@@ -42,6 +43,7 @@ export default function RootLayout({
               <SnowplowProvider>
                 <SignalsBootstrap />
                 <StylistNudge />
+                <CesMessengerWidget />
                 <Header />
                 <main className="min-h-screen">{children}</main>
                 <Footer />
