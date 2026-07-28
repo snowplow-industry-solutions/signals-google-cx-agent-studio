@@ -3,6 +3,9 @@
 #
 # Statuses (Status: line in each issue file):
 #   ready-for-agent      eligible for the agent pipeline
+#   in-progress          claimed by a running pipeline; not eligible, does not
+#                        satisfy blockers. If a host process dies mid-issue,
+#                        reset manually: tracker.sh set-status <id> ready-for-agent
 #   ready-for-human      human task; satisfies blockers only when done
 #   awaiting-human-test  agent finished; satisfies blockers UNLESS the issue
 #                        carries "Checkpoint: human-test-required"
@@ -94,7 +97,7 @@ cmd_view() { cat "$(issue_file "$1")"; }
 cmd_set_status() { # <id> <status>
   local f; f="$(issue_file "$1")"
   case "$2" in
-    ready-for-agent|ready-for-human|awaiting-human-test|needs-human|done) ;;
+    ready-for-agent|in-progress|ready-for-human|awaiting-human-test|needs-human|done) ;;
     *) echo "error: unknown status '$2'" >&2; exit 1 ;;
   esac
   sed -i.bak "s/^Status:.*/Status: $2/" "$f" && rm -f "$f.bak"

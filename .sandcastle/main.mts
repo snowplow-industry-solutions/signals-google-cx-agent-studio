@@ -291,6 +291,13 @@ for (let n = 1; n <= MAX_ISSUES_PER_RUN; n++) {
   const issue = eligible[0];
   processed.add(issue.id);
 
+  // Claim the issue before any work so a concurrently running AFK host doesn't
+  // pick it up too (statuses otherwise only change at pipeline end). Every exit
+  // path in processIssue overwrites this with a terminal status; if the host
+  // process itself dies, reset manually: tracker.sh set-status <id> ready-for-agent
+  tracker("set-status", issue.id, "in-progress");
+  commitMetadata(`Claim issue ${issue.id} (pipeline)`);
+
   try {
     await processIssue(issue);
   } catch (err) {
