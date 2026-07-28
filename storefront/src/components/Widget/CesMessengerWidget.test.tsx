@@ -64,7 +64,8 @@ describe("CesMessengerWidget", () => {
     element!.setQueryParameters = setQueryParametersMock;
 
     await act(async () => {
-      element!.dispatchEvent(new Event("ces-messenger-loaded"));
+      // The real widget fires this on window, not on the element.
+      window.dispatchEvent(new Event("ces-messenger-loaded"));
     });
 
     expect(setQueryParametersMock).toHaveBeenCalledWith({
@@ -85,7 +86,7 @@ describe("CesMessengerWidget", () => {
     element!.setQueryParameters = setQueryParametersMock;
 
     await act(async () => {
-      element!.dispatchEvent(new Event("ces-messenger-loaded"));
+      window.dispatchEvent(new Event("ces-messenger-loaded"));
     });
 
     expect(setQueryParametersMock).not.toHaveBeenCalled();
@@ -100,5 +101,28 @@ describe("CesMessengerWidget", () => {
     });
 
     expect(queryWidget(container)).toBeNull();
+  });
+
+  // Must run last in this file: customElements.define is irreversible in the
+  // shared jsdom window, and the earlier tests rely on the element NOT having
+  // setQueryParameters at mount (to exercise the event-listener path).
+  it("passes the session id immediately when the widget loaded before mount", async () => {
+    getDomainSessionIdMock.mockReturnValue("session-early");
+    const instanceMock = vi.fn();
+    customElements.define(
+      "ces-messenger",
+      class extends HTMLElement {
+        setQueryParameters = instanceMock;
+      }
+    );
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<CesMessengerWidget />);
+    });
+
+    expect(instanceMock).toHaveBeenCalledWith({
+      snowplow_session_id: "session-early",
+    });
   });
 });

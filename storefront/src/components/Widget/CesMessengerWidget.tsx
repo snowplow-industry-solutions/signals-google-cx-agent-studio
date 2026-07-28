@@ -46,9 +46,19 @@ export function CesMessengerWidget() {
       return;
     }
 
-    element.addEventListener("ces-messenger-loaded", handleLoaded);
+    // The widget dispatches ces-messenger-loaded on window, NOT on the
+    // element — an element-level listener never fires and the session id
+    // silently never reaches the agent. It can also have fired before this
+    // effect runs (the gstatic script loads independently of hydration), so
+    // treat a callable setQueryParameters as "already loaded".
+    if (typeof element.setQueryParameters === "function") {
+      handleLoaded();
+      return;
+    }
+
+    window.addEventListener("ces-messenger-loaded", handleLoaded);
     return () => {
-      element.removeEventListener("ces-messenger-loaded", handleLoaded);
+      window.removeEventListener("ces-messenger-loaded", handleLoaded);
     };
   }, [handleLoaded]);
 

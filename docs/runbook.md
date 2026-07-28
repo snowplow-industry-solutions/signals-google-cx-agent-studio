@@ -494,8 +494,10 @@ renders nothing if it's unset). For reference, the equivalent static markup:
 ></ces-messenger>
 ```
 
-Once the component observes the widget's `ces-messenger-loaded` event, it
-calls the equivalent of:
+Once the widget is ready — the `ces-messenger-loaded` event, which the widget
+dispatches on **`window`** (not on the element), or immediately if
+`setQueryParameters` is already callable at mount — the component calls the
+equivalent of:
 
 ```js
 const sessionId = getDomainSessionId(); // @snowplow/browser-tracker, >= 4.9.0
@@ -647,3 +649,17 @@ via `custom-css` from there.
   `audio-output-mode="ALWAYS_ON"` and `audio-input-mode="DEFAULT_ON"`. The
   embed in §9.4 (and `CesMessengerWidget.tsx`) pins both off
   (`NONE`/`DISABLED`) for the text-only demo.
+- **Agent describes a different user's journey (wrong cart/browsing)** —
+  the agent is not receiving your real session id, and is reading whatever
+  the `snowplow_session_id` variable falls back to. Check three things in
+  order: (1) the browser console must log `[Signals Demo] Passed
+  domain_sessionid to ces-messenger` — if missing, `setQueryParameters` was
+  never called (the loaded event fires on `window`, not the element; fixed
+  in `CesMessengerWidget.tsx`, and the §9.5 pin-check isolates this); (2)
+  the agent variable must have **no default value** in CX Agent Studio — a
+  default silently masks a missing session id with another session's data;
+  (3) the channel's pinned **Agent Version** must postdate any console
+  edits — the channel serves a version snapshot, not the draft, so removing
+  a default (or any agent edit) only reaches the widget after you add a new
+  version and point the channel at it. The simulator tests the draft, the
+  widget tests the pinned version — they can disagree.
