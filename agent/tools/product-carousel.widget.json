@@ -1,0 +1,39 @@
+{
+  "$comment": "Parameters schema for the CX Agent Studio widget tool 'productCarousel', Widget Type PRODUCT_CAROUSEL (see docs/runbook.md §10 and agent/README.md for citations and console steps). Paste the object below -- everything except this $comment key -- into the tool's Parameters editor. Field names are this repo's own choice (Google's docs confirm the widget-tool Parameters schema is author-defined, not fixed) and mirror the searchCatalog tool's CatalogResult fields one-to-one so the model can ground every value in a real search-catalog result instead of inventing one.",
+  "type": "object",
+  "required": ["products"],
+  "properties": {
+    "products": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "description": "2-6 products for the carousel, each grounded in a searchCatalog result -- never invented.",
+      "items": {
+        "type": "object",
+        "required": ["name", "designer", "price", "imageUrl", "productUrl"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "From the searchCatalog result's `name` field."
+          },
+          "designer": {
+            "type": "string",
+            "description": "From the searchCatalog result's `designer` field."
+          },
+          "price": {
+            "type": "number",
+            "description": "USD. From the searchCatalog result's `price` field."
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "From the searchCatalog result's `image` field (absolute URL)."
+          },
+          "productUrl": {
+            "type": "string",
+            "description": "Absolute link into the storefront: the deployed base URL (https://signals-google-gecx-storefront.vercel.app -- update if the deployed URL changes, matching agent/tools/*.openapi.yaml servers[0].url) followed by the searchCatalog result's `url` field."
+          }
+        }
+      }
+    }
+  }
+}

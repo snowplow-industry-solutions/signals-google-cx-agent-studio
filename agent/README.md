@@ -32,3 +32,18 @@ Both schemas point at the deployed storefront
 value (`AGENT_SHARED_SECRET` from the Vercel deploy, see `docs/runbook.md`
 §7) is never committed -- it's entered directly into each tool's API-key
 auth config in the console.
+
+- `tools/product-carousel.widget.json` / `tools/product-details.widget.json`
+  -- **Parameters** schemas for the two rich response widget tools
+  (`productCarousel`, Widget Type `PRODUCT_CAROUSEL`; `productDetails`,
+  Widget Type `PRODUCT_DETAILS`) covering issue
+  `11-rich-response-widgets.md`. Unlike the OpenAPI tools above, these
+  aren't imported from a file -- create each widget tool in the console
+  (rich response widgets icon in the agent builder), set its Widget Type,
+  and paste the JSON object (everything except the `$comment` key) into
+  the Parameters editor. See `docs/runbook.md` §10 for citations
+  confirming the widget-tool mechanism and widget-type names against
+  official docs, and for the open question on whether the pinned
+  `ces-messenger` component (as opposed to the hosted `chat-messenger`
+  build) actually renders these -- unresolved without a live check, hence
+  this issue's `human-test-required` checkpoint.
