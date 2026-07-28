@@ -7,7 +7,21 @@ import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { useSignals } from "@/components/Signals/SignalsProvider";
 import { products } from "@/data/products";
+import type { CesMessengerElement } from "@/types/ces-messenger";
 import { deriveDebugSummary } from "@/utils/personalization";
+
+// Between demo takes: the widget persists the conversation in per-tab session
+// storage (a refresh reconnects to the same chat by design), so a fresh
+// conversation needs the component's own clearStorage() reset.
+function resetChatConversation() {
+  const ces = document.querySelector<CesMessengerElement>("ces-messenger");
+  if (!ces) {
+    return;
+  }
+  ces.endSession?.();
+  ces.clearStorage?.({});
+  window.location.reload();
+}
 
 interface SignalsDebugPanelProps {
   currentProductId?: string;
@@ -36,8 +50,11 @@ export function SignalsDebugPanel({
     [attributes, collectionName, currentProductId, lineItems]
   );
 
+  // bottom-LEFT: the ces-messenger launcher pins itself bottom-right via its
+  // own shadow-DOM fixed positioning; at the same corner and z-index the
+  // later-in-DOM panel paints over it and hides the chat bubble.
   return (
-    <aside className="fixed bottom-4 right-4 z-50 max-w-sm rounded-[1.5rem] border border-[var(--accent)]/25 bg-[color:color-mix(in_srgb,var(--background)_92%,black)] p-4 shadow-2xl backdrop-blur-xl">
+    <aside className="fixed bottom-4 left-4 z-50 max-w-sm rounded-[1.5rem] border border-[var(--accent)]/25 bg-[color:color-mix(in_srgb,var(--background)_92%,black)] p-4 shadow-2xl backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.4em] text-[var(--muted)]">
@@ -71,6 +88,13 @@ export function SignalsDebugPanel({
           className="rounded-full border border-[var(--accent)]/35 px-3 py-2 text-[10px] uppercase tracking-[0.24em] text-[var(--accent)] disabled:opacity-40"
         >
           Trigger Nudge
+        </button>
+        <button
+          type="button"
+          onClick={resetChatConversation}
+          className="rounded-full border border-[var(--accent)]/35 px-3 py-2 text-[10px] uppercase tracking-[0.24em] text-[var(--accent)]"
+        >
+          Reset Chat
         </button>
       </div>
 

@@ -357,6 +357,195 @@ simulator.
      trace shows `end_session` with placeholder args, and the
      conversation silently ends).
 
+## 9. Widget embed and session-context wiring
+
+Covers `.scratch/signals-cx-agent-demo/issues/07-widget-end-to-end.md`: embeds
+the chat widget in the deployed storefront and wires the visitor's
+`domain_sessionid` into the agent session automatically, closing the loop
+from browse to chat. The widget component and wiring code
+(`storefront/src/components/Widget/CesMessengerWidget.tsx`), the
+`NEXT_PUBLIC_CES_DEPLOYMENT_ID` env var, and the `verify:deploy` widget-embed
+check are prepared in the repo; **the widget deployment/channel creation and
+token-broker public-access config in CX Agent Studio, and all live-browser /
+live-agent verification below, are human-triggered** — outside this sandbox.
+Requires the agent from §8 (specifically the `snowplow_session_id` variable
+and `x-ces-session-context` binding confirmed in §8.4) and the storefront
+already deployed per §7.
+
+### 9.1 Widget-generation pin: ces-messenger vs chat-messenger (resolved)
+
+Design doc risk #2 / PRD verify-at-build item. Findings, from official
+sources (not guessed):
+
+- The **open-source `ces-messenger` web component**
+  ([GoogleCloudPlatform/ces-messenger](https://github.com/GoogleCloudPlatform/ces-messenger)),
+  loaded via `<script src="https://www.gstatic.com/ces-console/fast/ces-messenger/ces-messenger.js">`
+  and embedded as `<ces-messenger deployment-id="..." token-broker-url="MANAGED">`,
+  documents a JS method `setQueryParameters({ key: value })` — each key
+  becomes readable in the agent session as `$context.variables.<key>`. This
+  is exactly the mechanism issue 06's tool schema already targets
+  (`x-ces-session-context: $context.variables.snowplow_session_id`, §8.4).
+- Google's official **CX Agent Studio "web widget" deploy docs**
+  ([docs.cloud.google.com](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/deploy/web-widget))
+  describe a *different* element, `chat-messenger`, hosted at
+  `https://www.gstatic.com/ces-console/fast/chat-messenger/prod/v1/chat-messenger.js`,
+  initialised via a `chatSdk.prebuilts.ces.createContext({ deploymentName, tokenBroker: { enableTokenBroker, enableRecaptcha } })`
+  JS call rather than an HTML-attribute + method pair. That surface's docs
+  do **not** mention `setQueryParameters`, session-context variables, or any
+  equivalent parameter-passing hook.
+- A Google developer-forum thread
+  ([discuss.google.dev](https://discuss.google.dev/t/hosted-versus-open-source-ces-messenger-web-component/334696))
+  confirms the gstatic-hosted `chat-messenger` build and the open-source
+  `ces-messenger` repo are related but **not kept in sync** on separate
+  release cycles — the hosted build ships rich-message templates (e.g.
+  Product Carousel) the open-source repo lacks, and some config in the
+  open-source repo's spec isn't in the hosted build.
+
+Since the demo's entire "browse → chat already knows" mechanism depends on
+`setQueryParameters` populating `$context.variables.snowplow_session_id`, and
+only `ces-messenger` documents that method, this repo pins to **ces-messenger**
+— matching `docs/design.md` decision #6 and the issue text. `chat-messenger`
+is not used anywhere in this repo.
+
+**Exact check the human should run before trusting this pin**, once the
+widget deployment exists (§9.2) and the storefront is embedding it (§9.3):
+
+1. Open the deployed storefront in a browser; wait for the `ces-messenger-loaded`
+   event to have fired (a few seconds after page load).
+2. In devtools console, run:
+   ```js
+   document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: "widget-pin-check-123" });
+   ```
+3. Open the chat and send any message.
+4. In the CX Agent Studio console's execution trace for that turn, confirm
+   the `getUserContext` tool request's `session_id` equals
+   `widget-pin-check-123` (mirrors the §8.4/§8.5 trace-inspection check, now
+   against the real widget instead of the simulator).
+5. If the value never reaches the tool: check the Network tab for which
+   script actually loaded — if the console's own "copy embed snippet"
+   affordance emitted the gstatic `chat-messenger` build instead of
+   `ces-messenger`, switch to the exact `<script>`/`<ces-messenger>` markup
+   in §9.4 rather than whatever the console generated.
+
+### 9.2 Create the web-widget deployment and enable public access (console)
+
+1. In CX Agent Studio, on the agent from §8, create a Web Widget
+   deployment/channel.
+2. Configure the deployment's security settings for public, unauthenticated
+   access (the console fields correspond to `google_ces_deployment.security_settings`
+   documented in `docs/research/cx-agent-studio-terraform.md`, even though
+   this pass is done in the console, not Terraform):
+   - Enable public access.
+   - Enable origin checking, and add the deployed storefront's exact origin
+     (`https://signals-google-gecx-storefront.vercel.app`, or the current
+     deployed URL from §7) to the allowed-origins list.
+   - Leave **Recaptcha OFF**. The `ces-messenger` component has no reCAPTCHA
+     support (no `recaptcha-site-key`-style attribute; verified against its
+     README 2026-07-28) — with the channel toggle on, the widget calls
+     `generateChatToken` without a `recaptcha_token` and the broker rejects
+     every session with `400 INVALID_ARGUMENT: "Recaptcha token is missing."`.
+     (The `enableRecaptcha` option in Google's web-widget docs belongs to the
+     other widget generation, `chat-messenger`, which we can't use — §9.1.)
+     Public access + origin verification is the protection level for this
+     short-lived demo deployment.
+3. Confirm the managed token broker option is selected — no separate broker
+   infrastructure is needed; `token-broker-url="MANAGED"` in the embed
+   (§9.4) is backed by Google's own `sessions.generateChatToken`.
+4. Record the deployment's full resource name here (the format is
+   `projects/<project>/locations/<location>/apps/<app>/deployments/<deployment>`):
+   `<PLACEHOLDER: deployment resource name>` — this is the `deployment-id`
+   value and the `NEXT_PUBLIC_CES_DEPLOYMENT_ID` env var in §9.3.
+5. Label the deployment per the project's tagging policy if the console
+   exposes labels for it (per the Terraform research note, the `ces_*`
+   app/agent resources have no `labels` field at all as of that research —
+   confirm whether the deployment resource is an exception before assuming
+   it can't be labelled).
+
+### 9.3 Configure the storefront and redeploy
+
+1. In Vercel → Project → Settings → Environment Variables (Production
+   scope), add:
+
+   | Var | Client-exposed? | Notes |
+   |---|---|---|
+   | `NEXT_PUBLIC_CES_DEPLOYMENT_ID` | Yes, by design | the deployment resource name from §9.2 step 4 |
+
+2. Redeploy (§7 step 3).
+3. Re-run `npm run verify:deploy -- https://<deployed-url>` (§7 step 4,
+   `AGENT_SHARED_SECRET` still required for the agent-endpoint checks) — it
+   now also asserts the homepage HTML includes both the `ces-messenger.js`
+   script and a `<ces-messenger>` element.
+
+### 9.4 Embed snippet (reference)
+
+Nothing to hand-author here — `storefront/src/components/Widget/CesMessengerWidget.tsx`
+renders this client-side once `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is set (and
+renders nothing if it's unset). For reference, the equivalent static markup:
+
+```html
+<script src="https://www.gstatic.com/ces-console/fast/ces-messenger/ces-messenger.js"></script>
+<ces-messenger
+  deployment-id="<NEXT_PUBLIC_CES_DEPLOYMENT_ID>"
+  chat-title="Atelier Concierge"
+  token-broker-url="MANAGED"
+  theme-id="dark"
+  audio-input-mode="NONE"
+  audio-output-mode="DISABLED"
+></ces-messenger>
+```
+
+Once the widget is ready — the `ces-messenger-loaded` event, which the widget
+dispatches on **`window`** (not on the element), or immediately if
+`setQueryParameters` is already callable at mount — the component calls the
+equivalent of:
+
+```js
+const sessionId = getDomainSessionId(); // @snowplow/browser-tracker, >= 4.9.0
+if (sessionId) {
+  document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: sessionId });
+}
+```
+
+`getDomainSessionId()` returns `undefined` for a brand-new visitor (tracker
+not yet initialised) or a cookieless one (no `_sp_id` cookie yet); in either
+case the component leaves `snowplow_session_id` unset rather than passing an
+empty/invalid value, so the agent's degraded-session instructions
+(`agent/instructions.md`) apply — the graceful cookieless-fallback criterion.
+
+**Styling**: only the documented attributes (`theme-id`, `chat-title`,
+`size`) and a `custom-css` attribute are available for theming per the
+`ces-messenger` GitHub docs; no specific CSS custom properties or shadow-DOM
+parts for fine-grained theming were found documented anywhere. `theme-id="dark"`
+is set to align with the storefront's dark luxury theme (`--background:
+#0c0b0c`, `--accent: #b79559` in `storefront/src/app/globals.css`), but
+matching the exact palette/typography is a **verify-at-build item for the
+human**: inspect the live widget's shadow DOM in a real browser and adjust
+via `custom-css` from there.
+
+### 9.5 Verification walkthrough
+
+1. Post-redeploy, confirm `npm run verify:deploy` (§9.3 step 3) passes the
+   widget-embed check — this only confirms the script/element are served in
+   the HTML, not that the widget renders or functions; that needs a browser.
+2. Open the deployed storefront in a real browser, browse a couple of
+   products, add one to cart.
+3. Open the chat bubble. In devtools, confirm no console errors from the
+   widget script and that the token-broker request succeeds.
+4. Send a message. Confirm the agent's reply references your real
+   browsing/cart behaviour unprompted — same substantive criterion as
+   §8.5's live-session pass, now exercised through the real widget instead
+   of a manually-set simulator variable.
+5. Freshness check: browse a product, then within a few seconds open chat
+   and ask about it; confirm the agent's answer reflects that just-viewed
+   product rather than stale or absent context.
+6. Open the same page in a fresh private/incognito window (no `_sp_id`
+   cookie yet) and open chat immediately, before any browsing. Confirm the
+   agent gives generic warm concierge behaviour — the cookieless-visitor
+   criterion, now exercised end-to-end via the real widget rather than an
+   unset simulator variable.
+7. Record the result (pass/fail + timestamp) here:
+   `<PLACEHOLDER: widget end-to-end verification run log>`.
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
@@ -428,3 +617,59 @@ simulator.
   project** — check the project's region and enabled-API list (§8.1);
   this was flagged as a verify-at-build availability risk before the
   agent existed.
+- **Widget renders but the chat never connects / token-broker errors in the
+  console** — check that §9.2's origin-check config includes the deployed
+  storefront's exact origin in `allowed_origins`.
+- **Real widget never delivers the session id (agent asks who you are even
+  after browsing, though §8's simulator pass worked)** — check the Network
+  tab for which script actually loaded; confirm it's
+  `ces-messenger.js`, not the gstatic `chat-messenger` build (§9.1). If the
+  console's own embed-snippet affordance was copy-pasted instead of the
+  markup in §9.4, it may have emitted the wrong widget generation.
+- **`verify:deploy`'s widget-embed check fails post-deploy** — confirms the
+  `<ces-messenger>` element or its script isn't in the served HTML; check
+  `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is set in the Vercel environment (§9.3)
+  and that the deploy actually picked it up (the component renders nothing
+  when that var is unset, by design).
+- **Widget loads and authorizes but no chat bubble is visible** — check for
+  another `position: fixed` element occupying the bottom-right corner. The
+  launcher pins itself bottom-right via the widget's own shadow-DOM styles
+  (host-element classes don't move it); anything later in the DOM at the
+  same corner and z-index paints over it. This is why `SignalsDebugPanel`
+  sits bottom-*left*. Diagnose with
+  `document.querySelector("ces-messenger").shadowRoot` (launcher present?)
+  vs `document.elementFromPoint(...)` at the corner (who's on top?).
+- **"Start conversation" fails; console shows `No token received from token
+  broker` with `400 INVALID_ARGUMENT: "Recaptcha token is missing."`** —
+  the channel's Recaptcha toggle is on. Turn it off (§9.2); `ces-messenger`
+  cannot mint reCAPTCHA tokens. Takes effect without a redeploy.
+- **Agent replies with spoken audio / mic prompt appears despite the
+  channel's "Interaction type: Text"** — that console setting doesn't reach
+  a hand-authored embed; the component itself defaults to
+  `audio-output-mode="ALWAYS_ON"` and `audio-input-mode="DEFAULT_ON"`. The
+  embed in §9.4 (and `CesMessengerWidget.tsx`) pins both off
+  (`NONE`/`DISABLED`) for the text-only demo.
+- **Agent describes a different user's journey (wrong cart/browsing)** —
+  the agent is not receiving your real session id, and is reading whatever
+  the `snowplow_session_id` variable falls back to. Check three things in
+  order: (1) the browser console must log `[Signals Demo] Passed
+  domain_sessionid to ces-messenger` — if missing, `setQueryParameters` was
+  never called (the loaded event fires on `window`, not the element; fixed
+  in `CesMessengerWidget.tsx`, and the §9.5 pin-check isolates this); (2)
+  the agent variable must have **no default value** in CX Agent Studio — a
+  default silently masks a missing session id with another session's data;
+  (3) the channel's pinned **Agent Version** must postdate any console
+  edits — the channel serves a version snapshot, not the draft, so removing
+  a default (or any agent edit) only reaches the widget after you add a new
+  version and point the channel at it. The simulator tests the draft, the
+  widget tests the pinned version — they can disagree.
+- **Chat history survives refresh / no way to start a new conversation** —
+  intended widget behaviour: the conversation lives in per-tab session
+  storage and "Start conversation" reconnects to it. The component's reset
+  is `clearStorage()`; the demo panel's **Reset Chat** button wraps
+  `endSession()` + `clearStorage()` + reload for a clean take between
+  rehearsals. A new tab or incognito window is also always fresh.
+- **Widget buttons render Vue-green instead of the theme accent** — the
+  shadow styles default `--host-primary-color` to `#42b883`; the embed sets
+  that variable to the site's `--accent` on the host element, and the
+  `custom-css` attribute is the hook for any further shadow-DOM styling.

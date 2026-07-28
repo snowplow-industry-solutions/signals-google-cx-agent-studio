@@ -19,13 +19,13 @@ Verify-at-build item from the PRD lands here: pin the widget generation (`ces-me
 
 ## Acceptance criteria
 
-- [ ] Tracker bumped to `^4.10.0`; existing tracking unaffected (tests + lint green)
+- [x] Tracker bumped to `^4.10.0`; existing tracking unaffected (tests + lint green)
 - [ ] Widget renders on the deployed site, styled acceptably against the luxury theme
 - [ ] Session id read via `getDomainSessionId()` and delivered to the agent session automatically
 - [ ] Full flow works on the deployed site: browse products → add to cart → open chat → agent references actual browsing/cart behaviour unprompted
 - [ ] Context freshness acceptable: activity seconds old is reflected in the conversation
 - [ ] New/cookieless visitor gets graceful generic concierge behaviour
-- [ ] Embed + wiring steps documented in the runbook
+- [x] Embed + wiring steps documented in the runbook
 
 ## Blocked by
 
@@ -76,3 +76,47 @@ re-flagged the missing carve-out. Dropped that duplicate parked block, deleted
 the stale fully-merged branch, and added a guard to `.sandcastle/main.mts` that
 deletes a leftover fully-merged pipeline branch before creating the sandbox.
 Re-queued as ready-for-agent — the constraint above stands unchanged.
+
+**2026-07-28 (implementer):** Prepared everything in scope of the Agent
+constraint:
+
+- Bumped `@snowplow/browser-tracker` to `^4.10.0` (package.json + lockfile);
+  full test suite (90 tests) and lint green after the bump.
+- Added `storefront/src/components/Widget/CesMessengerWidget.tsx`: renders
+  the `ces-messenger` web component (script + `<ces-messenger>` element),
+  and once its `ces-messenger-loaded` event fires, reads `getDomainSessionId()`
+  and calls `setQueryParameters({ snowplow_session_id })` — the exact
+  variable name issue 06's `getUserContext` tool schema already binds via
+  `x-ces-session-context`. When `getDomainSessionId()` returns `undefined`
+  (tracker not yet initialised, or no `_sp_id` cookie), the call is skipped
+  entirely rather than sending an empty value, leaving the agent's
+  degraded-session fallback in control. Renders nothing when
+  `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is unset. Wired into `layout.tsx`; unit
+  tests cover the happy path, the cookieless-fallback path, and the
+  unset-env-var path.
+- Added `storefront/src/types/ces-messenger.d.ts` (JSX intrinsic-element
+  typing for the custom element; no upstream npm types exist).
+- Extended `storefront/scripts/verify-deploy.ts` (+ tests) with a read-only
+  check that the deployed homepage HTML includes both the `ces-messenger.js`
+  script and a `<ces-messenger>` element — ran it against the live site
+  today (permitted outbound GET); passes on reachability, fails on the new
+  widget check as expected (widget isn't deployed yet, this branch only
+  prepares the repo side).
+- Added `.env.example` entry for `NEXT_PUBLIC_CES_DEPLOYMENT_ID`.
+- Added `docs/runbook.md` §9: the widget-generation pin (`ces-messenger` vs
+  `chat-messenger`) with cited findings and an exact human-runnable check to
+  confirm it against the live deployment, console steps for the web-widget
+  deployment + public-access/token-broker config, the embed snippet
+  (reference — the component renders it), and a verification walkthrough
+  covering all four live-only acceptance criteria below, plus new
+  troubleshooting entries.
+
+Left unchecked, as they require the live widget deployment, live agent, and
+a real browser (not available in this sandbox): "Widget renders on the
+deployed site, styled acceptably", "Session id read via `getDomainSessionId()`
+**and delivered to the agent session**" (the read + call is done; delivery
+can only be confirmed against a live widget/agent — same distinction the
+first parked run drew), "Full flow works on the deployed site", "Context
+freshness acceptable", and "New/cookieless visitor gets graceful generic
+concierge behaviour" (the code fallback is in place and unit-tested; the
+agent's actual behaviour is a live-agent check, covered in runbook §9.5).
