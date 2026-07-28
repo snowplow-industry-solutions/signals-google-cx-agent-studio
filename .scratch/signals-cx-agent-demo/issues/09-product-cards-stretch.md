@@ -1,6 +1,6 @@
 # 09 — Product cards in chat (stretch)
 
-Status: ready-for-agent
+Status: needs-human
 
 ## Parent
 
@@ -32,3 +32,17 @@ rich response widgets (product carousel / product details) instead of the
 simpler, supported route; issue 11 carries a disposition criterion for this
 issue (close `wontfix` if superseded, or feed findings back here if native
 widgets can't do what we need). Check 11's outcome before starting this.
+
+## Parked by pipeline (2026-07-28 16:08)
+
+Implementer flagged a spec conflict / blocker:
+
+Confirmed: issue 11 is newly added, still `Status: ready-for-agent` / `Checkpoint: human-test-required` — it has not been implemented, tested, or dispositioned yet. There's no PR file for it, and no other record resolving the "09 vs 11" question.
+
+Issue 09's own Comments section is explicit: *"issue 11 carries a disposition criterion for this issue (close `wontfix` if superseded, or feed findings back here if native widgets can't do what we need). Check 11's outcome before starting this."* That outcome doesn't exist yet — 11 hasn't been built or verified against the live ces-messenger widget, so there's no way to know whether native rich-response widgets can satisfy the wow-beat (making 09 redundant) or whether they can't (making 09 the fallback). Implementing 09 now risks duplicating work that 11 will supersede, which is exactly what the issue tells the agent to avoid pending that decision.
+
+This is a human-decision dependency, not something resolvable by reading more code — so per Step 1 I'm stopping without writing code.
+
+**Blocker:** Issue 09 explicitly requires checking issue 11's disposition before starting, and issue 11 has not yet been implemented or checkpointed (still `ready-for-agent` / `human-test-required`, added in the immediately preceding commit with no PR file). There is no recorded outcome to check — 11 may supersede 09 entirely (`wontfix`) or may feed back findings requiring a different scope for 09. Proceeding would risk building the `registerClientSideFunction` card-rendering path that gets thrown away if native rich response widgets (issue 11) turn out sufficient.
+
+<promise>BLOCKED</promise>
