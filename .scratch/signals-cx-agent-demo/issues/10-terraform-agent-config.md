@@ -1,6 +1,7 @@
 # 10 — Terraform the CX Agent Studio config
 
-Status: needs-human
+Status: ready-for-agent
+Checkpoint: human-test-required
 
 ## Parent
 
@@ -25,6 +26,29 @@ Known constraints from the research doc:
 - Open provider bug #26231: `ces_app` 400 with `gemini-3-flash` + temperature in `us` region — check whether it bites our config before relying on apply
 - No `labels` field on `ces_app` — baseline tagging policy (`system`, `snowplow-owner=cc017`, `environment`) goes on the project and any supporting resources (e.g. GCS bucket for export snapshots) instead
 
+**Agent constraint:** prepare everything that lives in the repo — the
+Terraform config (`google_ces_app`, `google_ces_agent` with `instruction`
+via `file("agent/instructions.md")`, `google_ces_app_root_agent_association`,
+`google_ces_toolset` with the OpenAPI spec via `file(...)` from
+`agent/tools/`, `google_ces_app_version`, `google_ces_deployment` with the
+public-access/allowed-origins settings), with live resource IDs taken as
+input variables (documented, no invented placeholder IDs presented as real),
+baseline labels threaded onto any supporting resources per the tagging
+policy (lowercase values, `snowplow-owner` key form for GCP), and the
+runbook section covering the ownership boundary (what Terraform owns vs.
+stays manual: GE enablement, beta `ces_security_settings`), the `ces_app`
+label gap, and re-apply-after-trial-expiry steps. Also document — as exact
+human-runnable commands, not runs — the import sequence for the
+console-built resources (including where to find each real resource ID),
+the `terraform plan` clean-check, and the `apps.exportApp` snapshot call +
+where to store it. **Permitted live access — outbound, read-only:**
+unauthenticated HTTP GETs (provider docs/registry, checking the current
+status of provider bug #26231 on the public tracker). Do **not** run
+`terraform import`/`plan`/`apply` against live state, call `apps.exportApp`,
+apply labels to the live project, or fabricate any output of those calls —
+the import, clean plan, snapshot, and live-label criteria are human-verified
+afterwards, per the checkpoint.
+
 ## Acceptance criteria
 
 - [ ] Terraform config in repo covering app, root agent (instruction from file), toolset with Signals OpenAPI spec, app version, deployment with public-access settings
@@ -38,7 +62,7 @@ Known constraints from the research doc:
 
 - `07-widget-end-to-end.md` (deployment/public-access config must be settled before codifying it)
 
-## Parked by pipeline (2026-07-28 16:12)
+## Parked by pipeline (2026-07-28 16:12) — resolved, see comment below
 
 Implementer flagged a spec conflict / blocker:
 
@@ -64,3 +88,14 @@ I could write just the Terraform authoring + runbook piece and leave the rest un
 No code was written and nothing was committed.
 
 <promise>BLOCKED</promise>
+
+## Comments
+
+**2026-07-28 (human/assistant):** Un-parked. Added the Agent constraint above
+(mirroring the 05/06/07/08 prep-only carve-out) and `Checkpoint:
+human-test-required`, per the implementer's recommendation — with the
+implementer's own sharpening kept: live resource IDs enter the config as
+documented input variables, and the import/plan/exportApp steps are written
+up as exact human-runnable commands rather than executed or faked. Import,
+clean-plan confirmation, snapshot capture, and live labels stay with the
+human checkpoint. Re-queued as ready-for-agent.
