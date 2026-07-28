@@ -34,11 +34,11 @@ checkpoint.
 
 ## Acceptance criteria
 
-- [ ] Demo script written: scene-by-scene choreography, talking points, the "prove it's real-time" moment
+- [x] Demo script written: scene-by-scene choreography, talking points, the "prove it's real-time" moment
 - [ ] Seeded fallback session prepared and verified retrievable
 - [ ] Debug panel displays live attributes during the scripted flow
-- [ ] Google product names correct in script and any on-screen material
-- [ ] Runbook complete end-to-end (someone else could re-create the demo after trial expiry)
+- [x] Google product names correct in script and any on-screen material
+- [x] Runbook complete end-to-end (someone else could re-create the demo after trial expiry)
 - [ ] At least one full rehearsal pass with no manual intervention
 - [ ] Recording produced and delivered by 7 August 2026
 
@@ -84,3 +84,50 @@ the human. Seeded fallback session is scoped to a documented human-runnable
 procedure — no live seeding/verification from the sandbox. Rehearsal,
 recording, delivery, debug-panel live check, and console origin cleanup all
 remain human checkpoint work. Re-queued as ready-for-agent.
+
+**2026-07-28 (implementer):** Prepared everything in scope of the Agent
+constraint:
+
+- Added `docs/demo-script.md`: scene-by-scene choreography (browse → open
+  chat → grounded recommendation → "prove it's real-time" mid-conversation
+  browse → wrap-up), talking points, and a fallback-contingency pointer.
+  Written against the real catalog (`storefront/src/data/products.ts`) —
+  Maison Cendre pieces across three categories to make "favourite designer"
+  unambiguous, ending with the Camel Cashmere Wrap Coat in cart — so it's
+  exactly reproducible against the live deployed site. Confirmed the site
+  is still reachable at the URL the script and runbook reference (permitted
+  read-only GET, 200).
+- Added `docs/runbook.md` §10: a pointer to the demo script; a seeded
+  fallback-session section with the exact human-runnable preparation steps
+  (browse sequence, devtools one-liner to capture `domain_sessionid`, a
+  `curl` command against `/api/agent/context` to verify retrievability) and
+  the live-substitution procedure (`setQueryParameters` override, same
+  mechanism §9.1 already documents) to swap to it mid-take if the pipeline
+  hiccups; a rehearsal checklist folding in the carried-over console
+  allowed-origins cleanup plus the other pre-flight checks; and a brief
+  human-only recording/delivery pointer.
+- Google product-naming sweep across this repo's presenter-facing material:
+  grepped the demo script, runbook, and all storefront UI copy
+  (`storefront/src/**`) for outdated/incorrect naming (`Dialogflow`,
+  `Contact Center AI` / `CCAI`, `Vertex AI Agent Builder`, the unrelated
+  `chat-messenger` widget generation). No storefront UI copy references
+  Google/Gemini/Dialogflow at all (only internal dev comments in
+  `CesMessengerWidget.tsx` / `ces-messenger.d.ts`, not presenter-facing);
+  the script and runbook consistently use "Google Gemini Enterprise for CX"
+  / "CX Agent Studio" / "ces-messenger", matching `docs/design.md`. Added an
+  explicit naming-check callout to the demo script itself as the durable
+  guard against drift.
+
+Left unchecked, as they require the live pipeline, live agent, a real
+browser, and the recording/delivery infrastructure this sandbox doesn't
+have: "Seeded fallback session prepared **and verified retrievable**" (the
+procedure is documented and human-runnable; actually running it needs live
+Signals credentials), "Debug panel displays live attributes during the
+scripted flow" (needs a live browser against the live pipeline), "At least
+one full rehearsal pass with no manual intervention", and "Recording
+produced and delivered by 7 August 2026" — all reserved for the human
+checkpoint per the Agent constraint.
+
+Full test suite and lint green (`npm --prefix storefront test`, `npm
+--prefix storefront run lint`) — this issue's changes are documentation
+only, no `storefront/` source touched.
