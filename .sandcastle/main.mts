@@ -121,6 +121,25 @@ async function processIssue(issue: Issue): Promise<void> {
   const branch = `sandcastle/${issue.id}`;
   console.log(`\n=== Issue ${issue.id} — branch ${branch} ===\n`);
 
+  // A parked run leaves its fixed-name branch behind, pointing at the main it
+  // was created from. createSandbox reuses an existing branch as-is (no origin
+  // to refresh from here), so a re-run after amending the issue on main would
+  // hand the agent a stale tree — issue 07 got double-parked exactly this way.
+  // If the leftover branch has no commits of its own, drop it so the sandbox
+  // is recreated from main's HEAD. Branches with unique commits (e.g. a
+  // review-failed park) are kept: they hold real work, but note the sandbox
+  // then won't see issue edits made on main since the branch was cut.
+  const branchExists = sh("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { allowFail: true }).ok;
+  if (branchExists) {
+    const unique = sh("git", ["log", "--oneline", `main..${branch}`]).stdout.trim();
+    if (unique === "") {
+      sh("git", ["branch", "-D", branch]);
+      console.log(`Deleted stale fully-merged branch ${branch}; recreating from main.`);
+    } else {
+      console.warn(`Branch ${branch} has unique commits — reusing it; issue edits on main since it was cut are NOT visible to the sandbox.`);
+    }
+  }
+
   const sandbox = await sandcastle.createSandbox({
     branch,
     sandbox: docker(),
