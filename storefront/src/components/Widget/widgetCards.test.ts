@@ -7,6 +7,7 @@ import {
   normalizeWidgetPayload,
   renderWidgetCardsHtml,
   replaceWidgetTokensIn,
+  safeCardUrl,
 } from "./widgetCards";
 
 const PRODUCT = {
@@ -72,6 +73,70 @@ describe("buildWidgetElement", () => {
     expect(onNavigate.mock.calls[0][0]).toBeInstanceOf(URL);
     expect(event.defaultPrevented).toBe(true);
     el!.remove();
+  });
+
+  it("rejects a javascript: uri: no href, no data-uri, click is a no-op", () => {
+    const onNavigate = vi.fn().mockReturnValue(true);
+    const el = buildWidgetElement(
+      document,
+      "productDetails",
+      { ...PRODUCT, uri: "javascript:alert(1)" },
+      onNavigate
+    );
+    document.body.appendChild(el!);
+    const anchor = el!.querySelector("a")!;
+    expect(anchor.hasAttribute("href")).toBe(false);
+    expect(anchor.hasAttribute("data-uri")).toBe(false);
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(event);
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+    el!.remove();
+  });
+
+  it("rejects a data: uri: no href, no data-uri", () => {
+    const el = buildWidgetElement(document, "productDetails", {
+      ...PRODUCT,
+      uri: "data:text/html,<script>alert(1)</script>",
+    });
+    const anchor = el!.querySelector("a")!;
+    expect(anchor.hasAttribute("href")).toBe(false);
+    expect(anchor.hasAttribute("data-uri")).toBe(false);
+  });
+});
+
+describe("safeCardUrl", () => {
+  it("rejects javascript: uris", () => {
+    expect(safeCardUrl("javascript:alert(1)", "https://example.com/")).toBeNull();
+  });
+
+  it("rejects data: uris", () => {
+    expect(
+      safeCardUrl("data:text/html,<script>alert(1)</script>", "https://example.com/")
+    ).toBeNull();
+  });
+
+  it("rejects uppercase and whitespace-padded javascript: uris", () => {
+    expect(safeCardUrl("  JAVASCRIPT:alert(1)", "https://example.com/")).toBeNull();
+    expect(safeCardUrl("JaVaScRiPt:alert(1)", "https://example.com/")).toBeNull();
+  });
+
+  it("resolves an absolute https:// uri", () => {
+    const url = safeCardUrl("https://example.com/products/x", "https://example.com/");
+    expect(url).not.toBeNull();
+    expect(url!.href).toBe("https://example.com/products/x");
+  });
+
+  it("resolves a relative uri against the base", () => {
+    const url = safeCardUrl("/products/x", "https://example.com/");
+    expect(url).not.toBeNull();
+    expect(url!.href).toBe("https://example.com/products/x");
+  });
+
+  it("resolves a protocol-relative uri against the base's protocol", () => {
+    const url = safeCardUrl("//example.com/products/x", "https://example.com/");
+    expect(url).not.toBeNull();
+    expect(url!.protocol).toBe("https:");
   });
 });
 

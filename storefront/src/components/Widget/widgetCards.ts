@@ -36,6 +36,25 @@ export interface WidgetCardContext {
 
 export type NavigateHandler = (url: URL) => boolean;
 
+/**
+ * Parses `uri` against `base` and returns the resulting URL only when its
+ * protocol is `http:` or `https:` — otherwise null. Model-emitted card URIs
+ * are untrusted text: without this gate a `javascript:` (or `data:`) URI
+ * would execute on click, whether assigned as an anchor `href` or passed to
+ * `window.location.assign`. Both card-navigation paths must resolve URIs
+ * through this single helper rather than hand-rolling their own
+ * `new URL` + try/catch.
+ */
+export function safeCardUrl(uri: string, base: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(uri, base);
+  } catch {
+    return null;
+  }
+  return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+}
+
 function normalizeProduct(product: ProductFields): ProductCardData | null {
   const title = typeof product.title === "string" ? product.title : null;
   if (!title) return null;
@@ -102,6 +121,12 @@ function buildCard(
 ): HTMLElement {
   const { title, subtitle, price, uri, imageUri } = product;
 
+  // Model-emitted uri is untrusted: only a URI that resolves to http(s)
+  // is wired up for navigation (href, data-uri, click listener, pointer
+  // cursor) — a bare `javascript:` or `data:` URI is left completely
+  // inert rather than assigned anywhere a click could execute it.
+  const safeUrl = uri ? safeCardUrl(uri, doc.baseURI) : null;
+
   // Anchor for the token path (native href behaviour, plus an optional SPA
   // listener); plain data-uri div for HTML-string rendering (template
   // path), where listeners wouldn't survive innerHTML insertion — clicks
@@ -117,19 +142,13 @@ function buildCard(
     borderRadius: "0.5rem",
     overflow: "hidden",
     color: TEXT_COLOR,
-    cursor: uri ? "pointer" : "default",
+    cursor: safeUrl ? "pointer" : "default",
   });
-  if (uri) card.setAttribute("data-uri", uri);
-  if (uri && card instanceof HTMLAnchorElement) card.href = uri;
-  if (uri && onNavigate && asAnchor) {
+  if (safeUrl) card.setAttribute("data-uri", uri);
+  if (safeUrl && card instanceof HTMLAnchorElement) card.href = uri;
+  if (safeUrl && onNavigate && asAnchor) {
     card.addEventListener("click", (event) => {
-      let url: URL;
-      try {
-        url = new URL(uri, doc.baseURI);
-      } catch {
-        return;
-      }
-      if (onNavigate(url)) event.preventDefault();
+      if (onNavigate(safeUrl)) event.preventDefault();
     });
   }
 

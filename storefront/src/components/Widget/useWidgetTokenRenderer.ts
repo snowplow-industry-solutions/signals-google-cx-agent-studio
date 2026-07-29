@@ -10,6 +10,7 @@ import {
   normalizeWidgetPayload,
   renderWidgetCardsHtml,
   replaceWidgetTokensIn,
+  safeCardUrl,
 } from "./widgetCards";
 
 const TEMPLATE_ID = "atelier_product_cards";
@@ -123,12 +124,8 @@ export function useWidgetTokenRenderer(
         const card = clicked.closest("[data-uri]");
         const uri = card?.getAttribute("data-uri");
         if (uri) {
-          let url: URL;
-          try {
-            url = new URL(uri, window.location.href);
-          } catch {
-            return { action: "keep" };
-          }
+          const url = safeCardUrl(uri, window.location.href);
+          if (!url) return { action: "keep" };
           if (!navigate(url)) window.location.assign(url.href);
         }
         return { action: "keep" };
