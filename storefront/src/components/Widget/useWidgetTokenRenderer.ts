@@ -7,8 +7,8 @@ import type { CesMessengerElement } from "@/types/ces-messenger";
 import { logSignalsDemo } from "@/utils/demo";
 
 import {
+  makeWidgetTemplate,
   normalizeWidgetPayload,
-  renderWidgetCardsHtml,
   replaceWidgetTokensIn,
   safeCardUrl,
 } from "./widgetCards";
@@ -27,8 +27,15 @@ const TEMPLATE_ID = "atelier_product_cards";
  *    `type: "product_detail_carousel"` and no text at all, which the stock
  *    component drops as a *blank* reply. Handled via the component's own
  *    rich-message system: a payload-received hook rewrites the payload to
- *    our registered template, and a rich-message handler routes card
- *    clicks.
+ *    our registered template. Click routing is decided once, at
+ *    registration time (issue 09 review, Finding A): a build exposing
+ *    registerRichMessageHandler gets the div+data-uri template with clicks
+ *    routed through it; a build that lacks that method gets the anchor
+ *    template instead, so links stay live (native navigation) rather than
+ *    silently dead. A registration-time payload that fails
+ *    normalizeWidgetPayload (Finding B) is not silently dropped — it's
+ *    logged via logSignalsDemo so the presenter can see why a reply came
+ *    back blank.
  *
  * Both are no-ops while the agent runs text-only instructions — nothing
  * emits widgets, the machinery just idles.
@@ -91,7 +98,20 @@ export function useWidgetTokenRenderer(
         return false;
       }
 
-      element.registerTemplate(TEMPLATE_ID, renderWidgetCardsHtml);
+      // Link strategy is decided once, here, at registration time — not
+      // re-checked per render. A build that exposes
+      // registerRichMessageHandler gets the current div+data-uri cards with
+      // clicks routed through it; otherwise cards render as native anchors
+      // (task 1's safeCardUrl-gated href) so links stay live via plain
+      // browser navigation instead of shipping dead div+data-uri cards no
+      // click handler will ever route (issue 09 review, Finding A). Never
+      // register both mechanisms for one build.
+      const richMessageHandler = element.registerRichMessageHandler;
+      const hasRichMessageHandler = typeof richMessageHandler === "function";
+      element.registerTemplate(
+        TEMPLATE_ID,
+        makeWidgetTemplate(!hasRichMessageHandler)
+      );
 
       element.registerHook("payload-received", (payload) => {
         if (payload === null || typeof payload !== "object") return true;
@@ -110,7 +130,17 @@ export function useWidgetTokenRenderer(
         if (!isWidgetShape) return true;
 
         const context = normalizeWidgetPayload(payload);
-        if (!context) return true;
+        if (!context) {
+          // Claimed the payload but couldn't normalise it (e.g. missing
+          // title) — the hook still returns true, so the stock component
+          // falls through to its own (blank) handling of this reply
+          // (issue 09 review, Finding B). No invented fallback content in
+          // chat; at minimum, make the failure observable to the presenter.
+          logSignalsDemo("Widget payload unrenderable — reply will be blank", {
+            type: p.type,
+          });
+          return true;
+        }
         p.template_id = TEMPLATE_ID;
         p.context = context;
         logSignalsDemo("Rewrote widget payload to rich-message template", {
@@ -120,16 +150,18 @@ export function useWidgetTokenRenderer(
         return true;
       });
 
-      element.registerRichMessageHandler?.(TEMPLATE_ID, (_message, clicked) => {
-        const card = clicked.closest("[data-uri]");
-        const uri = card?.getAttribute("data-uri");
-        if (uri) {
-          const url = safeCardUrl(uri, window.location.href);
-          if (!url) return { action: "keep" };
-          if (!navigate(url)) window.location.assign(url.href);
-        }
-        return { action: "keep" };
-      });
+      if (richMessageHandler) {
+        richMessageHandler(TEMPLATE_ID, (_message, clicked) => {
+          const card = clicked.closest("[data-uri]");
+          const uri = card?.getAttribute("data-uri");
+          if (uri) {
+            const url = safeCardUrl(uri, window.location.href);
+            if (!url) return { action: "keep" };
+            if (!navigate(url)) window.location.assign(url.href);
+          }
+          return { action: "keep" };
+        });
+      }
 
       return true;
     };

@@ -255,20 +255,36 @@ export function buildWidgetElement(
 }
 
 /**
- * Template function for ces-messenger's rich-message system
- * (registerTemplate) — the structured-payload delivery mode, which the
- * stock component otherwise drops as a blank reply. Receives the
- * WidgetCardContext prepared by the payload-received hook and returns an
- * HTML string; clicks are handled by registerRichMessageHandler via each
- * card's data-uri attribute (listeners can't survive string rendering).
+ * Factory for ces-messenger's rich-message system (registerTemplate) — the
+ * structured-payload delivery mode, which the stock component otherwise
+ * drops as a blank reply. Returns a template function receiving the
+ * WidgetCardContext prepared by the payload-received hook and producing an
+ * HTML string; listeners can't survive that string round-trip, so the two
+ * `asAnchor` variants pick between the two click-routing strategies the
+ * registration site (attachPayloadPath) chooses between at registration
+ * time (docs/runbook.md §11.5 / issue 09 review, Finding A):
+ *
+ * - `asAnchor = false` (default shape): plain `div` + `data-uri` cards;
+ *   clicks are routed by registerRichMessageHandler.
+ * - `asAnchor = true`: native `<a href>` cards — the fallback for a
+ *   ces-messenger build that lacks registerRichMessageHandler, where the
+ *   div+data-uri shape would otherwise ship dead links. Native navigation
+ *   is a degraded but honest path (full page load; conversation loss),
+ *   preferred over a link that silently does nothing.
  */
-export function renderWidgetCardsHtml(context: unknown): string {
-  const cardContext = context as WidgetCardContext | null;
-  if (!cardContext || !Array.isArray(cardContext.items) || cardContext.items.length === 0) {
-    return "";
-  }
-  return buildCards(document, cardContext, undefined, false).outerHTML;
+export function makeWidgetTemplate(asAnchor: boolean): (context: unknown) => string {
+  return (context: unknown): string => {
+    const cardContext = context as WidgetCardContext | null;
+    if (!cardContext || !Array.isArray(cardContext.items) || cardContext.items.length === 0) {
+      return "";
+    }
+    return buildCards(document, cardContext, undefined, asAnchor).outerHTML;
+  };
 }
+
+/** The default (div + data-uri) template variant — kept as a stable export
+ * for existing callers/tests; equivalent to `makeWidgetTemplate(false)`. */
+export const renderWidgetCardsHtml = makeWidgetTemplate(false);
 
 /**
  * Replaces every complete `{@Widget: …}` token found in the text nodes

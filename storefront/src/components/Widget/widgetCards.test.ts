@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildWidgetElement,
+  makeWidgetTemplate,
   normalizeWidgetPayload,
   renderWidgetCardsHtml,
   replaceWidgetTokensIn,
@@ -195,6 +196,40 @@ describe("renderWidgetCardsHtml", () => {
   it("returns an empty string for junk context", () => {
     expect(renderWidgetCardsHtml(null)).toBe("");
     expect(renderWidgetCardsHtml({ items: [] })).toBe("");
+  });
+});
+
+describe("makeWidgetTemplate(true) — anchor fallback for builds without registerRichMessageHandler", () => {
+  it("renders <a href> cards whose href round-trips through outerHTML", () => {
+    const context = normalizeWidgetPayload({
+      type: "product_detail_carousel",
+      productDetails: [PRODUCT, { ...PRODUCT, title: "Felt Cloche Hat" }],
+    });
+    const html = makeWidgetTemplate(true)(context);
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    expect(host.querySelector("[data-widget-card=productCarousel]")).not.toBeNull();
+    const anchors = host.querySelectorAll("a");
+    expect(anchors).toHaveLength(2);
+    expect(anchors[0].getAttribute("href")).toBe(PRODUCT.uri);
+    expect(anchors[1].textContent).toContain("Felt Cloche Hat");
+    // No data-uri-only divs left over — every card is a real anchor.
+    expect(host.querySelectorAll("[data-uri]")).toHaveLength(2);
+  });
+
+  it("omits href for an unsafe uri, same gate as the div variant", () => {
+    const context = normalizeWidgetPayload({ ...PRODUCT, uri: "javascript:alert(1)" });
+    const html = makeWidgetTemplate(true)(context);
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const anchor = host.querySelector("a")!;
+    expect(anchor.hasAttribute("href")).toBe(false);
+    expect(anchor.hasAttribute("data-uri")).toBe(false);
+  });
+
+  it("returns an empty string for junk context, same as the div variant", () => {
+    expect(makeWidgetTemplate(true)(null)).toBe("");
+    expect(makeWidgetTemplate(true)({ items: [] })).toBe("");
   });
 });
 
