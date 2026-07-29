@@ -640,6 +640,17 @@ terraform import google_ces_app_version.current \
 
 terraform import google_ces_deployment.web_widget \
   "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/deployments/${DEPLOYMENT_ID}"
+
+# Widget tools (issue 09). Their UUIDs appear in the agent's `tools` list
+# (REST GET on the agent, or console → root agent → tools).
+PRODUCT_DETAILS_TOOL_ID=<product_details_tool_id>
+PRODUCT_CAROUSEL_TOOL_ID=<product_carousel_tool_id>
+
+terraform import google_ces_tool.product_details \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/tools/${PRODUCT_DETAILS_TOOL_ID}"
+
+terraform import google_ces_tool.product_carousel \
+  "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/tools/${PRODUCT_CAROUSEL_TOOL_ID}"
 ```
 
 Import the shared secret too. The 2026-07-29 run resolved the
@@ -683,7 +694,10 @@ these resources, check those guards before touching anything live.
 
 Import run log, 2026-07-29: all 7 CES imports + the 3 Secret Manager
 imports above succeeded first try against
-`projects/engineering-sandbox/locations/us/apps/83a964e4-…0024`.
+`projects/engineering-sandbox/locations/us/apps/83a964e4-…0024`. Later
+the same day, the QA plan surfaced the issue 09 widget work (console-built
+`productDetails`/`productCarousel` tools, 14:46Z) as drift; both were
+imported as `google_ces_tool.*` — 12 imports total.
 
 ### 10.4 Confirm a clean plan
 
@@ -719,7 +733,19 @@ on the agent, and the toolsets' `api_key_secret_version` built as the
 console's `…/versions/latest` alias (a version-resource reference can
 only render a pinned `versions/N`).
 
-### 10.5 Capture the `apps.exportApp` snapshot
+Second verification run, 2026-07-29 (QA pass): the plan surfaced real
+drift — the issue 09 widget work had updated the live agent after the
+first reconcile (instruction gained the widget constraints; two
+console-built widget tools attached). Reconciled by repointing the agent
+instruction at `agent/instructions.console.widgets.txt` (verified
+byte-identical to live) and adopting both widget tools as
+`google_ces_tool` resources (`terraform/tools.tf`, parameter schemas
+mirrored from live). Final plan: `Plan: 0 to add, 11 to change, 0 to
+destroy` — same artifact classes as above, now with `deletion_policy`
+on nine `google_ces_*` resources. Lesson for future QA passes: any
+console change to the agent (instructions, tools, widgets) lands as
+plan drift; reconcile config to live, never the reverse, when the live
+behaviour is the verified one.
 
 Belt-and-braces drift/backup artefact, independent of the Terraform state.
 Host confirmed live 2026-07-29: `https://ces.googleapis.com`. Two things

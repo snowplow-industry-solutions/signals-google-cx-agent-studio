@@ -26,6 +26,9 @@ acceptance criteria.
   agent + app/root-agent association, the two OpenAPI toolsets (sourced from
   `agent/tools/*.openapi.yaml`), the app version, and the web-widget
   deployment (public access, origin check, recaptcha off).
+- `tools.tf` -- the two typed widget tools from issue 09
+  (`productCarousel`/`productDetails`), adopted 2026-07-29 after the QA
+  plan surfaced them as post-reconcile console drift.
 - `outputs.tf` -- resource names, including the deployment name that feeds
   `NEXT_PUBLIC_CES_DEPLOYMENT_ID`.
 - `terraform.tfvars.example` -- copy to `terraform.tfvars` (gitignored) and
@@ -35,10 +38,12 @@ acceptance criteria.
 
 **Terraform owns:** app (incl. its app-level model settings -- that's
 where the console stores them; the agent inherits), root agent
-(instructions from `agent/instructions.console.txt`, the console-format
-copy the live agent actually runs -- `agent/instructions.md` is the
-human-readable source, see runbook §8.2), the app/root-agent association,
-both OpenAPI toolsets (schemas from `agent/tools/`), the app version, the
+(instructions from `agent/instructions.console.widgets.txt`, the
+console-format copy the live agent actually runs since the issue 09
+widget work -- `agent/instructions.md` is the human-readable source and
+`agent/instructions.console.txt` the pre-widget base, see runbook §8.2),
+the app/root-agent association, both OpenAPI toolsets (schemas from
+`agent/tools/`), both widget tools (`tools.tf`), the app version, the
 web-widget deployment's public-access settings, and the shared-secret
 Secret Manager secret.
 
@@ -79,9 +84,9 @@ matching live state or set `model_temperature = null`.
 
 ## Known plan diffs after import (accepted)
 
-Observed on the 2026-07-29 verification run (`Plan: 0 to add, 9 to
-change, 0 to destroy`) -- all provider/import artifacts, none of them
-config↔live drift:
+Observed on the 2026-07-29 verification runs (`Plan: 0 to add, 11 to
+change, 0 to destroy` after the widget tools were adopted; 9 before)
+-- all provider/import artifacts, none of them config↔live drift:
 
 - **`deletion_policy = "DELETE" -> "PREVENT"` on every `google_ces_*`
   resource.** Provider-side virtual field with no API call behind it;

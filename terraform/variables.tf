@@ -121,6 +121,28 @@ variable "model_temperature" {
   default     = null
 }
 
+variable "product_carousel_tool_id" {
+  type        = string
+  description = <<-EOT
+    ID of the productCarousel widget tool (issue 09) to import as
+    google_ces_tool.product_carousel. The console-built tool's ID is a
+    UUID -- read it from the agent's `tools` list via the CES REST API or
+    console. The default only applies to a greenfield re-create.
+  EOT
+  default     = "product-carousel"
+}
+
+variable "product_details_tool_id" {
+  type        = string
+  description = <<-EOT
+    ID of the productDetails widget tool (issue 09) to import as
+    google_ces_tool.product_details. Same discovery route as
+    product_carousel_tool_id; the default only applies to a greenfield
+    re-create.
+  EOT
+  default     = "product-details"
+}
+
 variable "agent_shared_secret_id" {
   type        = string
   description = <<-EOT

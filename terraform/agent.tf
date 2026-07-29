@@ -6,19 +6,26 @@ resource "google_ces_agent" "root" {
   display_name = "Root agent"
 
   # The console-format instruction copy is what the live agent actually
-  # runs (docs/runbook.md §8.2: paste instructions.console.txt into the
-  # Root Agent node, verbatim -- its {@TOOL: ...} references only resolve
-  # in that format). agent/instructions.md is the human-readable source
-  # for the same contract; edit there first and mirror changes into the
-  # console copy.
-  instruction = file("${path.module}/../agent/instructions.console.txt")
+  # runs (docs/runbook.md §8.2: paste it into the Root Agent node,
+  # verbatim -- its {@TOOL: ...} references only resolve in that format).
+  # Since issue 09 the live agent runs the *widgets* variant
+  # (instructions.console.widgets.txt, verified byte-identical live
+  # 2026-07-29); instructions.console.txt is the pre-widget base copy.
+  # agent/instructions.md is the human-readable source for the same
+  # contract; edit there first and mirror changes into the console copy.
+  instruction = file("${path.module}/../agent/instructions.console.widgets.txt")
 
   # Model settings are app-level (see app.tf) -- the live agent carries
   # none and inherits the app's.
 
-  # end_session is attached to every agent the console builds.
+  # end_session is attached to every agent the console builds; the widget
+  # tools (tools.tf) were attached by the issue 09 console work. Order
+  # matches the live list so the plan stays clean. `.id` is the full
+  # resource name (`.name` on google_ces_tool is just the ID segment).
   tools = [
     "projects/${var.project_id}/locations/${var.location}/apps/${var.app_id}/tools/end_session",
+    google_ces_tool.product_details.id,
+    google_ces_tool.product_carousel.id,
   ]
 
   toolsets {
