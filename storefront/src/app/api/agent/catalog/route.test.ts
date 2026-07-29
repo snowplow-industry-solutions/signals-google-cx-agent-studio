@@ -179,6 +179,7 @@ describe("GET /api/agent/catalog", () => {
         color: expect.any(String),
         price: expect.any(Number),
         url: expect.stringMatching(/^\/products\//),
+        image: expect.stringMatching(/^https?:\/\//),
       });
     });
   });

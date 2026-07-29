@@ -1,0 +1,51 @@
+{
+  "$comment": "Google's FIXED Parameters schema for the CX Agent Studio widget tool 'productDetails' (Widget Type PRODUCT_DETAILS), captured verbatim from the live tool via the CES REST API on 2026-07-29. Nothing here is pasted into the console: typed widget tools carry this Google-defined contract and the console's schema editor is read-only for them -- only the CUSTOM widget type accepts an author-defined schema. Field mapping from searchCatalog results: title<-name, subtitle<-designer, price<-price as a dollar string, productId<-the url slug, uri<-storefront base URL + url, imageUris<-[image]; rating and review are always omitted (the catalog has neither). See agent/instructions.md 'Rich response widgets' and docs/runbook.md.",
+  "type": "OBJECT",
+  "properties": {
+    "imageUris": {
+      "type": "ARRAY",
+      "description": "A list of direct URLs to images displaying the product.",
+      "items": {
+        "type": "STRING"
+      }
+    },
+    "price": {
+      "type": "STRING",
+      "description": "The current selling price of the product."
+    },
+    "productId": {
+      "type": "STRING",
+      "description": "The unique identifier for this specific product."
+    },
+    "uri": {
+      "type": "STRING",
+      "description": "The URL directing users to the main product detail page on the website."
+    },
+    "rating": {
+      "type": "NUMBER",
+      "description": "The average aggregate user rating for the product, typically on a scale of 1.0 to 5.0. Leave null if no ratings exist."
+    },
+    "review": {
+      "type": "OBJECT",
+      "properties": {
+        "count": {
+          "type": "INTEGER",
+          "description": "The total number of individual user reviews received for this product."
+        },
+        "reviewUri": {
+          "type": "STRING",
+          "description": "The URL directing users to a dedicated page or section where they can read all customer reviews."
+        }
+      },
+      "description": "A summary object containing the total count of reviews and a link to read them. Leave null if no reviews exist."
+    },
+    "subtitle": {
+      "type": "STRING",
+      "description": "A longer, secondary line of text for additional context or description of the product."
+    },
+    "title": {
+      "type": "STRING",
+      "description": "Required. The primary name of the product as listed (e.g., \"Men's Running Shoes\")."
+    }
+  }
+}

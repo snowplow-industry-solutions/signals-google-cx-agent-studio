@@ -654,6 +654,265 @@ Human-only, after rehearsal passes: record the take following
 `docs/demo-script.md`, then deliver per marketing's request. Target date:
 **Thursday 7 August 2026** (`docs/design.md`, PRD).
 
+## 11. Rich response widgets (product carousel / product details)
+
+Covers `.scratch/signals-cx-agent-demo/issues/11-rich-response-widgets.md`:
+polish so the agent's recommendations render as visual product widgets in
+chat instead of plain text. The widget-tool Parameters schemas
+(`agent/tools/product-carousel.widget.json`,
+`agent/tools/product-details.widget.json`), the `image` field added to the
+`searchCatalog` tool, and the agent-instructions updates are prepared in
+the repo; **creating the two widget tools in the console, attaching them
+to the Root agent node, and all live rendering verification below are
+human-triggered** — outside this sandbox. Requires the agent from §8 and
+the widget embed from §9.
+
+### 11.1 Confirmed against official docs (not guessed)
+
+- **The mechanism exists and is called "rich response widgets."** CX Agent
+  Studio's dedicated docs page
+  ([docs.cloud.google.com](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/rich-response-widget))
+  confirms: "You can use rich response widgets to create rich, interactive
+  UI elements for your user interface," built on **widget tools**,
+  referenced in agent instructions with `{@Widget: widget_name}` syntax
+  (parallel to this agent's existing `{@TOOL: ...}` references). The page
+  notes: "The current implementation of rich response widgets is built on
+  widget tools. A future implementation will be stand alone."
+- **Widget Type names, confirmed from the widget tools docs page**
+  ([docs.cloud.google.com](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/widget)):
+  `PRODUCT_CAROUSEL` ("Displays a scrollable carousel of products"),
+  `PRODUCT_DETAILS` ("Shows detailed information about a single product"),
+  plus `QUICK_ACTIONS`, `PRODUCT_COMPARISON`, `ORDER_SUMMARY` (not used by
+  this issue). This is exactly the carousel / product-details split the
+  issue asks for.
+- **The Parameters schema is author-defined ONLY for the `CUSTOM` widget
+  type — typed widgets carry a fixed Google contract.** (Corrected
+  2026-07-29 against the live console; the earlier reading of the docs'
+  generic "Parameters: The input schema for the widget data..." wording
+  as author-defined-for-all-types was wrong.) Creating a
+  `PRODUCT_CAROUSEL` or `PRODUCT_DETAILS` tool from the console template
+  auto-fills a Google-defined schema and the schema editor is
+  **read-only** ("Cannot edit in read-only editor"); only a `CUSTOM`
+  widget tool offers a writable schema ("You can write your own schema
+  here."). The fixed contracts are captured verbatim (via the CES REST
+  API `tools` endpoint) in `agent/tools/product-carousel.widget.json`
+  and `product-details.widget.json`: the carousel takes a
+  `productDetails[]` array (Google's property name, despite belonging to
+  the *carousel*) of `{title, subtitle, price (string), productId, uri,
+  imageUris[]}`; the details widget takes the same fields flat, plus
+  optional `rating`/`review` (always omitted — the catalog has neither).
+  The agent instructions map `searchCatalog`'s `CatalogResult` fields
+  onto them: `title`←`name`, `subtitle`←`designer`, `price`←`price` as a
+  dollar string, `productId`←the `url` slug, `uri`←storefront base URL +
+  `url`, `imageUris`←`[image]`. A fixed contract is also the good case
+  for rendering: it's the shape a widget-aware messenger build knows how
+  to draw natively.
+
+### 11.2 Risk: does the pinned `ces-messenger` render these? (RESOLVED 2026-07-29: NO — see §11.5 log)
+
+Live verification confirmed the risk: `ces-messenger` prints widget
+invocations as literal text (the token arrives in-band in the response
+text; rendering is a hosted-`chat-messenger` client-side feature). The
+original risk analysis below is kept as written — it called the mechanism
+correctly — and §11.5's log carries the evidence and the demo-impact
+warning. Issue 09's custom-render fallback is the path forward.
+
+This was the reason this issue kept `Checkpoint: human-test-required` and
+the acceptance criteria below stayed unchecked rather than assumed:
+
+- Neither rich-response-widget docs page states which web-widget component
+  generation renders the output — both just say "your client... presents
+  the widget," matching the generic "web widget deployment option."
+- Issue 07 (`docs/runbook.md` §9.1) already pinned this repo to the
+  **open-source `ces-messenger`** component specifically because it's the
+  only one documenting `setQueryParameters()`, the mechanism the entire
+  "browse → chat already knows" demo depends on. The **hosted
+  `chat-messenger`** build (Google's console-generated embed snippet,
+  loaded from a different gstatic path) does *not* document that method.
+- A Google developer-forum thread cited in that same section
+  ([discuss.google.dev](https://discuss.google.dev/t/hosted-versus-open-source-ces-messenger-web-component/334696))
+  states, in a Feb–Mar 2026 exchange with a Google representative: the
+  hosted build ships "a few other Rich Message Templates (fex. the Product
+  Carousel) that are not available on Github" (i.e. not in the open-source
+  `ces-messenger` repo), and "the hosted CES Messenger script and the
+  open-source GitHub component are not necessarily kept fully in sync." As
+  of that thread there was no confirmation that these built-in widgets had
+  reached, or would reach, the open-source library. The open-source
+  repo's own rich-message docs
+  (`ces-messenger` GitHub, `doc/message_templates.md`) describe a
+  Handlebars-based custom-template system with generic built-ins (buttons,
+  lists, forms) and do not mention `PRODUCT_CAROUSEL`, `PRODUCT_DETAILS`,
+  "widget tools," or CX Agent Studio's rich-response-widget feature at
+  all — suggesting these are two different rendering mechanisms that may
+  not be the same feature, and the forum's "Product Carousel" gap may
+  apply directly to what this issue needs.
+- **Net finding**: the specific rich message template named "Product
+  Carousel" is documented as hosted-`chat-messenger`-only as of that
+  thread (five months stale relative to this build; no newer public source
+  confirming or denying parity was found). This repo cannot switch to
+  `chat-messenger` without losing `setQueryParameters` (breaking the
+  session-context mechanism issues 06/07 depend on), and this sandbox has
+  no browser/console access to test rendering directly. **This is a
+  genuine, undecided compatibility question, not a guessed field name** —
+  it can only be resolved by the human running §11.5 below against the
+  live deployment.
+- If §11.5 shows the widgets don't render on `ces-messenger` (raw JSON,
+  plain text, or a console/widget error instead of a card), treat this
+  issue as **not shippable as specified** for the carousel/details visual
+  criteria below, and feed the finding back into
+  `.scratch/signals-cx-agent-demo/issues/09-product-cards-stretch.md`
+  (already kept open pending this finding, not closed `wontfix`) — 09's
+  `registerClientSideFunction` custom-render path becomes the fallback.
+
+### 11.3 Create the two widget tools (console)
+
+1. In CX Agent Studio, on the agent from §8, open the rich response
+   widgets builder (rich response widgets icon in the agent builder, per
+   §11.1's citation).
+2. Create a widget tool named `productCarousel` from the
+   `PRODUCT_CAROUSEL` template. **Do not attempt to edit the Parameters
+   schema** — for typed widgets the console auto-fills Google's fixed
+   contract and the editor is read-only (§11.1). Verify it matches the
+   captured copy in `agent/tools/product-carousel.widget.json`; a
+   mismatch means Google changed the contract — re-capture the schema
+   (CES REST `GET .../apps/<app_id>/tools`) and update the repo file and
+   the instruction mapping instead of fighting the console.
+3. Create a second widget tool named `productDetails` from the
+   `PRODUCT_DETAILS` template — same deal: accept the fixed schema,
+   verify against `agent/tools/product-details.widget.json`.
+4. Attach both to the Root agent node (same **+** affordance used for the
+   OpenAPI tools in §8.3) — watch for the same detachment gotcha noted in
+   Troubleshooting for the OpenAPI tools if you re-import anything later.
+5. Re-paste `agent/instructions.console.txt` into the Root agent node's
+   instructions field (it now includes constraint 5, Rich Response
+   Widgets, and the updated taskflow step referencing
+   `{@Widget: productCarousel}` / `{@Widget: productDetails}`) — use the
+   editor's `@` picker to (re-)resolve the `{@Widget: ...}` references if
+   the console flags them as unresolved, same as the `{@TOOL: ...}`
+   guidance in §8.2.
+
+### 11.4 Styling against the luxury theme
+
+No documented CSS custom properties or shadow-DOM parts specific to rich
+response widgets were found in any source checked (mirroring the same gap
+noted for the base widget chrome in §9.4) — the `custom-css` attribute
+already set in `CesMessengerWidget.tsx` is the only confirmed hook. This is
+a **verify-at-build item for the human**: once §11.3 is done and a widget
+actually renders (contingent on §11.2), inspect it in the live browser's
+shadow DOM and extend `WIDGET_CUSTOM_CSS` in
+`storefront/src/components/Widget/CesMessengerWidget.tsx` if any
+widget-specific selectors are found; otherwise the carousel/details card
+renders with whatever default styling `ces-messenger` ships, which may or
+may not read as "acceptable" against the dark luxury palette (`--accent:
+#b79559` etc.) without further work.
+
+### 11.5 Verification walkthrough
+
+1. Confirm §11.3's two widget tools show up correctly in a simulator turn
+   before testing live: ask for "a couple of accessories to go with an
+   evening look" and confirm the trace shows a `productCarousel` widget
+   call with real catalog data (not model-invented fields).
+2. On the deployed site (real browser, real widget): browse a category
+   with 2+ products, open chat, and ask for recommendations from that
+   category. **Expected:** the reply renders as an actual visual carousel
+   card (image, name, designer, price, clickable link), not raw JSON or
+   plain text. **If it renders as plain text/JSON instead**: this is the
+   §11.2 risk materializing — record it as a finding in this section and
+   in issue 09, rather than retrying.
+3. Ask about one specific product by name. **Expected:** the reply renders
+   as a single product-details card with a working link back into the
+   storefront (clicking it lands on that product's page).
+4. Click the link in a rendered carousel item. **Expected:** navigates to
+   the correct `/products/<slug>` page on the deployed storefront (proves
+   the `uri` = base URL + `searchCatalog`'s `url` construction is
+   correct end-to-end).
+5. Ask a question that would normally trigger a recommendation, but for a
+   filter combination with zero catalog matches (e.g. an out-of-stock
+   combination). **Expected:** the agent falls back to a plain-text
+   response (or broadens the search per the existing grounding
+   instructions) — no widget rendered with invented data, no error talk.
+6. Visually compare the rendered widget(s) against the storefront's dark
+   luxury palette. Note any clashing default styling (e.g. the same
+   Vue-green default noted for buttons in §9.4) for a `custom-css` fix.
+7. Record the result (pass/fail + timestamp, and the §11.2 finding either
+   way) here:
+
+   **Verification run, 2026-07-29 ~15:10 UTC (Playwright walkthrough
+   against the deployed storefront + live agent, new deployment version
+   `a8c48c30…` published minutes earlier): FAIL on rendering — the §11.2
+   risk is CONFIRMED.**
+
+   - **Agent side: fully correct.** Both queries behaved exactly as
+     instructed. Accessories query → grounded prose plus a
+     `productCarousel` invocation whose `productDetails[]` payload
+     carried three real catalog items *from the live session's own
+     browsing* (Silk Twill Square Scarf $340 / Atelier Lune,
+     Hammered Gold Cuff Bracelet $680 / Arc Studio, Felt Cloche Hat
+     $410 / Arc Studio), every field matching the fixed schema —
+     `title`, `subtitle`, dollar-string `price`, slug `productId`,
+     absolute `uri`, single-element `imageUris`. Single-product query →
+     equivalent correct `productDetails` invocation. (One benign quirk:
+     the model appends a `summary:` argument that isn't in the schema.)
+   - **Rendering: the pinned open-source `ces-messenger` printed the
+     entire `{@Widget: productCarousel(payload: …)}` token as literal
+     text inside the chat bubble.** No carousel, no card, no console
+     error — and visibly *worse* than plain text for a shopper.
+   - **Wire-format root cause (decisive for the fallback):** the
+     `runSession` response delivers the widget invocation **in-band in
+     `outputs[].text`** — there is no structured widget/richContent
+     field in the payload at all. So the token→card transformation is
+     purely a client-side text-parsing feature of the hosted
+     `chat-messenger`, absent from the open-source component. This also
+     means issue 09's custom-render fallback is *feasible without any
+     agent-side change*: parse the `{@Widget: name(payload: {…})}`
+     token out of the message text, render a custom card, suppress the
+     raw string (note the payload uses unquoted JS-object keys, not
+     strict JSON).
+   - Steps 4–6 (link click-through, zero-result degradation, styling)
+     were not reachable — nothing rendered to click or style.
+   - **Demo impact: the live agent now emits raw widget tokens in chat.**
+     Until either issue 09's client-side renderer exists or the console
+     instructions are reverted to the pre-widget text-only version (and
+     the widget tools detached + a new version published), live
+     conversations look broken. Do not record the demo in this state.
+
+### 11.6 Current state: widgets parked pending issue 09's renderer
+
+Decision after the §11.5 failure (2026-07-29): **revert the live agent to
+text-only now, build issue 09's client-side renderer in parallel**, and
+re-enable widgets only if that renderer ships solid before the recording.
+
+The two instruction variants live side by side in the repo:
+
+- `agent/instructions.console.txt` — the **text-only** version, matching
+  what the live console agent runs after the revert. This is the file
+  Terraform's `google_ces_agent` reads, so it must always mirror live.
+- `agent/instructions.console.widgets.txt` — the widget-enabled variant
+  verified agent-side in §11.5 (correct invocations, grounded data),
+  parked until rendering exists.
+
+**Revert procedure (console):**
+
+1. Root agent node → Instructions → paste the full contents of
+   `agent/instructions.console.txt` (re-resolve any flagged `{@TOOL: …}`
+   references with the `@` picker, per §8.2).
+2. Detach `productCarousel` and `productDetails` from the Root agent node
+   (leave the widget *tools* in place in the app — only the attachment
+   goes; re-enabling is then a re-attach, not a re-create).
+3. Publish a new deployment version and confirm a live chat recommendation
+   comes back as clean prose with no `{@Widget:` text.
+
+**Re-enable procedure (only after issue 09's renderer is verified):**
+
+1. Re-attach both widget tools to the Root agent node.
+2. Paste `agent/instructions.console.widgets.txt` into the Root agent
+   node's instructions (re-resolve `{@TOOL: …}`/`{@Widget: …}` refs).
+3. Publish a new version and re-run the §11.5 walkthrough end-to-end —
+   this time expecting the storefront's own renderer (not
+   `ces-messenger`) to draw the cards.
+4. Swap the contents of `agent/instructions.console.txt` and update
+   Terraform state/plan accordingly (the file must keep mirroring live).
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
@@ -781,3 +1040,24 @@ Human-only, after rehearsal passes: record the take following
   shadow styles default `--host-primary-color` to `#42b883`; the embed sets
   that variable to the site's `--accent` on the host element, and the
   `custom-css` attribute is the hook for any further shadow-DOM styling.
+- **Agent recommends products but the reply is plain text / raw JSON
+  instead of a carousel or product card** — this is the §11.2 risk: the
+  pinned `ces-messenger` component may not implement the specific rich
+  message templates CX Agent Studio's widget-tool feature relies on (a
+  Google forum thread documents this gap for the hosted vs. open-source
+  builds, unresolved as of that thread). Confirm the widget tools are
+  actually attached to the Root agent node (§11.3 step 4, same detachment
+  gotcha as the OpenAPI tools) before concluding it's this risk rather than
+  a wiring mistake. If confirmed, record the finding in
+  `docs/runbook.md` §11.2/§11.5 and in issue
+  `09-product-cards-stretch.md`, and fall back to that issue's
+  `registerClientSideFunction` approach.
+- **Widget tool call shows in the trace but the console flags `{@Widget:
+  ...}` as unresolved in the instructions editor** — same fix as the
+  `{@TOOL: ...}` case (§8.2): delete the reference and re-insert it with
+  the editor's `@` picker rather than hand-typing.
+- **Carousel/details card renders but the product link 404s or points at
+  the wrong product** — check the widget's `uri` field was built as the
+  deployed base URL literally prefixed to `searchCatalog`'s `url` field
+  (§11.1); a common mistake is the model using the site-relative `url`
+  value alone, which won't navigate correctly from inside the chat widget.
