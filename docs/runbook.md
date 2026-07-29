@@ -546,6 +546,114 @@ via `custom-css` from there.
 7. Record the result (pass/fail + timestamp) here:
    `<PLACEHOLDER: widget end-to-end verification run log>`.
 
+## 10. Demo script, seeded fallback session, and rehearsal
+
+Covers `.scratch/signals-cx-agent-demo/issues/08-demo-polish-and-recording.md`:
+turns the working, human-verified integration (§7–9) into the recorded
+webinar deliverable. The demo script and the fallback-session/rehearsal
+procedures below are prepared in the repo; **rehearsing, recording,
+delivering, and the console allowed-origins cleanup in §10.3 are
+human-triggered** — outside this sandbox.
+
+### 10.1 Demo script
+
+`docs/demo-script.md` — scene-by-scene choreography, talking points, and the
+"prove it's real-time" beat. Written against the real product catalog
+(`storefront/src/data/products.ts`) so the browsing described there is
+exactly reproducible against the live deployed site.
+
+### 10.2 Seeded fallback session
+
+Purpose: a known-good `domain_sessionid` with rich, verified attributes,
+ready to substitute live during the recording if the pipeline hasn't
+propagated attributes in time (Signals ingestion lag, a dropped event, a
+flaky trial-org call) — so a hiccup doesn't ruin the take.
+
+**Preparation** (human-runnable; requires the deployed site and, for the
+verification step, the `AGENT_SHARED_SECRET` value from §7):
+
+1. Open the deployed storefront in a fresh/incognito browser window (no
+   prior `_sp_id` cookie), default demo mode so the debug panel is visible.
+2. Run the exact browse sequence from `docs/demo-script.md` Scene 1: view
+   the Noir Double-Breasted Blazer, Burgundy Silk Evening Gown, and Camel
+   Cashmere Wrap Coat product pages, then add the Camel Cashmere Wrap Coat
+   to cart. Using the same sequence as the script means the seeded
+   session's attributes match what the script narrates even if it's
+   substituted mid-take.
+3. Wait ~15 seconds for the pipeline to propagate events into the Profile
+   Store, then confirm the debug panel shows a non-empty "Favorite
+   designer" (Maison Cendre) and "Favorite category" before continuing.
+4. Capture the session's `domain_sessionid` from devtools (Application →
+   Cookies → `_sp_id.<hash>`, or the console one-liner):
+   ```js
+   document.cookie.split("; ").find((c) => c.startsWith("_sp_id.")).split("=")[1].split(".")[5]
+   ```
+5. Verify retrievability — confirm the agent-facing context endpoint
+   actually returns that session's attributes, the same contract the live
+   agent calls:
+   ```
+   curl -s -H "x-agent-api-key: $AGENT_SHARED_SECRET" \
+     "https://<deployed-url>/api/agent/context?session_id=<captured-domain_sessionid>"
+   ```
+   Confirm the response's `profile` is non-empty (e.g. `favorite_designer:
+   "Maison Cendre"`) and `recent_activity` lists the product views/cart-add
+   just performed. An empty/degraded payload (`{"profile":{},...}`) means
+   the seed didn't take — wait longer and re-check, or repeat step 2.
+6. Record the seeded session id and verification result here so it's
+   ready to hand during rehearsal/recording:
+   - Seeded `domain_sessionid`: `<PLACEHOLDER: fill in during human prep>`
+   - Verification result (pass/fail + timestamp):
+     `<PLACEHOLDER: fill in during human prep>`
+
+**Live substitution procedure** (if the pipeline hiccups during rehearsal
+or recording): the widget always reads the *real* browser session id via
+`getDomainSessionId()` (`storefront/src/components/Widget/CesMessengerWidget.tsx`),
+so forcing the seeded id means overriding what's passed to the agent, the
+same `setQueryParameters` mechanism §9.1's widget-pin check already
+exercises:
+
+```js
+document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: "<seeded-domain_sessionid>" });
+```
+
+Run this in devtools before opening (or continuing) the chat, then proceed
+with the scripted conversation as normal — the agent's tool calls now
+resolve against the seeded session's known-good attributes instead of the
+live one.
+
+### 10.3 Rehearsal checklist
+
+Run through before recording. All console/live steps are human-only.
+
+- [ ] **Remove the temporary `http://localhost:3000` entry** from the
+      chat channel's allowed-origins list in the CX Agent Studio console
+      (§9.2) — added for local testing only, must not ship in the
+      recording or the public webinar.
+- [ ] `npm run verify:deploy -- https://<deployed-url>` passes all checks
+      (§7 step 4 / §9.3 step 3) against the current deployed URL.
+- [ ] Seeded fallback session (§10.2) prepared and verified retrievable
+      today, not from a stale prior run — Signals trial-org state and
+      agentic-context windows (max 3600s) can go stale between sessions.
+- [ ] Fresh/incognito browser window ready, no leftover `_sp_id` cookie
+      from earlier testing.
+- [ ] Debug panel visible (default demo mode) and showing live values as
+      you browse the Scene 1 sequence from `docs/demo-script.md`.
+- [ ] Chat widget renders correctly themed, no console errors, "Start
+      conversation" succeeds (no Recaptcha-token error — §9.2's toggle).
+- [ ] "Reset Chat" control (`SignalsDebugPanel`) confirmed to actually
+      start a clean conversation, so retakes don't carry over prior chat
+      history.
+- [ ] Do at least one full run-through of `docs/demo-script.md` end to end
+      with no manual intervention required (no swapping to the fallback
+      session, no restarting the widget) before treating the setup as
+      recording-ready.
+
+### 10.4 Recording and delivery
+
+Human-only, after rehearsal passes: record the take following
+`docs/demo-script.md`, then deliver per marketing's request. Target date:
+**Thursday 7 August 2026** (`docs/design.md`, PRD).
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
