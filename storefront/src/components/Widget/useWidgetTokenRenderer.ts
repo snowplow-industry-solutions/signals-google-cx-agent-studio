@@ -12,6 +12,7 @@ import {
   replaceWidgetTokensIn,
   safeCardUrl,
 } from "./widgetCards";
+import { createPartialTokenVisibility } from "./widgetTokenVisibility";
 
 const TEMPLATE_ID = "atelier_product_cards";
 
@@ -22,7 +23,12 @@ const TEMPLATE_ID = "atelier_product_cards";
  *
  * 1. **In-band text tokens** — `{@Widget: …(payload: …)}` printed verbatim
  *    inside the chat bubble. Handled by watching the component's (open)
- *    shadow DOM and swapping every complete token for rendered cards.
+ *    shadow DOM and swapping every complete token for rendered cards. A
+ *    trailing *incomplete* token (still streaming in) is never shown raw
+ *    either: createPartialTokenVisibility hides the nearest ancestor
+ *    element of that text — without touching the node's content, since
+ *    ces-messenger owns and rewrites it every tick — until the token
+ *    completes or a safety timeout reveals it.
  * 2. **Structured payloads** — `outputs[].payload` with
  *    `type: "product_detail_carousel"` and no text at all, which the stock
  *    component drops as a *blank* reply. Handled via the component's own
@@ -53,6 +59,7 @@ export function useWidgetTokenRenderer(
   useEffect(() => {
     let observer: MutationObserver | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const partialVisibility = createPartialTokenVisibility();
 
     const navigate = (url: URL): boolean => {
       // Widget payloads carry the *deployed* storefront's absolute URLs
@@ -70,6 +77,9 @@ export function useWidgetTokenRenderer(
 
     const process = (root: Node) => {
       const replaced = replaceWidgetTokensIn(root, navigate);
+      // Runs after the replace pass so a token that just completed is
+      // already a card by the time visibility re-checks for a partial.
+      partialVisibility.process(root);
       if (replaced > 0) {
         logSignalsDemo("Rendered rich-response widget token(s) in chat", {
           replaced,
@@ -192,6 +202,7 @@ export function useWidgetTokenRenderer(
     return () => {
       observer?.disconnect();
       if (pollTimer) clearInterval(pollTimer);
+      partialVisibility.dispose();
     };
   }, [ref, router]);
 }

@@ -8,7 +8,7 @@
  * luxury palette comes from var() references with hex fallbacks.
  */
 
-import { findWidgetTokens } from "@/utils/widgetTokens";
+import { findPartialTokenStart, findWidgetTokens } from "@/utils/widgetTokens";
 
 /** One product as the fixed PRODUCT_CAROUSEL/PRODUCT_DETAILS schema ships it
  * (agent/tools/*.widget.json): title required; the rest best-effort. */
@@ -328,4 +328,29 @@ export function replaceWidgetTokensIn(
     textNode.parentNode?.replaceChild(fragment, textNode);
   }
   return replaced;
+}
+
+/**
+ * Finds every text node under `root` whose text ends in an incomplete
+ * trailing `{@Widget: …}` invocation (still streaming in). Call after
+ * `replaceWidgetTokensIn` has processed the same root, so any *complete*
+ * token earlier in an originally-mixed text node has already been swapped
+ * for a card and the remaining partial sits in its own text node — this
+ * walk only needs to look at `findPartialTokenStart` per node, not re-derive
+ * completeness itself.
+ *
+ * Pure and read-only: callers decide what to do with the nodes (the
+ * streaming-suppression seam in useWidgetTokenRenderer hides their nearest
+ * ancestor element rather than touching the node).
+ */
+export function findPartialTokenTextNodes(root: Node): Text[] {
+  const doc = root.ownerDocument ?? (root as Document);
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const found: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (findPartialTokenStart(n.textContent ?? "") >= 0) {
+      found.push(n as Text);
+    }
+  }
+  return found;
 }

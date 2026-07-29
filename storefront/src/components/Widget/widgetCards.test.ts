@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildWidgetElement,
+  findPartialTokenTextNodes,
   makeWidgetTemplate,
   normalizeWidgetPayload,
   renderWidgetCardsHtml,
@@ -21,6 +22,24 @@ const PRODUCT = {
     "https://images.unsplash.com/photo-1518893063132-36e46dbe2428?auto=format&fit=crop&w=1200&q=80",
   ],
 };
+
+/** Mirrors the live ces-messenger structure: li.from-bot > span > #text
+ * (single text node carrying the whole message, token included). Shared by
+ * replaceWidgetTokensIn and findPartialTokenTextNodes tests below. */
+function messageNode(text: string): { root: HTMLElement; span: HTMLElement } {
+  const root = document.createElement("ul");
+  const li = document.createElement("li");
+  li.className = "from-bot text-response";
+  const span = document.createElement("span");
+  span.textContent = text;
+  li.appendChild(span);
+  root.appendChild(li);
+  return { root, span };
+}
+
+// Shared by replaceWidgetTokensIn and findPartialTokenTextNodes tests below.
+const TOKEN =
+  '{@Widget: productDetails(payload: {title: "Silk Twill Square Scarf", subtitle: "Atelier Lune", price: "$340", uri: "https://x.test/products/scarf", imageUris: ["https://img.test/scarf.jpg"]})}';
 
 describe("buildWidgetElement", () => {
   it("builds a carousel rail with one anchor card per product", () => {
@@ -234,22 +253,6 @@ describe("makeWidgetTemplate(true) — anchor fallback for builds without regist
 });
 
 describe("replaceWidgetTokensIn", () => {
-  function messageNode(text: string): { root: HTMLElement; span: HTMLElement } {
-    // Mirrors the live ces-messenger structure: li.from-bot > span > #text
-    // (single text node carrying the whole message, token included).
-    const root = document.createElement("ul");
-    const li = document.createElement("li");
-    li.className = "from-bot text-response";
-    const span = document.createElement("span");
-    span.textContent = text;
-    li.appendChild(span);
-    root.appendChild(li);
-    return { root, span };
-  }
-
-  const TOKEN =
-    '{@Widget: productDetails(payload: {title: "Silk Twill Square Scarf", subtitle: "Atelier Lune", price: "$340", uri: "https://x.test/products/scarf", imageUris: ["https://img.test/scarf.jpg"]})}';
-
   it("swaps the token for a card and keeps surrounding prose", () => {
     const { root, span } = messageNode(`Lovely choice. ${TOKEN} Anything else?`);
     const replaced = replaceWidgetTokensIn(root);
@@ -289,5 +292,32 @@ describe("replaceWidgetTokensIn", () => {
     expect(span.textContent).toContain("A ");
     expect(span.textContent).toContain(" B ");
     expect(span.textContent).toContain(" C");
+  });
+});
+
+describe("findPartialTokenTextNodes", () => {
+  it("returns the text node whose trailing content is an incomplete token", () => {
+    const { root, span } = messageNode(`Prose ${TOKEN.slice(0, 40)}`);
+    const found = findPartialTokenTextNodes(root);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toBe(span.firstChild);
+  });
+
+  it("returns nothing once the only token in the text is complete", () => {
+    const { root } = messageNode(`Take a look: ${TOKEN}`);
+    expect(findPartialTokenTextNodes(root)).toHaveLength(0);
+  });
+
+  it("returns nothing for plain prose with no marker", () => {
+    const { root } = messageNode("A plain concierge reply.");
+    expect(findPartialTokenTextNodes(root)).toHaveLength(0);
+  });
+
+  it("finds the trailing partial that remains after a preceding complete token is already replaced by a card", () => {
+    const { root, span } = messageNode(`${TOKEN} then ${TOKEN.slice(0, 20)}`);
+    replaceWidgetTokensIn(root);
+    const found = findPartialTokenTextNodes(root);
+    expect(found).toHaveLength(1);
+    expect(found[0].parentElement).toBe(span);
   });
 });
