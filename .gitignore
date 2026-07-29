@@ -5,3 +5,13 @@ node_modules/
 .vercel/
 .claude/worktrees/
 .claude/settings.local.json
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# Terraform local state — .tf config files are tracked; tfvars hold live
+# resource IDs and stay local
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
