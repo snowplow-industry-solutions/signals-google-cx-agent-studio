@@ -116,10 +116,9 @@ export function useWidgetTokenRenderer(
       // click handler will ever route (issue 09 review, Finding A). Never
       // register both mechanisms for one build.
       const richMessageHandler = element.registerRichMessageHandler;
-      const hasRichMessageHandler = typeof richMessageHandler === "function";
       element.registerTemplate(
         TEMPLATE_ID,
-        makeWidgetTemplate(!hasRichMessageHandler)
+        makeWidgetTemplate(typeof richMessageHandler !== "function")
       );
 
       element.registerHook("payload-received", (payload) => {
@@ -159,7 +158,7 @@ export function useWidgetTokenRenderer(
         return true;
       });
 
-      if (richMessageHandler) {
+      if (typeof richMessageHandler === "function") {
         richMessageHandler(TEMPLATE_ID, (_message, clicked) => {
           const card = clicked.closest("[data-uri]");
           const uri = card?.getAttribute("data-uri");
