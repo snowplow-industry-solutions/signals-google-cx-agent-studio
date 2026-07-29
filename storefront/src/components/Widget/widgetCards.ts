@@ -112,12 +112,18 @@ function styled<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/** Layout/click-routing variant for one card — see `buildCards` for what
+ * `wide` and `asAnchor` each mean. */
+interface BuildCardOptions {
+  wide: boolean;
+  asAnchor: boolean;
+}
+
 function buildCard(
   doc: Document,
   product: ProductCardData,
   onNavigate: NavigateHandler | undefined,
-  wide: boolean,
-  asAnchor: boolean
+  { wide, asAnchor }: BuildCardOptions
 ): HTMLElement {
   const { title, subtitle, price, uri, imageUri } = product;
 
@@ -220,7 +226,9 @@ function buildCards(
     });
     rail.setAttribute("data-widget-card", "productCarousel");
     for (const item of context.items) {
-      rail.appendChild(buildCard(doc, item, onNavigate, false, asAnchor));
+      rail.appendChild(
+        buildCard(doc, item, onNavigate, { wide: false, asAnchor })
+      );
     }
     return rail;
   }
@@ -230,7 +238,9 @@ function buildCards(
     maxWidth: "17rem",
   });
   wrap.setAttribute("data-widget-card", "productDetails");
-  wrap.appendChild(buildCard(doc, context.items[0], onNavigate, true, asAnchor));
+  wrap.appendChild(
+    buildCard(doc, context.items[0], onNavigate, { wide: true, asAnchor })
+  );
   return wrap;
 }
 

@@ -20,6 +20,12 @@
 - `src/components/Cart/CartProvider.tsx`
   Holds in-memory demo cart state and emits tracked cart updates.
 
+- `src/components/Widget/CesMessengerWidget.tsx`
+  Embeds the ces-messenger chat element; `useWidgetTokenRenderer.ts` renders
+  its CX Agent Studio rich-response widget tokens/payloads as product cards
+  (`widgetCards.ts`) and hides still-streaming partial tokens
+  (`widgetTokenVisibility.ts`).
+
 ## Where To Change Things
 
 - Product catalog: `src/data/products.ts`

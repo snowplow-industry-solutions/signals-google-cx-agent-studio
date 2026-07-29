@@ -4,10 +4,9 @@ import { getDomainSessionId } from "@snowplow/browser-tracker";
 import Script from "next/script";
 import { useCallback, useEffect, useRef } from "react";
 
+import { useWidgetTokenRenderer } from "@/components/Widget/useWidgetTokenRenderer";
 import type { CesMessengerElement } from "@/types/ces-messenger";
 import { logSignalsDemo } from "@/utils/demo";
-
-import { useWidgetTokenRenderer } from "./useWidgetTokenRenderer";
 
 // GitHub-distributed component (not the gstatic "chat-messenger" generation) —
 // only this one documents setQueryParameters(), which is how

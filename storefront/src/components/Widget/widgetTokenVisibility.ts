@@ -22,9 +22,8 @@
  * timer that force-reveals it after `hideTimeoutMs`.
  */
 
+import { findPartialTokenTextNodes } from "@/components/Widget/widgetCards";
 import { findPartialTokenStart } from "@/utils/widgetTokens";
-
-import { findPartialTokenTextNodes } from "./widgetCards";
 
 /** Force-reveal a partial that never resolves on its own. */
 const DEFAULT_HIDE_TIMEOUT_MS = 5000;

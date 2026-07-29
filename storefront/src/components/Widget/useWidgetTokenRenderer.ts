@@ -3,16 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, type RefObject } from "react";
 
-import type { CesMessengerElement } from "@/types/ces-messenger";
-import { logSignalsDemo } from "@/utils/demo";
-
 import {
   makeWidgetTemplate,
   normalizeWidgetPayload,
   replaceWidgetTokensIn,
   safeCardUrl,
-} from "./widgetCards";
-import { createPartialTokenVisibility } from "./widgetTokenVisibility";
+} from "@/components/Widget/widgetCards";
+import { createPartialTokenVisibility } from "@/components/Widget/widgetTokenVisibility";
+import type { CesMessengerElement } from "@/types/ces-messenger";
+import { logSignalsDemo } from "@/utils/demo";
 
 const TEMPLATE_ID = "atelier_product_cards";
 
@@ -75,7 +74,7 @@ export function useWidgetTokenRenderer(
       return true;
     };
 
-    const process = (root: Node) => {
+    const replaceTokensUnder = (root: Node) => {
       const replaced = replaceWidgetTokensIn(root, navigate);
       // Runs after the replace pass so a token that just completed is
       // already a card by the time visibility re-checks for a partial.
@@ -90,8 +89,8 @@ export function useWidgetTokenRenderer(
     const attachTokenObserver = (element: CesMessengerElement): boolean => {
       const shadowRoot = element.shadowRoot;
       if (!shadowRoot) return false;
-      process(shadowRoot);
-      observer = new MutationObserver(() => process(shadowRoot));
+      replaceTokensUnder(shadowRoot);
+      observer = new MutationObserver(() => replaceTokensUnder(shadowRoot));
       observer.observe(shadowRoot, {
         childList: true,
         subtree: true,
