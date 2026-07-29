@@ -876,20 +876,54 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
      the widget tools detached + a new version published), live
      conversations look broken. Do not record the demo in this state.
 
-### 11.6 Current state: widgets parked pending issue 09's renderer
+   **Addendum, 2026-07-29 ~15:45 UTC (issue 09 renderer, local dev):**
+   further live turns showed the wire format is **bimodal** — the same
+   agent/version sometimes ships the widget as (1) the in-band text token
+   above, and sometimes as (2) a **structured `outputs[].payload`** with a
+   `type` discriminator (`product_detail_carousel` for the carousel,
+   `base_product_detail` for the details widget) and **no text output at
+   all** — which stock `ces-messenger` drops as a completely **blank
+   reply** (arguably worse than the raw token). Issue 09's renderer
+   (`sandcastle/09-widget-token-renderer`, storefront-side) handles both:
+   mode 1 via a shadow-DOM observer that swaps complete tokens for cards,
+   mode 2 via the component's own extension surface (`payload-received`
+   hook rewriting the payload onto a registered card template, plus
+   `registerRichMessageHandler` for clicks). Verified live against
+   localhost with the widget-enabled agent: carousel and details cards
+   render with image/designer/title/price, card clicks route through the
+   SPA router (conversation preserved — a full page load would remount
+   the widget), and cards re-render from restored session history after a
+   reload. One more model quirk for the record: a structured details
+   payload arrived with **invented** `rating`/`review` values (4.5 stars,
+   12 reviews, a nonexistent `/reviews` URL) despite instructions to omit
+   them — the renderer discards both fields unconditionally.
+
+### 11.6 Current state: renderer built (branch), prod path decision open
 
 Decision after the §11.5 failure (2026-07-29): **revert the live agent to
-text-only now, build issue 09's client-side renderer in parallel**, and
+text-only, build issue 09's client-side renderer in parallel**, and
 re-enable widgets only if that renderer ships solid before the recording.
+
+Status as of 2026-07-29 evening: the renderer is **built and verified
+against localhost** (`sandcastle/09-widget-token-renderer`, unmerged —
+see the §11.5 addendum), while the live console agent still runs the
+widget-enabled instructions (revert not yet performed). That opens a
+second path: instead of reverting, **deploy the renderer-equipped
+storefront to Vercel and re-run §11.5 against production** — if it
+passes, the widget moment ships in the demo and no console revert is
+needed. The revert procedure below remains the safety fallback either
+way; what must not persist is the current in-between state (live agent
+emits widgets, deployed storefront can't render them).
 
 The two instruction variants live side by side in the repo:
 
 - `agent/instructions.console.txt` — the **text-only** version, matching
-  what the live console agent runs after the revert. This is the file
-  Terraform's `google_ces_agent` reads, so it must always mirror live.
+  what the live console agent runs **after the revert** (until the revert
+  happens — or if it's skipped in favour of the renderer — the live agent
+  runs the widgets variant below, and Terraform's instruction reference
+  must track whichever is actually live).
 - `agent/instructions.console.widgets.txt` — the widget-enabled variant
-  verified agent-side in §11.5 (correct invocations, grounded data),
-  parked until rendering exists.
+  verified agent-side in §11.5 (correct invocations, grounded data).
 
 **Revert procedure (console):**
 

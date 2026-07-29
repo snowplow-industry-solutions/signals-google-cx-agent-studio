@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef } from "react";
 import type { CesMessengerElement } from "@/types/ces-messenger";
 import { logSignalsDemo } from "@/utils/demo";
 
+import { useWidgetTokenRenderer } from "./useWidgetTokenRenderer";
+
 // GitHub-distributed component (not the gstatic "chat-messenger" generation) —
 // only this one documents setQueryParameters(), which is how
 // SESSION_CONTEXT_VARIABLE below reaches the agent's
@@ -33,6 +35,11 @@ const WIDGET_CUSTOM_CSS = `
 export function CesMessengerWidget() {
   const elementRef = useRef<CesMessengerElement | null>(null);
   const deploymentId = process.env.NEXT_PUBLIC_CES_DEPLOYMENT_ID;
+
+  // Issue 09: render {@Widget: …} tokens (which ces-messenger would print
+  // as raw text) as product cards. Idles harmlessly while the agent runs
+  // the text-only instruction variant.
+  useWidgetTokenRenderer(elementRef);
 
   const handleLoaded = useCallback(() => {
     const element = elementRef.current;
