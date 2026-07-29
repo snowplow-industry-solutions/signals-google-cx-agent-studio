@@ -591,7 +591,16 @@ default — fill in `terraform/terraform.tfvars` (gitignored; copy from
 | `catalog_toolset_id` | Console → the `searchCatalog` toolset's settings |
 | `app_version_id` | The version currently pinned to the live deployment's channel — console → deployment → pinned Agent Version (see §9's note that the channel serves a version snapshot, not the draft) |
 | `deployment_display_name` | Console → the web-widget deployment's display name |
-| `model_name` | Console → Root Agent → model settings — read the live value, don't guess |
+| `app_display_name` | Console → the app's display name (whatever was chosen at §8.2 creation; not prescribed) |
+| `model_name` | Console → the **app's** model settings — the console sets model/temperature at the app level and the root agent inherits them (confirmed live 2026-07-29: the agent resource carries no `modelSettings`). Read the live value, don't guess |
+
+Everything above is also discoverable without console access via the CES
+REST API using ADC credentials (`gcloud auth application-default
+print-access-token`), e.g. `GET
+https://ces.googleapis.com/v1/projects/<project>/locations/<location>/apps/<app_id>`
+and its `/agents`, `/toolsets`, `/versions`, `/deployments` children — the
+2026-07-29 discovery run used this path when the gcloud CLI token had gone
+stale but ADC still worked.
 
 `terraform/secrets.tf`'s `agent_shared_secret_id`/`agent_shared_secret_value`
 are a separate decision — see 10.4 before importing anything toolset-related.
@@ -633,9 +642,14 @@ terraform import google_ces_deployment.web_widget \
   "projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}/deployments/${DEPLOYMENT_ID}"
 ```
 
-Import the shared secret too (only if reconciling with the console's hidden
-secret — the other option in `terraform/README.md` "Secret reconciliation"
-skips this and creates a fresh one on `apply` instead):
+Import the shared secret too. The 2026-07-29 run resolved the
+`terraform/README.md` "Secret reconciliation" decision in favour of
+importing: the console-era secret
+(`signals-agent-studio-agent-shared-secret`) turned out to already carry
+the full baseline label set and the CES service-agent IAM grant, and its
+payload matched the deployed `AGENT_SHARED_SECRET` — so Terraform adopts
+it rather than creating a duplicate. Set `agent_shared_secret_id` to the
+live secret's ID in `terraform.tfvars`, then:
 
 ```
 SECRET_ID=<the secret backing the console tools' API-key auth>
@@ -646,7 +660,30 @@ terraform import google_secret_manager_secret.agent_shared_secret \
 
 terraform import google_secret_manager_secret_version.agent_shared_secret \
   "projects/${PROJECT_ID}/secrets/${SECRET_ID}/versions/${SECRET_VERSION}"
+
+terraform import google_secret_manager_secret_iam_member.ces_service_agent_accessor \
+  "projects/${PROJECT_ID}/secrets/${SECRET_ID} roles/secretmanager.secretAccessor serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-ces.iam.gserviceaccount.com"
 ```
+
+Find the secret's ID in the live toolsets' `apiKeyConfig.apiKeySecretVersion`
+(console or REST), its version numbers via
+`https://secretmanager.googleapis.com/v1/projects/<project>/secrets/<secret>/versions`,
+and the project number for the IAM member via `gcloud projects describe`
+or the app's REST payload.
+
+**Provider import gap (google provider v7.41.0):** `terraform import`
+leaves the create-only, ForceNew ID fields (`app_id` on the app,
+`agent_id` on the agent, `app_version_id` on the version) null in state,
+so a naive first plan wants to **destroy and recreate** all three. The
+config works around this with `lifecycle.ignore_changes` on those fields
+(see `terraform/app.tf`, `agent.tf`, `deployment.tf`) and by having child
+resources reference `google_ces_app.this.name` (populated by import)
+rather than `.app_id` (null). If a plan ever shows `must be replaced` on
+these resources, check those guards before touching anything live.
+
+Import run log, 2026-07-29: all 7 CES imports + the 3 Secret Manager
+imports above succeeded first try against
+`projects/engineering-sandbox/locations/us/apps/83a964e4-…0024`.
 
 ### 10.4 Confirm a clean plan
 
@@ -658,43 +695,92 @@ TF_VAR_agent_shared_secret_value=<the live AGENT_SHARED_SECRET value> \
 **Expected result:** no changes, or only the accepted secret-reconciliation
 diff from `terraform/README.md` if the fresh-secret path was chosen. Any
 other diff means a variable value or a `.tf` argument doesn't match live
-state — reconcile before treating this config as authoritative. Record the
-result here: `<PLACEHOLDER: clean-plan verification run log>`.
+state — reconcile before treating this config as authoritative.
+
+Verification run, 2026-07-29: `Plan: 0 to add, 9 to change, 0 to destroy`,
+where every remaining "change" is a documented provider/import artifact,
+not config↔live drift (see `terraform/README.md` "Known plan diffs after
+import"): `deletion_policy DELETE → PREVENT` on all seven `google_ces_*`
+resources (provider-side virtual field; import defaults it to DELETE),
+the deployment's `app_version` being backfilled with exactly the live
+value (import leaves it null in state), and the secret's `labels` map
+being backfilled (import puts live labels in `effective_labels` only —
+the live values already matched the baseline set). The secret *version*
+showed an update with zero changed fields, and comparing the plan JSON
+confirmed `secret_data` in live state equals the `TF_VAR` value — i.e.
+the console secret's payload is byte-identical to the deployed
+`AGENT_SHARED_SECRET`. Reaching this required reconciling the `.tf`
+sources to live console reality first: model settings moved from the
+agent to the app (where the console actually stores them), agent
+instruction repointed at `agent/instructions.console.txt` (the format
+the live agent runs, per §8.2), display names/descriptions aligned with
+console values, `tool_ids` and the built-in `end_session` tool declared
+on the agent, and the toolsets' `api_key_secret_version` built as the
+console's `…/versions/latest` alias (a version-resource reference can
+only render a pinned `versions/N`).
 
 ### 10.5 Capture the `apps.exportApp` snapshot
 
 Belt-and-braces drift/backup artefact, independent of the Terraform state.
-Confirm the exact request host and path against the [CES v1 API
-reference](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/reference/rest/v1/projects.locations.apps/exportApp)
-before running — not guessed here:
+Host confirmed live 2026-07-29: `https://ces.googleapis.com`. Two things
+the API reference's shape implies but are easy to miss:
+
+1. `:exportApp` returns a **long-running operation**, not the export —
+   poll `GET /v1/projects/${PROJECT_ID}/locations/${LOCATION}/operations/<op>`
+   until `"done": true`.
+2. The finished operation's `response.appContent` is a **base64-encoded
+   ZIP**, not JSON, regardless of `"exportFormat": "JSON"` — the zip holds
+   per-resource JSON/YAML/text files (`app.json`, `agents/…/instruction.txt`,
+   `toolsets/…/open_api_schema.yaml`, `environment.json`, guardrails).
 
 ```
 curl -X POST \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Authorization: Bearer $(gcloud auth application-default print-access-token)" \
   -H "Content-Type: application/json" \
-  "<CES_API_HOST, confirm from the API reference above>/v1/projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}:exportApp" \
-  -d '{"exportFormat": "JSON"}' \
-  -o "agent/export/app-export-$(date +%Y%m%d).json"
+  "https://ces.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/apps/${APP_ID}:exportApp" \
+  -d '{"exportFormat": "JSON"}'
+# poll the returned operation name until done, then decode:
+#   response.appContent | base64 -d > export.zip
 ```
 
-Commit the resulting file under `agent/export/` (create the directory) —
-same treatment as `agent/instructions.console.txt`: a checked-in snapshot of
-live console state, not something the app reads at runtime. Record the
-capture here: `<PLACEHOLDER: exportApp snapshot capture log — date, file
-path, any drift noticed vs. the `.tf` sources>`.
+Extract the zip into a dated directory under `agent/export/` (pretty-print
+the JSON members for stable diffs) and commit it — same treatment as
+`agent/instructions.console.txt`: a checked-in snapshot of live console
+state, not something the app reads at runtime.
+
+Capture log, 2026-07-29: snapshot committed at
+`agent/export/app-export-20260729/`. Drift check against the repo sources:
+the exported `instruction.txt` is byte-identical to
+`agent/instructions.console.txt`, and both exported OpenAPI schemas match
+`agent/tools/*.openapi.yaml` except that the export substitutes the server
+`url` with the literal `$env_var`, externalizing the real URL (and the
+tools' secret references) into `environment.json` — an export-format
+artifact, not drift (`terraform plan` showed no schema diff). Checked the
+extracted files for the shared-secret value before committing: not present.
 
 ### 10.6 Tagging: apply at the project level
 
 `google_ces_app`/`google_ces_agent` have no `labels` field (10.1), so the
-baseline policy is applied directly to the project, not through Terraform:
+baseline policy would have to be applied directly to the project, not
+through Terraform:
 
 ```
 gcloud projects update "${PROJECT_ID}" \
   --update-labels=system=signals-gecx-demo,snowplow-owner=cc017,environment=dev
 ```
 
-Confirm with `gcloud projects describe "${PROJECT_ID}" --format='value(labels)'`.
-Record here: `<PLACEHOLDER: project-labelling verification log>`.
+**Do not run this against `engineering-sandbox`.** Checked live 2026-07-29:
+the demo lives in a *shared* sandbox project ("Snowplow Development Env")
+that already carries org-managed labels (`team=engineering`,
+`cost-allocation=r-d`, `service_type=engineering_sandbox`, …) and hosts
+other teams' workloads — stamping this demo's `system`/`snowplow-owner`
+labels on the whole project would mislabel everyone's resources. This
+section's assumption of a dedicated project only holds after a §10.7
+re-create into one. As deployed, the baseline label set reaches the one
+labellable resource the config manages — the Secret Manager secret, whose
+live labels were confirmed compliant (`system=signals-gecx-demo`,
+`snowplow-owner=cc017`, `environment=dev`) — and project-level labelling
+is deliberately skipped.
 
 ### 10.7 Re-apply after trial expiry / re-publish a change
 
@@ -713,6 +799,21 @@ Record here: `<PLACEHOLDER: project-labelling verification log>`.
 
 ## Troubleshooting
 
+- **First `terraform plan` after §10.3 import wants to destroy and
+  recreate the app/agent/app version** — the google provider (v7.41.0)
+  import leaves the create-only ForceNew ID fields (`app_id`, `agent_id`,
+  `app_version_id`) null in state, and null → value on a ForceNew field
+  reads as a replacement. The config guards against this with
+  `lifecycle.ignore_changes` on those fields and by referencing
+  `google_ces_app.this.name` (populated) instead of `.app_id` (null) from
+  child resources; if replacements still appear, one of those guards has
+  been removed. Never apply a plan showing `must be replaced` on live
+  demo resources.
+- **`terraform plan` after import shows `deletion_policy = "DELETE" ->
+  "PREVENT"` on every `google_ces_*` resource** — expected: it's a
+  provider-side virtual field (no API call behind it) that import
+  defaults to `DELETE` while `terraform/locals.tf` pins `PREVENT`. It
+  clears on first apply and is an accepted diff for the §10.4 check.
 - **Tracking plan IDs are derived per-org automatically** — `npm run
   seed:tracking-plans` derives a stable UUIDv5 per resource from the org ID,
   so a fresh org never collides with IDs published from a previous org, and

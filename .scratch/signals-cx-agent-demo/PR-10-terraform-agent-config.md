@@ -229,3 +229,57 @@ Record results at these placeholders in `docs/runbook.md`:
 
 If needed: `git revert -n <commit-hash>` to create a revert commit, or `git reset --hard main` to discard unpushed work (only run this if the branch is backed up and no live resources were created yet).
 
+
+## Live test record (2026-07-29)
+
+Run against `engineering-sandbox` / `us` / app `83a964e4-…0024` using ADC
+credentials (gcloud CLI token was stale; ADC worked throughout).
+
+- **Phase 1 (schema validation):** `terraform init` + `validate` PASS;
+  `terraform fmt` applied 2 whitespace fixes (variables.tf/versions.tf).
+- **Resource-ID discovery:** all IDs read live via CES REST (no console
+  needed); recorded in gitignored `terraform/terraform.tfvars`. Key
+  finding: model settings live at the **app** level
+  (`gemini-3.0-flash-001`, temperature 1) — the agent has none.
+- **Phase 2 (import + plan):** all 7 CES imports succeeded. First plan
+  wanted to destroy/recreate app, agent, and app version — provider
+  v7.41.0 import leaves the ForceNew `app_id`/`agent_id`/`app_version_id`
+  fields null in state. Fixed in config: `lifecycle.ignore_changes` on
+  those fields; child refs switched from `.app_id` (null) to `.name`
+  (populated). Reconciled config to live console reality: model_settings
+  moved agent→app, instruction repointed at
+  `agent/instructions.console.txt` (byte-identical to live; runbook §8.2
+  says that file is what gets pasted), display names/descriptions aligned,
+  `tool_ids` + built-in `end_session` declared, deployment
+  `disable_dtmf`/`disable_barge_in_control` added, `llm_agent {}` dropped
+  (live agent stores no agent-type config).
+- **Secret reconciliation:** RESOLVED as import (option 1). The
+  console-era `signals-agent-studio-agent-shared-secret` already carries
+  the full baseline labels, already has the CES service-agent accessor
+  grant, and its payload equals the deployed `AGENT_SHARED_SECRET`
+  (verified via plan-JSON state comparison — value never printed).
+  Imported secret + version 1 + IAM member (10 imports total). Toolsets
+  now reference the console's `…/versions/latest` alias via string
+  interpolation (a version-resource ref can only render `versions/N`).
+- **Final plan:** `Plan: 0 to add, 9 to change, 0 to destroy` — every
+  change a documented provider/import artifact (deletion_policy ×7,
+  deployment app_version backfill == live value, secret labels backfill,
+  zero-field secret-version update). No config↔live drift. Accepted
+  per README "Known plan diffs after import". PASS.
+- **Phase 3 (exportApp):** host = `ces.googleapis.com`; returns a
+  long-running operation whose `response.appContent` is a base64 **zip**,
+  not JSON. Extracted (pretty-printed) to
+  `agent/export/app-export-20260729/` and committed. Drift check:
+  instruction byte-identical to `instructions.console.txt`; OpenAPI
+  schemas match modulo the export's `$env_var` server-URL substitution
+  (externalized to `environment.json`). Secret value confirmed absent
+  before commit.
+- **Phase 3 (project labels):** NOT APPLIED, deliberately —
+  `engineering-sandbox` is a shared project ("Snowplow Development Env")
+  with org-managed labels and other teams' workloads; runbook §10.6
+  amended with a do-not-run warning. The baseline label set is live on
+  the Secret Manager secret (the one labellable managed resource).
+- **Not covered:** `apply` (nothing needs applying; #26231 risk note
+  updated in README since the config now matches the issue's exact
+  shape), allowedOrigins localhost cleanup (rehearsal-day item; tfvars
+  mirrors live including localhost so the plan stays clean until then).

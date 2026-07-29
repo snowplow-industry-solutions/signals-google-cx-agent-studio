@@ -26,6 +26,16 @@ variable "app_id" {
   description = "ID of the existing console-built CES app (issue 06) to import as google_ces_app.this."
 }
 
+variable "app_display_name" {
+  type        = string
+  description = <<-EOT
+    Display name of the existing console-built app -- whatever name was
+    chosen at creation in the console (docs/runbook.md §8.2 doesn't
+    prescribe one). Read the live value from the console so the first
+    plan after import is clean.
+  EOT
+}
+
 variable "agent_id" {
   type        = string
   description = "ID of the existing console-built root agent (issue 06) to import as google_ces_agent.root."
@@ -95,17 +105,19 @@ variable "web_widget_modality" {
 variable "model_name" {
   type        = string
   description = <<-EOT
-    LLM model for the root agent's model_settings. Must match (or be a
-    deliberate, documented change from) whatever the live console agent
-    currently uses -- discover it from the console or `apps.exportApp`
-    rather than guessing. See README.md re: provider bug #26231 before
-    pairing this with a non-null model_temperature in the "us" location.
+    LLM model for the app's model_settings. The console sets model
+    settings at the *app* level, not on the root agent (confirmed live
+    2026-07-29: the agent resource carries no modelSettings and inherits
+    the app's). Must match whatever the live console app currently uses
+    -- discover it from the console or `apps.exportApp` rather than
+    guessing. See README.md re: provider bug #26231 before pairing this
+    with a non-null model_temperature in the "us" location.
   EOT
 }
 
 variable "model_temperature" {
   type        = number
-  description = "Temperature for the root agent's model_settings. Leave null to omit the field (inherit the model's default)."
+  description = "Temperature for the app's model_settings. Leave null to omit the field (inherit the model's default)."
   default     = null
 }
 
@@ -118,7 +130,7 @@ variable "agent_shared_secret_id" {
     from whatever secret already backs the console-configured tools, and the
     reconciliation choice that implies at import time.
   EOT
-  default = "ces-agent-shared-secret"
+  default     = "ces-agent-shared-secret"
 }
 
 variable "agent_shared_secret_value" {

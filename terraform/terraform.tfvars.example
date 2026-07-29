@@ -1,6 +1,6 @@
 # Copy to terraform.tfvars (gitignored) and fill in with real values read
-# from the console / apps.exportApp -- see README.md "Finding the real
-# resource IDs". Never commit terraform.tfvars.
+# from the console / apps.exportApp / the CES REST API -- see README.md
+# "Finding the real resource IDs". Never commit terraform.tfvars.
 #
 # agent_shared_secret_value is intentionally left out of this file even as
 # a placeholder -- pass it at apply time instead:
@@ -9,15 +9,23 @@
 project_id = "<PLACEHOLDER: Snowplow-managed sandbox GCP project ID>"
 location   = "<PLACEHOLDER: e.g. us -- confirm, don't assume>"
 
-app_id              = "<PLACEHOLDER: existing console-built app ID>"
-agent_id            = "<PLACEHOLDER: existing console-built root agent ID>"
-context_toolset_id  = "<PLACEHOLDER: existing getUserContext toolset ID>"
-catalog_toolset_id  = "<PLACEHOLDER: existing searchCatalog toolset ID>"
+app_id             = "<PLACEHOLDER: existing console-built app ID>"
+app_display_name   = "<PLACEHOLDER: the app's display name as shown in the console>"
+agent_id           = "<PLACEHOLDER: existing console-built root agent ID>"
+context_toolset_id = "<PLACEHOLDER: existing getUserContext toolset ID>"
+catalog_toolset_id = "<PLACEHOLDER: existing searchCatalog toolset ID>"
 
 app_version_id           = "<PLACEHOLDER: existing app version ID currently live on the deployment>"
-app_version_display_name = "<PLACEHOLDER: e.g. v1>"
+app_version_display_name = "<PLACEHOLDER: the version's display name, e.g. the console's deployment-version-... string>"
 
 deployment_display_name = "<PLACEHOLDER: existing deployment's display name>"
 
-model_name        = "<PLACEHOLDER: model the live agent currently uses, e.g. gemini-3.0-flash-001>"
+# Model settings live at the *app* level in the console (the agent
+# inherits them) -- read them off the app, not the Root Agent node.
+model_name        = "<PLACEHOLDER: model the live app currently uses, e.g. gemini-3.0-flash-001>"
 model_temperature = null
+
+# Import path (README.md "Secret reconciliation"): set to the secret
+# already backing the console tools' API-key auth. Leave unset only for a
+# greenfield re-create, where the ces-agent-shared-secret default applies.
+agent_shared_secret_id = "<PLACEHOLDER: live secret ID from the toolsets' apiKeySecretVersion>"

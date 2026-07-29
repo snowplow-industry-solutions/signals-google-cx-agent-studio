@@ -1,0 +1,53 @@
+{
+  "audioProcessingConfig": {
+    "bargeInConfig": {
+      "bargeInAwareness": true
+    },
+    "synthesizeSpeechConfigs": {
+      "en-US": {}
+    }
+  },
+  "defaultChannelProfile": {},
+  "displayName": "signals-agent-jordan-peck",
+  "errorHandlingSettings": {
+    "endSessionConfig": {
+      "escalateSession": true
+    },
+    "errorHandlingStrategy": "FALLBACK_RESPONSE",
+    "fallbackResponseConfig": {
+      "maxFallbackAttempts": 1
+    }
+  },
+  "guardrails": [
+    "Default Safety Guardrail",
+    "Default Prompt Guardrail"
+  ],
+  "languageSettings": {
+    "defaultLanguageCode": "en-US"
+  },
+  "loggingSettings": {
+    "conversationLoggingSettings": {
+      "retentionWindow": "31536000s"
+    },
+    "metricAnalysisSettings": {}
+  },
+  "modelSettings": {
+    "model": "gemini-3.0-flash-001",
+    "temperature": 1.0
+  },
+  "name": "83a964e4-41ba-4c75-8540-f2f3b0930024",
+  "rootAgent": "Root agent",
+  "timeZoneSettings": {
+    "timeZone": "America/Los_Angeles"
+  },
+  "toolExecutionMode": "PARALLEL",
+  "variableDeclarations": [
+    {
+      "name": "snowplow_session_id",
+      "schema": {
+        "default": null,
+        "type": "STRING"
+      }
+    }
+  ]
+}

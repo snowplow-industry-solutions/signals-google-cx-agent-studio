@@ -1,27 +1,49 @@
 resource "google_ces_agent" "root" {
   agent_id     = var.agent_id
   location     = var.location
-  app          = google_ces_app.this.app_id
+  app          = google_ces_app.this.name
   project      = var.project_id
-  display_name = "Atelier Signals Concierge - Root Agent"
-  description  = "Luxury fashion concierge grounded in real-time Snowplow Signals context (agent/instructions.md)."
+  display_name = "Root agent"
 
-  instruction = file("${path.module}/../agent/instructions.md")
+  # The console-format instruction copy is what the live agent actually
+  # runs (docs/runbook.md §8.2: paste instructions.console.txt into the
+  # Root Agent node, verbatim -- its {@TOOL: ...} references only resolve
+  # in that format). agent/instructions.md is the human-readable source
+  # for the same contract; edit there first and mirror changes into the
+  # console copy.
+  instruction = file("${path.module}/../agent/instructions.console.txt")
 
-  model_settings {
-    model       = var.model_name
-    temperature = var.model_temperature
+  # Model settings are app-level (see app.tf) -- the live agent carries
+  # none and inherits the app's.
+
+  # end_session is attached to every agent the console builds.
+  tools = [
+    "projects/${var.project_id}/locations/${var.location}/apps/${var.app_id}/tools/end_session",
+  ]
+
+  toolsets {
+    toolset  = google_ces_toolset.context.id
+    tool_ids = ["getUserContext"]
   }
 
   toolsets {
-    toolset = google_ces_toolset.context.id
+    toolset  = google_ces_toolset.catalog.id
+    tool_ids = ["searchCatalog"]
   }
 
-  toolsets {
-    toolset = google_ces_toolset.catalog.id
-  }
+  # No llm_agent {} block: the live console-built agent stores no explicit
+  # agent-type config (LLM is the default), and declaring the empty block
+  # leaves a permanent "+ llm_agent {}" plan diff against imported state.
 
-  llm_agent {}
+  lifecycle {
+    ignore_changes = [
+      # Provider v7.41.0 import gap: import leaves the create-only,
+      # ForceNew agent_id null in state -- without this, the first plan
+      # after import wants to destroy and recreate the live agent.
+      # Greenfield creates still use var.agent_id.
+      agent_id,
+    ]
+  }
 
   deletion_policy = local.ces_deletion_policy
 }
@@ -30,10 +52,10 @@ resource "google_ces_agent" "root" {
 # reference its parent app first) -- this association resource completes
 # the wiring afterwards (docs/research/cx-agent-studio-terraform.md §1b).
 resource "google_ces_app_root_agent_association" "this" {
-  app_id   = google_ces_app.this.app_id
+  app_id   = google_ces_app.this.name
   location = var.location
   project  = var.project_id
-  agent_id = google_ces_agent.root.agent_id
+  agent_id = google_ces_agent.root.name
 
   deletion_policy = local.ces_deletion_policy
 }

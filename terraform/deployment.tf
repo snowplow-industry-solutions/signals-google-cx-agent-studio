@@ -7,7 +7,7 @@
 resource "google_ces_app_version" "current" {
   app_version_id = var.app_version_id
   location       = var.location
-  app            = google_ces_app.this.app_id
+  app            = google_ces_app.this.name
   project        = var.project_id
   display_name   = var.app_version_display_name
 
@@ -16,6 +16,18 @@ resource "google_ces_app_version" "current" {
     google_ces_toolset.context,
     google_ces_toolset.catalog,
   ]
+
+  lifecycle {
+    ignore_changes = [
+      # Provider v7.41.0 import gap: import leaves the create-only,
+      # ForceNew app_version_id null in state (see app.tf/agent.tf).
+      app_version_id,
+      # Console-deploy-generated text ("Automatically created from
+      # deploying to ...") on the imported version; ForceNew, so managing
+      # it here would force a replacement of an immutable snapshot.
+      description,
+    ]
+  }
 
   deletion_policy = local.ces_deletion_policy
 }
@@ -27,13 +39,18 @@ resource "google_ces_app_version" "current" {
 # (docs/runbook.md §9.2, Troubleshooting).
 resource "google_ces_deployment" "web_widget" {
   location     = var.location
-  app          = google_ces_app.this.app_id
+  app          = google_ces_app.this.name
   project      = var.project_id
   display_name = var.deployment_display_name
   app_version  = google_ces_app_version.current.id
 
   channel_profile {
     channel_type = "WEB_UI"
+
+    # The console sets both on every WEB_UI deployment it builds; the demo
+    # is text-only anyway (docs/runbook.md §9.4 pins audio off client-side).
+    disable_dtmf             = true
+    disable_barge_in_control = true
 
     web_widget_config {
       modality         = var.web_widget_modality
