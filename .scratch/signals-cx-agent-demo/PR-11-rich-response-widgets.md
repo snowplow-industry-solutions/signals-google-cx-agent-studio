@@ -121,3 +121,37 @@ If either widget rendering failed in step 5, verify the agent can still emit pla
 ## Rollback
 
 To undo this PR: revert the merge commit (`git revert <merge-commit-hash>`), which will remove all schema, instruction, and runbook changes. If widget tools were already created in the console, delete them manually via the CX Agent Studio UI (rich response widgets builder → delete `productCarousel` and `productDetails`).
+
+## Live test record (2026-07-29)
+
+Steps 1–2 (console tool creation) done by human 2026-07-29 ~14:46 —
+created from typed templates as-is after the read-only-schema correction
+(see commit ed7e1d3); attachment to Root agent verified via CES REST.
+Updated instructions pasted + new deployment version `a8c48c30…`
+published ~15:06. Steps 3–4 run ~15:10 via Playwright against the
+deployed storefront (click-browsed Accessories, live Signals attributes
+visible in the debug panel: favourite category Accessories, designer
+Atelier Lune, occasion City).
+
+- **Step 3 (carousel): agent PASS / rendering FAIL.** Reply contained a
+  schema-perfect `productCarousel` invocation grounded in three real
+  session-relevant catalog items (scarf $340, cuff bracelet $680, cloche
+  hat $410) — but `ces-messenger` printed the whole `{@Widget: …}` token
+  as literal chat text. Screenshot:
+  `widget-carousel-raw-text-failure.png` (Playwright output dir).
+- **Step 4 (details): identical result** — correct `productDetails`
+  payload, raw text in the bubble.
+- **Root cause (wire-level):** `runSession` returns the widget
+  invocation inside `outputs[].text`; no structured widget field exists
+  in the response. Token→card parsing is a hosted `chat-messenger`
+  client feature the pinned open-source component lacks. Confirms
+  runbook §10.2's risk exactly as analysed.
+- **Disposition:** visual acceptance criteria NOT met — issue 11 not
+  shippable as specified for rendering; agent-side contract + `image`
+  field + docs are verified correct. Finding fed to issue 09
+  (custom-render fallback now known-feasible: parse the in-band token
+  client-side; payload uses unquoted JS-object keys). Demo hazard until
+  resolved: live agent emits raw tokens — revert console instructions to
+  text-only or ship 09's renderer before recording.
+- Model quirk noted: appends a `summary:` argument not in the fixed
+  schema (harmless today; a client-side parser must tolerate it).

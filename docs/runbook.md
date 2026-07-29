@@ -600,10 +600,17 @@ the widget embed from §9.
   for rendering: it's the shape a widget-aware messenger build knows how
   to draw natively.
 
-### 10.2 Open risk: does the pinned `ces-messenger` render these? (unresolved — verify live)
+### 10.2 Risk: does the pinned `ces-messenger` render these? (RESOLVED 2026-07-29: NO — see §10.5 log)
 
-This is the reason this issue keeps `Checkpoint: human-test-required` and
-the acceptance criteria below stay unchecked rather than assumed:
+Live verification confirmed the risk: `ces-messenger` prints widget
+invocations as literal text (the token arrives in-band in the response
+text; rendering is a hosted-`chat-messenger` client-side feature). The
+original risk analysis below is kept as written — it called the mechanism
+correctly — and §10.5's log carries the evidence and the demo-impact
+warning. Issue 09's custom-render fallback is the path forward.
+
+This was the reason this issue kept `Checkpoint: human-test-required` and
+the acceptance criteria below stayed unchecked rather than assumed:
 
 - Neither rich-response-widget docs page states which web-widget component
   generation renders the output — both just say "your client... presents
@@ -720,7 +727,46 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
    luxury palette. Note any clashing default styling (e.g. the same
    Vue-green default noted for buttons in §9.4) for a `custom-css` fix.
 7. Record the result (pass/fail + timestamp, and the §10.2 finding either
-   way) here: `<PLACEHOLDER: rich response widget verification run log>`.
+   way) here:
+
+   **Verification run, 2026-07-29 ~15:10 UTC (Playwright walkthrough
+   against the deployed storefront + live agent, new deployment version
+   `a8c48c30…` published minutes earlier): FAIL on rendering — the §10.2
+   risk is CONFIRMED.**
+
+   - **Agent side: fully correct.** Both queries behaved exactly as
+     instructed. Accessories query → grounded prose plus a
+     `productCarousel` invocation whose `productDetails[]` payload
+     carried three real catalog items *from the live session's own
+     browsing* (Silk Twill Square Scarf $340 / Atelier Lune,
+     Hammered Gold Cuff Bracelet $680 / Arc Studio, Felt Cloche Hat
+     $410 / Arc Studio), every field matching the fixed schema —
+     `title`, `subtitle`, dollar-string `price`, slug `productId`,
+     absolute `uri`, single-element `imageUris`. Single-product query →
+     equivalent correct `productDetails` invocation. (One benign quirk:
+     the model appends a `summary:` argument that isn't in the schema.)
+   - **Rendering: the pinned open-source `ces-messenger` printed the
+     entire `{@Widget: productCarousel(payload: …)}` token as literal
+     text inside the chat bubble.** No carousel, no card, no console
+     error — and visibly *worse* than plain text for a shopper.
+   - **Wire-format root cause (decisive for the fallback):** the
+     `runSession` response delivers the widget invocation **in-band in
+     `outputs[].text`** — there is no structured widget/richContent
+     field in the payload at all. So the token→card transformation is
+     purely a client-side text-parsing feature of the hosted
+     `chat-messenger`, absent from the open-source component. This also
+     means issue 09's custom-render fallback is *feasible without any
+     agent-side change*: parse the `{@Widget: name(payload: {…})}`
+     token out of the message text, render a custom card, suppress the
+     raw string (note the payload uses unquoted JS-object keys, not
+     strict JSON).
+   - Steps 4–6 (link click-through, zero-result degradation, styling)
+     were not reachable — nothing rendered to click or style.
+   - **Demo impact: the live agent now emits raw widget tokens in chat.**
+     Until either issue 09's client-side renderer exists or the console
+     instructions are reverted to the pre-widget text-only version (and
+     the widget tools detached + a new version published), live
+     conversations look broken. Do not record the demo in this state.
 
 ## Troubleshooting
 

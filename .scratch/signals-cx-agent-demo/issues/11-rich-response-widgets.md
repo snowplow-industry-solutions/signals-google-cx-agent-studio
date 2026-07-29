@@ -149,3 +149,16 @@ still unresolved — §10.5 walkthrough remains the deciding test.
 Remaining console step: re-paste the updated
 `agent/instructions.console.txt` into the Root agent node and publish a
 new deployment version.
+
+**2026-07-29 (agent, live §10.5 result):** Rendering walkthrough run
+against the freshly published version (`a8c48c30…`): **agent-side PASS,
+rendering FAIL — §10.2 risk confirmed.** Perfect fixed-schema widget
+invocations, grounded in the live session's real browsing, printed as
+literal `{@Widget: …}` text by `ces-messenger`. Wire evidence: payload
+arrives in-band in `runSession` `outputs[].text`; rendering is a hosted
+`chat-messenger` client feature. Visual acceptance criteria stay
+unchecked and cannot pass on the pinned component; everything
+agent/API/docs-side is verified correct. Escalated to issue 09 (fallback
+renderer now known-feasible, details there) with a demo-hazard warning:
+live agent currently emits raw tokens in chat until 09 ships or the
+console instructions are reverted to text-only.

@@ -91,3 +91,19 @@ finding rather than started speculatively. If §10.5 instead confirms
 native rendering works, this issue can be closed `wontfix` as superseded
 at that point (a human decision once the live finding is in, not made by
 this implementer).
+**2026-07-29 (agent, live §10.5 result):** Re-disposition trigger fired —
+runbook §10.5 rendering walkthrough FAILED on the pinned `ces-messenger`
+(raw `{@Widget: …}` token printed as chat text; agent payload itself
+schema-perfect and grounded). Wire-level evidence changes this issue's
+feasibility picture in its favour: the `runSession` response carries the
+full widget payload **in-band in `outputs[].text`** (no structured field),
+so a client-side renderer needs no agent/console changes at all — parse
+`{@Widget: productCarousel|productDetails(payload: {…})}` out of the
+message text (keys are unquoted JS-object style, plus a stray `summary:`
+arg), suppress the raw token, render a card from the fixed-schema fields
+(title, subtitle, price string, productId, uri, imageUris). This issue is
+now the only path to visual cards for the demo (hosted `chat-messenger`
+remains excluded — no `setQueryParameters`). If not built before the
+recording, the console agent must be reverted to text-only instructions
+(+ widget tools detached, new version published) so live chat doesn't
+show raw tokens. Status stays open pending that build-vs-revert decision.
