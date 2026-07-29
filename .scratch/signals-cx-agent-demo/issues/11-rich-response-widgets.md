@@ -123,3 +123,29 @@ haven't yet confirmed either way — the presenter-usable moment (ask for a
 couple of accessories → expect a carousel; ask about one product → expect
 a details card) is already written into runbook §10.5 for issue 08 to pull
 from once it exists and once §10.5 has run.
+
+**2026-07-29 (agent + human, live console):** Correction to the 28/07
+research note above: the "Parameters schema is author-defined" reading was
+**wrong for typed widgets**. Live console behaviour (hit while creating
+the tools): `PRODUCT_CAROUSEL`/`PRODUCT_DETAILS` templates auto-fill a
+Google-fixed schema and the editor is read-only ("Cannot edit in
+read-only editor"); only the `CUSTOM` widget type takes an author-defined
+schema (its parameters read "You can write your own schema here.").
+Confirmed via CES REST `GET .../tools`. Console work done: both tools
+created from templates as-is (`productCarousel` ecd09e09…,
+`productDetails` 0527261b…, after deleting an earlier duplicate carousel)
+and attached to the Root agent alongside `end_session` + the two OpenAPI
+toolsets (attachment verified via REST). Repo reconciled to the fixed
+contract: `agent/tools/*.widget.json` replaced with the captured schemas
+(documentation now, nothing is pasted), instruction mapping rewritten
+(`title`←`name`, `subtitle`←`designer`, `price`←dollar string,
+`productId`←`url` slug, `uri`←base URL+`url`, `imageUris`←`[image]`;
+`rating`/`review` always omitted) in both `instructions.md` and
+`instructions.console.txt`, runbook §10.1/§10.3/§10.5/Troubleshooting and
+PR-11 test plan updated. The fixed contract slightly *derisks* §10.2
+(a Google-defined shape is what a widget-aware messenger renders
+natively), but rendering on the pinned open-source `ces-messenger` is
+still unresolved — §10.5 walkthrough remains the deciding test.
+Remaining console step: re-paste the updated
+`agent/instructions.console.txt` into the Root agent node and publish a
+new deployment version.

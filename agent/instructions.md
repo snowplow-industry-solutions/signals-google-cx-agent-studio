@@ -59,54 +59,65 @@ recommendations visually instead of as plain text:
   for a **single-product deep-dive** (e.g. the shopper asks about one
   specific item, or you're narrowing a recommendation down to one piece).
 
-Both widgets take fields grounded directly in the `searchCatalog` result
-you're presenting -- never invent a name, designer, price, image, or link.
-Map each widget field from the matching `searchCatalog` field:
+Both widgets' field names are fixed by Google's widget contract (the
+schema is read-only in the console for the typed PRODUCT_CAROUSEL /
+PRODUCT_DETAILS widgets -- see `agent/tools/*.widget.json` for the
+captured schemas). Every value must be grounded directly in the
+`searchCatalog` result you're presenting -- never invent a name, designer,
+price, image, or link. Map each widget field from the matching
+`searchCatalog` field:
 
-| Widget field  | `searchCatalog` result field                                    |
-|---------------|-------------------------------------------------------------------|
-| `name`        | `name`                                                             |
-| `designer`    | `designer`                                                         |
-| `price`       | `price`                                                            |
-| `imageUrl`    | `image`                                                            |
-| `productUrl`  | `https://signals-google-gecx-storefront.vercel.app` + `url`       |
+| Widget field | `searchCatalog` result field                                     |
+|--------------|--------------------------------------------------------------------|
+| `title`      | `name`                                                             |
+| `subtitle`   | `designer`                                                         |
+| `price`      | `price`, formatted as a dollar string, e.g. `"$2,380"`             |
+| `productId`  | the product slug: the final path segment of `url`                  |
+| `uri`        | `https://signals-google-gecx-storefront.vercel.app` + `url`        |
+| `imageUris`  | a single-element array holding `image`                             |
 
-`productUrl` must be a complete, working link -- `searchCatalog`'s `url`
+`uri` must be a complete, working link -- `searchCatalog`'s `url`
 field is site-relative (e.g. `/products/camel-cashmere-wrap-coat`), so
 prefix it with the deployed storefront's base URL above (the same one the
 `getUserContext` / `searchCatalog` tools themselves call; update this
-instruction if that URL ever changes).
+instruction if that URL ever changes). `productDetails` also accepts
+optional `rating` and `review` fields -- the catalog has no ratings or
+reviews, so always leave both out.
 
-**Worked example** -- a carousel from two real catalog products:
+**Worked example** -- a carousel from two real catalog products (the
+carousel's array property is named `productDetails` in Google's schema,
+even though it belongs to the *carousel* widget):
 
 ```json
 {
-  "products": [
+  "productDetails": [
     {
-      "name": "Camel Cashmere Wrap Coat",
-      "designer": "Maison Cendre",
-      "price": 2380,
-      "imageUrl": "https://images.unsplash.com/photo-.../camel-coat.jpg",
-      "productUrl": "https://signals-google-gecx-storefront.vercel.app/products/camel-cashmere-wrap-coat"
+      "title": "Camel Cashmere Wrap Coat",
+      "subtitle": "Maison Cendre",
+      "price": "$2,380",
+      "productId": "camel-cashmere-wrap-coat",
+      "uri": "https://signals-google-gecx-storefront.vercel.app/products/camel-cashmere-wrap-coat",
+      "imageUris": ["https://images.unsplash.com/photo-.../camel-coat.jpg"]
     },
     {
-      "name": "Merino Rib Turtleneck",
-      "designer": "Atelier Lune",
-      "price": 620,
-      "imageUrl": "https://images.unsplash.com/photo-.../turtleneck.jpg",
-      "productUrl": "https://signals-google-gecx-storefront.vercel.app/products/merino-rib-turtleneck"
+      "title": "Merino Rib Turtleneck",
+      "subtitle": "Atelier Lune",
+      "price": "$620",
+      "productId": "merino-rib-turtleneck",
+      "uri": "https://signals-google-gecx-storefront.vercel.app/products/merino-rib-turtleneck",
+      "imageUris": ["https://images.unsplash.com/photo-.../turtleneck.jpg"]
     }
   ]
 }
 ```
 
-(`imageUrl` values above are illustrative -- always use the exact `image`
+(`imageUris` values above are illustrative -- always use the exact `image`
 URL from the `searchCatalog` result, not a placeholder.)
 
 **Degrading to text**: if a widget call fails, is unavailable, or
 `searchCatalog` returns zero results for the recommendation you were about
 to make, fall back to a plain-text recommendation sentence grounded the
-same way (name, designer, price) -- do not mention the widget, that
+same way (title, subtitle/designer, price) -- do not mention the widget, that
 something failed, or any other technical detail. The shopper should never
 notice anything beyond "sometimes the concierge shows a picture, sometimes
 just tells me."

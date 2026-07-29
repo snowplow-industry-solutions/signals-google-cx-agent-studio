@@ -54,8 +54,8 @@ Added schema definitions, agent instructions, and runbook documentation for rich
 
 1. In CX Agent Studio, open the agent from `docs/runbook.md` §8.
 2. Go to the rich response widgets builder (rich response widgets icon in the agent builder).
-3. Create a new widget tool named `productCarousel` with Widget Type `PRODUCT_CAROUSEL`.
-4. In the Parameters editor, paste the full content of `agent/tools/product-carousel.widget.json` (excluding the `$comment` key — paste only the `type`, `required`, `properties` keys).
+3. Create a new widget tool named `productCarousel` from the `PRODUCT_CAROUSEL` template.
+4. Do **not** edit the Parameters schema — the console auto-fills Google's fixed contract for typed widgets and the editor is read-only (corrected 2026-07-29; see runbook §10.1). Verify it matches the captured copy in `agent/tools/product-carousel.widget.json`.
 5. Save the widget tool.
 6. Return to the Root agent node and attach `productCarousel` to it (per `docs/runbook.md` §10.3).
 
@@ -63,8 +63,8 @@ Added schema definitions, agent instructions, and runbook documentation for rich
 
 **2. Create the product details widget tool (console)**
 
-1. In the same rich response widgets builder, create a new widget tool named `productDetails` with Widget Type `PRODUCT_DETAILS`.
-2. In the Parameters editor, paste the full content of `agent/tools/product-details.widget.json` (excluding the `$comment` key).
+1. In the same rich response widgets builder, create a new widget tool named `productDetails` from the `PRODUCT_DETAILS` template.
+2. Accept the auto-filled fixed schema (read-only, as above); verify it matches `agent/tools/product-details.widget.json`.
 3. Save the widget tool.
 4. Attach `productDetails` to the Root agent node.
 
@@ -80,13 +80,13 @@ Added schema definitions, agent instructions, and runbook documentation for rich
 
 **Expected result:** 
 - The agent calls `searchCatalog` and receives 2+ products.
-- The agent emits a `{@Widget: productCarousel}` instruction with the products array populated from the search results.
-- The chat widget renders a **scrollable carousel** with product cards (each showing image, name, designer, price).
-- Clicking a product link navigates to that product's page on the storefront (verify `productUrl` is a working absolute link).
+- The agent emits a `{@Widget: productCarousel}` instruction with the `productDetails` array populated from the search results.
+- The chat widget renders a **scrollable carousel** with product cards (each showing image, title, subtitle/designer, price).
+- Clicking a product link navigates to that product's page on the storefront (verify `uri` is a working absolute link).
 
 **If it fails:** 
 - Check `docs/runbook.md` §10.2 first — if the widgets appear as raw JSON or plain text instead of a card, or if a console/widget error appears, this likely indicates the `ces-messenger` compatibility risk is real (hosted `chat-messenger` ships these widgets, open-source `ces-messenger` does not). Document the finding and escalate to issue 09 disposition.
-- If no error but no carousel renders, check: (a) agent instructions were synced to the console (paste the updated `agent/instructions.console.txt` if not), (b) the Parameters schema in step 1 was pasted correctly (review the `properties` object structure), (c) `searchCatalog` actually returned 2+ results (check browser network log for the tool call result).
+- If no error but no carousel renders, check: (a) agent instructions were synced to the console (paste the updated `agent/instructions.console.txt` if not), (b) the widget tool was created from the correct typed template (its read-only schema matches `agent/tools/product-carousel.widget.json`), (c) `searchCatalog` actually returned 2+ results (check browser network log for the tool call result).
 
 **4. Test product details rendering (live agent)**
 
@@ -95,8 +95,8 @@ Added schema definitions, agent instructions, and runbook documentation for rich
 
 **Expected result:**
 - The agent calls `searchCatalog` with narrowed filters and receives 1 product (or more, but focuses on one).
-- The agent emits a `{@Widget: productDetails}` instruction with the single product's fields (`name`, `designer`, `price`, `imageUrl`, `productUrl`).
-- The chat widget renders a **product details card** showing the image, name, designer, price, and a clickable link to the storefront.
+- The agent emits a `{@Widget: productDetails}` instruction with the single product's fields (`title`, `subtitle`, `price`, `productId`, `uri`, `imageUris`; `rating`/`review` omitted).
+- The chat widget renders a **product details card** showing the image, title, designer subtitle, price, and a clickable link to the storefront.
 - The link is a complete, absolute URL (not site-relative) and navigates to that product's page.
 
 **If it fails:**

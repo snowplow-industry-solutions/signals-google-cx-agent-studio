@@ -577,20 +577,28 @@ the widget embed from §9.
   plus `QUICK_ACTIONS`, `PRODUCT_COMPARISON`, `ORDER_SUMMARY` (not used by
   this issue). This is exactly the carousel / product-details split the
   issue asks for.
-- **The Parameters schema is author-defined, not a Google-fixed field
-  set.** Both docs pages describe "Parameters: The input schema for the
-  widget data... specifying the expected fields and data types for the
-  widget's content" — i.e. you write your own JSON Schema object per tool
-  (via a template from the gallery, or from scratch). Neither page (nor
-  any other official source found) publishes a fixed field-name table for
-  `PRODUCT_CAROUSEL` / `PRODUCT_DETAILS`. There is therefore no Google
-  field-name spec to guess at or contradict — the field names in
-  `agent/tools/product-carousel.widget.json` and
-  `product-details.widget.json` (`name`, `designer`, `price`, `imageUrl`,
-  `productUrl`) are this repo's own choice, deliberately mirroring the
-  `searchCatalog` tool's own `CatalogResult` fields (`name`, `designer`,
-  `price`, `image`, `url`) one-to-one so the agent maps real data across
-  without inventing anything.
+- **The Parameters schema is author-defined ONLY for the `CUSTOM` widget
+  type — typed widgets carry a fixed Google contract.** (Corrected
+  2026-07-29 against the live console; the earlier reading of the docs'
+  generic "Parameters: The input schema for the widget data..." wording
+  as author-defined-for-all-types was wrong.) Creating a
+  `PRODUCT_CAROUSEL` or `PRODUCT_DETAILS` tool from the console template
+  auto-fills a Google-defined schema and the schema editor is
+  **read-only** ("Cannot edit in read-only editor"); only a `CUSTOM`
+  widget tool offers a writable schema ("You can write your own schema
+  here."). The fixed contracts are captured verbatim (via the CES REST
+  API `tools` endpoint) in `agent/tools/product-carousel.widget.json`
+  and `product-details.widget.json`: the carousel takes a
+  `productDetails[]` array (Google's property name, despite belonging to
+  the *carousel*) of `{title, subtitle, price (string), productId, uri,
+  imageUris[]}`; the details widget takes the same fields flat, plus
+  optional `rating`/`review` (always omitted — the catalog has neither).
+  The agent instructions map `searchCatalog`'s `CatalogResult` fields
+  onto them: `title`←`name`, `subtitle`←`designer`, `price`←`price` as a
+  dollar string, `productId`←the `url` slug, `uri`←storefront base URL +
+  `url`, `imageUris`←`[image]`. A fixed contract is also the good case
+  for rendering: it's the shape a widget-aware messenger build knows how
+  to draw natively.
 
 ### 10.2 Open risk: does the pinned `ces-messenger` render these? (unresolved — verify live)
 
@@ -646,21 +654,17 @@ the acceptance criteria below stay unchecked rather than assumed:
 1. In CX Agent Studio, on the agent from §8, open the rich response
    widgets builder (rich response widgets icon in the agent builder, per
    §10.1's citation).
-2. Create a widget tool named `productCarousel`:
-   - Widget Type: `PRODUCT_CAROUSEL`.
-   - Description: "Displays 2-6 recommended products as a scrollable
-     carousel; use when searchCatalog returns two or more products worth
-     presenting as a set."
-   - Parameters: paste the JSON object from
-     `agent/tools/product-carousel.widget.json` (everything except the
-     `$comment` key).
-3. Create a second widget tool named `productDetails`:
-   - Widget Type: `PRODUCT_DETAILS`.
-   - Description: "Displays one product's details for a single-product
-     deep-dive; use when presenting exactly one recommended product."
-   - Parameters: paste the JSON object from
-     `agent/tools/product-details.widget.json` (everything except the
-     `$comment` key).
+2. Create a widget tool named `productCarousel` from the
+   `PRODUCT_CAROUSEL` template. **Do not attempt to edit the Parameters
+   schema** — for typed widgets the console auto-fills Google's fixed
+   contract and the editor is read-only (§10.1). Verify it matches the
+   captured copy in `agent/tools/product-carousel.widget.json`; a
+   mismatch means Google changed the contract — re-capture the schema
+   (CES REST `GET .../apps/<app_id>/tools`) and update the repo file and
+   the instruction mapping instead of fighting the console.
+3. Create a second widget tool named `productDetails` from the
+   `PRODUCT_DETAILS` template — same deal: accept the fixed schema,
+   verify against `agent/tools/product-details.widget.json`.
 4. Attach both to the Root agent node (same **+** affordance used for the
    OpenAPI tools in §8.3) — watch for the same detachment gotcha noted in
    Troubleshooting for the OpenAPI tools if you re-import anything later.
@@ -705,7 +709,7 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
    storefront (clicking it lands on that product's page).
 4. Click the link in a rendered carousel item. **Expected:** navigates to
    the correct `/products/<slug>` page on the deployed storefront (proves
-   the `productUrl` = base URL + `searchCatalog`'s `url` construction is
+   the `uri` = base URL + `searchCatalog`'s `url` construction is
    correct end-to-end).
 5. Ask a question that would normally trigger a recommendation, but for a
    filter combination with zero catalog matches (e.g. an out-of-stock
@@ -862,7 +866,7 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
   `{@TOOL: ...}` case (§8.2): delete the reference and re-insert it with
   the editor's `@` picker rather than hand-typing.
 - **Carousel/details card renders but the product link 404s or points at
-  the wrong product** — check the widget's `productUrl` was built as the
+  the wrong product** — check the widget's `uri` field was built as the
   deployed base URL literally prefixed to `searchCatalog`'s `url` field
   (§10.1); a common mistake is the model using the site-relative `url`
   value alone, which won't navigate correctly from inside the chat widget.

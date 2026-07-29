@@ -34,16 +34,19 @@ value (`AGENT_SHARED_SECRET` from the Vercel deploy, see `docs/runbook.md`
 auth config in the console.
 
 - `tools/product-carousel.widget.json` / `tools/product-details.widget.json`
-  -- **Parameters** schemas for the two rich response widget tools
-  (`productCarousel`, Widget Type `PRODUCT_CAROUSEL`; `productDetails`,
-  Widget Type `PRODUCT_DETAILS`) covering issue
-  `11-rich-response-widgets.md`. Unlike the OpenAPI tools above, these
-  aren't imported from a file -- create each widget tool in the console
-  (rich response widgets icon in the agent builder), set its Widget Type,
-  and paste the JSON object (everything except the `$comment` key) into
-  the Parameters editor. See `docs/runbook.md` §10 for citations
-  confirming the widget-tool mechanism and widget-type names against
-  official docs, and for the open question on whether the pinned
-  `ces-messenger` component (as opposed to the hosted `chat-messenger`
-  build) actually renders these -- unresolved without a live check, hence
-  this issue's `human-test-required` checkpoint.
+  -- **captured copies of Google's fixed Parameters schemas** for the two
+  rich response widget tools (`productCarousel`, Widget Type
+  `PRODUCT_CAROUSEL`; `productDetails`, Widget Type `PRODUCT_DETAILS`)
+  covering issue `11-rich-response-widgets.md`, read verbatim from the
+  live tools via the CES REST API on 2026-07-29. Nothing in them is
+  entered into the console: creating a typed widget tool from its console
+  template auto-fills this schema and the editor is read-only (only the
+  `CUSTOM` widget type takes an author-defined schema). The files exist so
+  the instruction mapping (`title`←`name`, `subtitle`←`designer`,
+  `price`←dollar string, `productId`←`url` slug, `uri`←base URL + `url`,
+  `imageUris`←`[image]`) has a checked-in contract to be verified
+  against. See `docs/runbook.md` §10 for the corrected schema finding and
+  for the open question on whether the pinned `ces-messenger` component
+  (as opposed to the hosted `chat-messenger` build) actually renders
+  these -- unresolved without a live check, hence this issue's
+  `human-test-required` checkpoint.
