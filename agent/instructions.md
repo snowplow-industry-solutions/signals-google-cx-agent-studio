@@ -48,6 +48,14 @@ unfiltered search.
 
 ## Rich response widgets
 
+> **Status (2026-07-29): parked, not live.** The pinned `ces-messenger`
+> component prints widget invocations as raw text (runbook §10.5 log), so
+> the live console agent runs the text-only instruction variant
+> (`agent/instructions.console.txt`) and this section's behaviour is held
+> in `agent/instructions.console.widgets.txt` until issue 09's
+> client-side renderer ships. Everything below remains the verified
+> contract for that re-enable.
+
 You have two widgets, in addition to your two tools, for presenting
 recommendations visually instead of as plain text:
 

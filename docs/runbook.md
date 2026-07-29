@@ -768,6 +768,43 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
      the widget tools detached + a new version published), live
      conversations look broken. Do not record the demo in this state.
 
+### 10.6 Current state: widgets parked pending issue 09's renderer
+
+Decision after the §10.5 failure (2026-07-29): **revert the live agent to
+text-only now, build issue 09's client-side renderer in parallel**, and
+re-enable widgets only if that renderer ships solid before the recording.
+
+The two instruction variants live side by side in the repo:
+
+- `agent/instructions.console.txt` — the **text-only** version, matching
+  what the live console agent runs after the revert. This is the file
+  Terraform's `google_ces_agent` reads, so it must always mirror live.
+- `agent/instructions.console.widgets.txt` — the widget-enabled variant
+  verified agent-side in §10.5 (correct invocations, grounded data),
+  parked until rendering exists.
+
+**Revert procedure (console):**
+
+1. Root agent node → Instructions → paste the full contents of
+   `agent/instructions.console.txt` (re-resolve any flagged `{@TOOL: …}`
+   references with the `@` picker, per §8.2).
+2. Detach `productCarousel` and `productDetails` from the Root agent node
+   (leave the widget *tools* in place in the app — only the attachment
+   goes; re-enabling is then a re-attach, not a re-create).
+3. Publish a new deployment version and confirm a live chat recommendation
+   comes back as clean prose with no `{@Widget:` text.
+
+**Re-enable procedure (only after issue 09's renderer is verified):**
+
+1. Re-attach both widget tools to the Root agent node.
+2. Paste `agent/instructions.console.widgets.txt` into the Root agent
+   node's instructions (re-resolve `{@TOOL: …}`/`{@Widget: …}` refs).
+3. Publish a new version and re-run the §10.5 walkthrough end-to-end —
+   this time expecting the storefront's own renderer (not
+   `ces-messenger`) to draw the cards.
+4. Swap the contents of `agent/instructions.console.txt` and update
+   Terraform state/plan accordingly (the file must keep mirroring live).
+
 ## Troubleshooting
 
 - **Tracking plan IDs are derived per-org automatically** — `npm run
