@@ -10,6 +10,22 @@ export interface CesMessengerElement extends HTMLElement {
   setQueryParameters(params: Record<string, string>): void;
   endSession?(): void;
   clearStorage?(args: { clearAuthentication?: boolean }): void;
+  /** Rich-message template registration (doc/message_templates.md). The
+   * function is a compiled Handlebars template — i.e. any
+   * `(context) => htmlString` function. */
+  registerTemplate?(templateId: string, template: (context: unknown) => string): void;
+  /** Lifecycle hooks (README "Hooks"); `payload-received` receives the
+   * (mutable) payload object and returns whether the default rich-message
+   * action should run. */
+  registerHook?(hook: string, callback: (payload: unknown) => boolean): void;
+  /** Click handling for rendered rich-message templates. */
+  registerRichMessageHandler?(
+    templateId: string,
+    handler: (
+      message: { payload?: { context?: unknown } },
+      clickedElement: Element
+    ) => { action?: "delete" | "keep" } | undefined | void
+  ): void;
 }
 
 type CesMessengerAttributes = HTMLAttributes<CesMessengerElement> & {

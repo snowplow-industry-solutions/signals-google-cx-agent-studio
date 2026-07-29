@@ -1,6 +1,6 @@
 # 09 — Product cards in chat (stretch)
 
-Status: ready-for-agent
+Status: in-progress
 
 ## Parent
 
@@ -107,3 +107,36 @@ remains excluded — no `setQueryParameters`). If not built before the
 recording, the console agent must be reverted to text-only instructions
 (+ widget tools detached, new version published) so live chat doesn't
 show raw tokens. Status stays open pending that build-vs-revert decision.
+
+**2026-07-29 (agent, renderer built + locally verified):** Built on
+`sandcastle/09-widget-token-renderer` (unmerged by request). Scope grew
+from the original token-parsing plan after live turns revealed the wire
+format is bimodal (runbook §11.5 addendum): the same agent/version ships
+widgets either as in-band `{@Widget: …}` text tokens or as structured
+`outputs[].payload` objects (`type: product_detail_carousel` /
+`base_product_detail`) with no text — which stock ces-messenger drops as
+a blank reply. Implementation (storefront-side, zero console/agent
+changes):
+
+- `src/utils/widgetTokens.ts` — tolerant parser for the token mode
+  (JS-object-literal args, stray `summary:` arg, streaming-incomplete
+  tokens deferred). Unit-tested against the live-captured token verbatim.
+- `src/components/Widget/widgetCards.ts` — payload normalisation +
+  luxury-theme card DOM/HTML builders shared by both modes (invented
+  `rating`/`review` fields discarded).
+- `src/components/Widget/useWidgetTokenRenderer.ts` — wires both modes
+  into the existing CesMessengerWidget wrapper: shadow-DOM
+  MutationObserver for token mode; ces-messenger's own `payload-received`
+  hook + `registerTemplate` + `registerRichMessageHandler` for payload
+  mode. Card clicks route storefront paths through the SPA router
+  (full-load would remount the widget and lose the conversation).
+
+Verified live against localhost (dev server + live agent, widgets still
+enabled): carousel renders (2 cards, grounded session products), details
+card renders, card click SPA-navigates to the right product page with
+conversation intact, cards re-render from restored history after reload.
+Screenshots: `widget-renderer-{carousel,details}-success-20260729.png`.
+Tests: 31 widget-related unit tests green; suite 120/122 (2 pre-existing
+`userTracking` env failures). Remaining before close: decide prod path
+(deploy renderer + §11.5 re-run on production vs console revert — runbook
+§11.6), then demo-script update if shipped.

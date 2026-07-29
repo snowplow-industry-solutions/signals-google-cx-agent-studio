@@ -16,6 +16,12 @@ vi.mock("next/script", () => ({
   default: () => null,
 }));
 
+// useWidgetTokenRenderer calls next/navigation's useRouter, which requires a
+// mounted app router; these tests render the component bare.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 import type { CesMessengerElement } from "@/types/ces-messenger";
 import { CesMessengerWidget } from "@/components/Widget/CesMessengerWidget";
 
