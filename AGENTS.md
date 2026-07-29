@@ -6,11 +6,11 @@ Demo integration: customer-facing agent built in Google Gemini Enterprise for CX
 
 ### Issue tracker
 
-Issues and PRDs live as local markdown under `.scratch/<feature>/` until the GitHub repo (`snowplow-industry-solutions/signals-google-cx-agent-studio`, pending IT provisioning) exists. See `docs/agents/issue-tracker.md`.
+GitHub Issues on `snowplow-industry-solutions/signals-google-cx-agent-studio` (migrated from local `.scratch/` markdown on 2026-07-29; pre-migration history stays under `.scratch/signals-cx-agent-demo/`). The PRD remains at `.scratch/signals-cx-agent-demo/PRD.md`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default canonical strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) recorded as `Status:` lines in issue files. See `docs/agents/triage-labels.md`.
+Default canonical strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) exist as real GitHub labels on the repo. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

@@ -1,14 +1,25 @@
-# Implement issue {{ISSUE_ID}}
+# Implement issue #{{ISSUE_ID}}
 
 You are the implementation agent in an unattended pipeline. You are in a sandboxed
 checkout of this repo on a dedicated branch; commit freely, your work is reviewed
 by a separate agent afterwards.
 
+The issue tracker is GitHub Issues ({{ISSUE_URL}}), but this sandbox has no
+GitHub credentials and no tracker access — the full issue (body + comment
+history) is embedded below, and the host manages all issue state. Do not
+attempt `gh` or GitHub API calls, and do not push.
+
+## The issue
+
+<issue>
+{{ISSUE_CONTENT}}
+</issue>
+
 ## Step 1 — spec check (do this before writing any code)
 
 Read, in order:
 
-1. `{{ISSUE_FILE}}` — the issue you are implementing
+1. The issue content above — including its comment history
 2. `.scratch/signals-cx-agent-demo/PRD.md` — the product spec
 3. `docs/design.md` — design decisions
 4. `.sandcastle/CODING_STANDARDS.md` — repo conventions and commands
@@ -28,8 +39,6 @@ write code. Print a clear explanation of the conflict/blocker, then output exact
 - Write or update tests for behaviour you add (`npm --prefix storefront test`).
 - Run tests and lint before finishing:
   `npm --prefix storefront test` and `npm --prefix storefront run lint`.
-- Tick the acceptance-criteria checkboxes in `{{ISSUE_FILE}}` as you satisfy them.
-  **Never modify the `Status:` or `Checkpoint:` lines — the host owns those.**
 - Never commit credentials, tokens, or org-specific secrets.
 - Commit in logical units with clear messages.
 
