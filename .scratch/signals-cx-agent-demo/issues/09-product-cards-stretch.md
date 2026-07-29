@@ -140,3 +140,16 @@ Tests: 31 widget-related unit tests green; suite 120/122 (2 pre-existing
 `userTracking` env failures). Remaining before close: decide prod path
 (deploy renderer + §11.5 re-run on production vs console revert — runbook
 §11.6), then demo-script update if shipped.
+
+**2026-07-29 (human/assistant, post-merge):** Review-fix pass applied on the
+branch (5 commits: http(s) protocol allowlist on card navigation, payload-mode
+anchor fallback + unrenderable-payload logging, streaming partial-token
+suppression via `widgetTokenVisibility`, standards cleanups, guard-consistency
+fix). Two-axis review + per-task reviews + final whole-branch review all
+clean; suite now 151 tests (149 pass, 2 pre-existing `userTracking` env
+failures). **Human local test passed** — carousel and details cards both
+render nicely. Branch merged to main (`eca007c`). Follow-up issues raised
+from testing: `12-agent-commentary-with-widgets.md`,
+`13-chat-loading-indicator.md` (both blocked by this issue's close).
+Remaining before close unchanged: §11.6 prod-path decision (deploy + §11.5
+re-run on production vs console revert), then demo-script update.
