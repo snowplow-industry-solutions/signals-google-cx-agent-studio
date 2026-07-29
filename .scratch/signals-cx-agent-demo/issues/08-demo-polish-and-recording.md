@@ -1,6 +1,6 @@
 # 08 — Demo polish + recording
 
-Status: in-progress
+Status: done
 Checkpoint: human-test-required
 
 ## Parent

@@ -33,7 +33,7 @@ Added the complete demo script and supporting procedures to turn the working int
 
 Open `docs/demo-script.md` and confirm:
 - [ ] Scene 1 (Browse before chat, ~90s): exact product paths listed (City After Dark collection, Noir Double-Breasted Blazer, Burgundy Silk Evening Gown, Camel Cashmere Wrap Coat). Try the browse sequence: visit each product page in order, add the Camel Cashmere Wrap Coat to cart, observe the debug panel populating "Favorite designer" (Maison Cendre) and "Favorite category". Confirm the "prove it's real" first beat is visible and accurate (attributes changing live on-screen).
-- [ ] Scene 2 (Open chat, ~30s): instructions to let concierge's opening land without typing; talking point about unprompted context grounding; fallback contingency reference to runbook §10.2.
+- [ ] Scene 2 (Open chat, ~30s): chat opens empty (no proactive greeting from the widget); presenter sends a contentless opener and the agent's first reply references browsing/cart unprompted; fallback contingency reference to runbook §10.2.
 - [ ] Scene 3 (Grounded recommendation, ~45s): request for pairing recommendation; expected agent behavior (catalog search, real product by name/designer/price); talking point about context-filtered suggestion.
 - [ ] Scene 4 ("Prove it's real-time" beat, ~45s): mid-conversation product view (Suede Chelsea Ankle Boot) followed by shoe recommendation request; expected agent answer reflects just-viewed item; expected debug-panel activity shows view within seconds. This is the second half of the live-attribute proof.
 - [ ] Scene 5 (Wrap-up, ~15s): summary line with correct current product names.
@@ -113,3 +113,34 @@ Confirm `docs/runbook.md` §10.3 Rehearsal checklist is complete:
 ## Rollback
 
 Revert the merge commit: `git revert -m 1 <merge-commit-hash>` (or `git reset --hard HEAD~1` if not yet pushed). Then delete the branch: `git branch -D sandcastle/08-demo-polish-and-recording`.
+
+## Manual test record — 2026-07-29
+
+Run by Claude (Playwright, fresh browser profile) + human review; deployed
+site `https://signals-google-gecx-storefront.vercel.app`.
+
+- Naming grep: clean — 2 hits, both non-presenter-facing (script's own
+  naming-guard text; GCP API-family name in runbook §8.1). PASS.
+- Scene 1: click-through browse populated debug panel live (Favorite
+  category: Tailoring, Favorite designer: Maison Cendre, Favorite occasion:
+  Evening); cart add registered. PASS.
+- §10.2 procedure: devtools one-liner captured `domain_sessionid`
+  (8e3667e8-ce6b-4c78-8b83-a67bf9c237fa); authorized
+  `/api/agent/context` curl returned populated profile + recent_activity
+  within seconds. PASS.
+- Scene 3: agent reply cited carted coat and recently-viewed Burgundy Silk
+  Evening Gown ($2,860) + Noir Double-Breasted Blazer ($1,480) — real
+  catalog items, grounded unprompted. PASS.
+- Scene 4: viewed Suede Chelsea Ankle Boot mid-conversation via Winter nav;
+  agent's next reply referenced it ("While you were looking at the Suede
+  Chelsea Ankle Boot ($780)") seconds later. PASS.
+- Reset Chat control: cleared conversation. PASS.
+- Scene 2 as originally written: FAIL — widget sends no proactive greeting;
+  chat opens empty (no welcome config exists agent-side or in the embed).
+  Script amended in this branch: presenter sends a contentless opener and
+  the agent's grounded first reply is the no-dead-air moment.
+- Findings folded into the script: click-navigation-only caveat (product
+  views don't fire on address-bar loads/refreshes) and the Winter-nav
+  route to the Scene 4 boot.
+- Not covered (rehearsal-day, human-only): console allowed-origins cleanup,
+  fresh seeded-session prep on the day, recording/delivery.

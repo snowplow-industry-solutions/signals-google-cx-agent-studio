@@ -22,6 +22,11 @@ verified).
   makes the "no dead air" beat credible rather than staged.
 - Debug panel visible (default demo mode; don't pass `?demo=plain`) —
   it's the presenter's own on-screen proof, not just narration.
+- **Navigate by clicking site links only.** Product-view tracking fires on
+  in-app route changes; pasting a URL into the address bar or refreshing
+  mid-scene loads the page without registering the view, and a refresh also
+  remounts the chat widget. Every product path in this script is reachable
+  by clicking — never type a URL once Scene 1 starts.
 
 ## Scene 1 — Browse before chat (~90s)
 
@@ -50,19 +55,24 @@ that's the actual Profile Store."*
 
 ## Scene 2 — Open chat: the "no dead air" moment (~30s)
 
-1. Click the chat launcher (bottom-right).
-2. Say nothing yet — let the concierge's opening message land. It should
-   reference the shopper's evening/tailoring browsing and the coat now in
-   cart, unprompted.
+1. Click the chat launcher (bottom-right). The panel opens empty — the
+   widget does not send a proactive greeting; the concierge speaks after
+   the shopper's first message.
+2. Send a light, contentless opener: *"Hello — I'm getting ready for an
+   evening event."* Nothing about the coat, the designer, or the browsing.
+3. Let the reply land: it should reference the shopper's evening/tailoring
+   browsing and the coat now in cart, unprompted.
 
-Talking point: *"I haven't typed a single word. The agent already knows
-what I've been looking at and what's in my cart — that's Signals context
-flowing into the Gemini Enterprise for CX agent on the very first turn."*
+Talking point: *"All I said was hello. I never mentioned the coat, the
+designer, or anything I looked at — the agent already knows, because
+Signals context flows into the Gemini Enterprise for CX agent from the
+very first turn."*
 
-If the opening message is generic instead (degraded/unknown-session
-fallback), do not stop — this is exactly the trigger for the seeded
-fallback session substitution in `docs/runbook.md`'s "Seeded fallback
-session" section; swap sessions and continue without narrating the hiccup.
+If the reply is generic instead — no reference to the browsing or the cart
+(degraded/unknown-session fallback) — do not stop — this is exactly the
+trigger for the seeded fallback session substitution in
+`docs/runbook.md`'s "Seeded fallback session" section; swap sessions and
+continue without narrating the hiccup.
 
 ## Scene 3 — Grounded recommendation (~45s)
 
@@ -80,9 +90,12 @@ Purpose: show the context isn't just the batch profile from Scene 1, but
 updates within seconds of new behaviour — the freshness half of the "prove
 it's real" moment.
 
-1. Without closing the chat, switch back to the storefront tab and view one
+1. Without closing the chat (it stays open and keeps its history across
+   in-app navigation), click **Winter** in the site nav, then open one
    product not browsed yet: **Suede Chelsea Ankle Boot**
-   (`/products/suede-chelsea-ankle-boot`, Maison Cendre, Shoes, $780).
+   (`/products/suede-chelsea-ankle-boot`, Maison Cendre, Shoes, $780). The
+   boot lives in the Winter Salon collection — it is not reachable from the
+   evening pages, so the nav click is the route.
 2. Immediately switch back to the chat and ask: *"What shoes would go with
    this look?"*
 3. The agent's answer should reflect that just-viewed boot (or a close
