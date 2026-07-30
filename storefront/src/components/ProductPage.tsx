@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 
 import { useCart } from "@/components/Cart/CartProvider";
@@ -11,8 +11,8 @@ import { useSignals } from "@/components/Signals/SignalsProvider";
 import type { Product } from "@/types/commerce";
 import { deriveComplementaryProducts } from "@/utils/personalization";
 import {
-  trackDemoProductView,
   useTrackDemoProductListView,
+  useTrackDemoProductView,
 } from "@/utils/tracking";
 
 interface ProductPageProps {
@@ -45,9 +45,7 @@ export function ProductPage({ product, relatedProducts }: ProductPageProps) {
     items: complementaryProducts,
   });
 
-  useEffect(() => {
-    trackDemoProductView(product);
-  }, [product]);
+  useTrackDemoProductView(product);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">

@@ -19,6 +19,8 @@ const {
 
 let attributesState: SignalsAttributes | null = null;
 let bootstrapReadyState = false;
+let trackerReadyPromise = Promise.resolve();
+let resolveTrackerReady: () => void = () => {};
 
 vi.mock("@/snowtype/snowplow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/snowtype/snowplow")>();
@@ -29,6 +31,10 @@ vi.mock("@/snowtype/snowplow", async (importOriginal) => {
     trackProductListViewedSpec: trackProductListViewedSpecMock,
   };
 });
+
+vi.mock("@/components/Analytics/SnowplowProvider", () => ({
+  waitForSnowplowTracker: () => trackerReadyPromise,
+}));
 
 vi.mock("@/components/Cart/CartProvider", () => ({
   useCart: () => ({
@@ -79,6 +85,9 @@ describe("ProductPage", () => {
     vi.clearAllMocks();
     attributesState = null;
     bootstrapReadyState = false;
+    trackerReadyPromise = new Promise<void>((resolve) => {
+      resolveTrackerReady = resolve;
+    });
   });
 
   afterEach(async () => {
@@ -92,6 +101,59 @@ describe("ProductPage", () => {
     root = null;
   });
 
+  it("does not track the product view until the Snowplow tracker is registered", async () => {
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductViewedSpecMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveTrackerReady();
+      await trackerReadyPromise;
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+    expect(trackProductViewedSpecMock.mock.calls[0]?.[0]).toMatchObject({
+      product_id: product.id,
+    });
+  });
+
+  it("tracks one product view per product across SPA navigation", async () => {
+    const otherProduct = relatedProducts[0];
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+      resolveTrackerReady();
+      await trackerReadyPromise;
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root?.render(
+        <ProductPage
+          product={otherProduct}
+          relatedProducts={products.filter((candidate) => candidate.id !== otherProduct.id)}
+        />
+      );
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(2);
+    expect(trackProductViewedSpecMock.mock.calls[1]?.[0]).toMatchObject({
+      product_id: otherProduct.id,
+    });
+  });
+
   it("waits for bootstrap readiness before tracking the PDP product list impression", async () => {
     root = createRoot(container);
 
@@ -99,7 +161,6 @@ describe("ProductPage", () => {
       root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
     });
 
-    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
     expect(trackProductListViewedSpecMock).not.toHaveBeenCalled();
 
     bootstrapReadyState = true;
