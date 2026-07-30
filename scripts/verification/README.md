@@ -18,6 +18,9 @@ session rebuilt them from scratch and re-paid the same discovery cost.
 | `commentary.py` | Issue #3 check: does every widget turn also carry a text bubble? Extracts prose with `[data-widget-card]` subtrees removed so card text cannot be mistaken for commentary. |
 | `followup.py` | Extra turns hunting in-band token mode, carousel-item click-through, and a synthetic token-mode probe (injects a verbatim token into the shadow DOM when the live agent won't emit one). |
 | `probe_navmode.py` | **The issue #7 reproduction.** Two fresh sessions, full-page-load vs SPA-click browsing; records collector requests, response statuses, `requestfailed`, then asks the agent. |
+| `probe_issue7_fix.py` | **The issue #7 acceptance check** (runbook §10.2.1). Same two variants, but decodes each collector payload to event level (`ue_px` → schema name) and counts `product_viewed` per variant, so it asserts a *specific event* reached the collector rather than counting requests. `PROBE_BASE` selects the target (defaults to `http://localhost:3000`), which is how a branch gets checked before deploy — the repo has no Vercel preview. Never opens the chat, so no CES token is captured. |
+| `probe_cart_checkout.py` | Audit companion to the above: adds an item, then full-loads `/cart` and `/checkout`, checking `cart_viewed` / `checkout_started` fire **exactly once** each. Catches the double-track that gating on tracker readiness alone introduced (the cart hydrates after mount). Imports `Recorder` from `probe_issue7_fix.py`. |
+| `probe_reset_chat.py` | Clicks the debug panel's Reset Chat (a full reload by design) and checks the post-reload product view is still tracked — the between-takes path in §10.2.1. |
 | `probe_entities.py` | Dumps context entities per event; shows `product_viewed` missing entirely on first load. Rules out validation/entity causes. |
 | `probe_latency.py` | Polls the agent on a timer; showed Signals answers 12–33s after an event, killing the "ingestion lag" theory. |
 | `probe_rotation.py`, `probe_stale.py`, `probe_session.py` | Disproved stale/rotating session-id theories. Kept for context. |
@@ -58,9 +61,11 @@ scratchpad path that no longer exists.
 - Ground truth for "which session did an event go to" is the collector POST body
   (`data[].sid`), not cookies — the `_sp_id` cookie's last field is a visit
   counter, not the session id.
-- Browsing by full page load drops `product_viewed` (issue #7), so a script that
-  browses that way sees an empty Signals profile. That cost a day of chasing
-  latency theories.
+- Browsing by full page load used to drop `product_viewed` (issue #7), so a
+  script that browsed that way saw an empty Signals profile. That cost a day of
+  chasing latency theories. **Fixed and verified in production 2026-07-30**, so
+  either browsing style is now safe — but any script written before that date
+  may still carry a click-only workaround.
 
 ## Not committed, deliberately
 
