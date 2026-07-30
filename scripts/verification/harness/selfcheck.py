@@ -6,6 +6,8 @@ runs reported PASS while carrying the empty profile that turned out to be issue
 here, and run() fails if one is missing.
 """
 
+import copy
+
 from harness import checks, collector
 
 # Minimal observation skeleton. Fixtures deep-copy this and corrupt one area,
@@ -24,8 +26,7 @@ BASE_OBS = {
 
 
 def obs(**overrides):
-    merged = {k: (v.copy() if isinstance(v, dict) else list(v))
-              for k, v in BASE_OBS.items()}
+    merged = copy.deepcopy(BASE_OBS)
     merged.update(overrides)
     return merged
 
@@ -57,10 +58,57 @@ def run_event_name_cases():
     return failures
 
 
+def turn(label="2a-carousel", prose="Here are three evening pieces I think work.",
+         cards=None, raw_token=False, mode="payload-mode", widget=True):
+    return {
+        "label": label,
+        "prompt": "Can you recommend a couple of accessories?",
+        "prose": prose,
+        "cards": cards if cards is not None else [
+            {"kind": "product_detail_carousel",
+             "items": [{"uri": "/products/satin-evening-pouch",
+                        "img": "https://example/1.jpg",
+                        "text": ["Satin Evening Pouch", "$760"]}]}],
+        "rawToken": raw_token,
+        "mode": mode,
+        "wire": ["wire:structured-payload"],
+        "isWidgetTurn": widget,
+        "screenshot": "turn-2a.png",
+    }
+
+
+ZERO_MATCH_OK = {
+    "label": "5-zero-match",
+    "prompt": "Do you have any neon orange swimwear under $15?",
+    "prose": "We have nothing in neon orange at that price. Shall I broaden the search?",
+    "cards": [], "rawToken": False, "mode": None, "wire": [],
+    "isWidgetTurn": False, "screenshot": "turn-5.png",
+}
+
+
 FIXTURES = {
+    "ac1-commentary": (
+        obs(turns=[turn()]),
+        obs(turns=[turn(prose="")]),
+    ),
+    "ac2-cards": (
+        obs(turns=[turn()]),
+        obs(turns=[turn(cards=[], raw_token=True)]),
+    ),
+    "ac4-mode": (
+        obs(turns=[turn()]),
+        obs(turns=[turn(mode="UNRENDERABLE")]),
+    ),
     "ac5-console": (
         obs(console={"errors": 0, "warnings": 0, "lines": []}),
         obs(console={"errors": 2, "warnings": 1, "lines": []}),
+    ),
+    "ac7-zero-match": (
+        obs(turns=[turn(), ZERO_MATCH_OK]),
+        obs(turns=[turn(), dict(ZERO_MATCH_OK, cards=[
+            {"kind": "base_product_detail",
+             "items": [{"uri": "/products/neon-orange-swim-brief",
+                        "img": None, "text": ["Neon Orange Swim Brief", "$12"]}]}])]),
     ),
 }
 
@@ -69,6 +117,10 @@ def run():
     missing = sorted(set(checks.PREDICATES) - set(FIXTURES))
     if missing:
         print(f"  {checks.FAIL_MARK} no selfcheck fixture for: {', '.join(missing)}")
+        return 1
+    unimplemented = sorted(set(FIXTURES) - set(checks.PREDICATES))
+    if unimplemented:
+        print(f"  {checks.FAIL_MARK} fixture with no predicate: {', '.join(unimplemented)}")
         return 1
 
     failures = run_event_name_cases()
