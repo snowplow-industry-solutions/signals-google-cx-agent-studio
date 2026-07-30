@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CartLineItem } from "@/types/commerce";
+
 const { trackCartViewedSpecMock, removeItemMock } = vi.hoisted(() => ({
   trackCartViewedSpecMock: vi.fn(),
   removeItemMock: vi.fn(),
@@ -11,6 +13,8 @@ const { trackCartViewedSpecMock, removeItemMock } = vi.hoisted(() => ({
 
 let trackerReadyPromise = Promise.resolve();
 let resolveTrackerReady: () => void = () => {};
+let lineItemsState: CartLineItem[] = [];
+let cartReadyState = false;
 
 vi.mock("@/snowtype/snowplow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/snowtype/snowplow")>();
@@ -27,8 +31,9 @@ vi.mock("@/components/Analytics/SnowplowProvider", () => ({
 
 vi.mock("@/components/Cart/CartProvider", () => ({
   useCart: () => ({
-    lineItems: [{ productId: "p4", quantity: 1 }],
-    subtotal: 620,
+    lineItems: lineItemsState,
+    cartReady: cartReadyState,
+    subtotal: 0,
     removeItem: removeItemMock,
   }),
 }));
@@ -66,6 +71,8 @@ describe("CartPage", () => {
     document.body.appendChild(container);
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
+    lineItemsState = [];
+    cartReadyState = false;
     trackerReadyPromise = new Promise<void>((resolve) => {
       resolveTrackerReady = resolve;
     });
@@ -83,6 +90,8 @@ describe("CartPage", () => {
   });
 
   it("does not track the cart view until the Snowplow tracker is registered", async () => {
+    cartReadyState = true;
+    lineItemsState = [{ productId: "p4", quantity: 1 }];
     root = createRoot(container);
 
     await act(async () => {
@@ -94,6 +103,30 @@ describe("CartPage", () => {
     await act(async () => {
       resolveTrackerReady();
       await trackerReadyPromise;
+    });
+
+    expect(trackCartViewedSpecMock).toHaveBeenCalledTimes(1);
+    expect(trackCartViewedSpecMock.mock.calls[0]?.[0]).toMatchObject({
+      cart_line_count: 1,
+    });
+  });
+
+  it("tracks the stored cart once, never the pre-hydration empty cart", async () => {
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<CartPage />);
+      resolveTrackerReady();
+      await trackerReadyPromise;
+    });
+
+    expect(trackCartViewedSpecMock).not.toHaveBeenCalled();
+
+    cartReadyState = true;
+    lineItemsState = [{ productId: "p4", quantity: 1 }];
+
+    await act(async () => {
+      root?.render(<CartPage />);
     });
 
     expect(trackCartViewedSpecMock).toHaveBeenCalledTimes(1);
