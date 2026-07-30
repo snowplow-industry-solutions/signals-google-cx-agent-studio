@@ -129,11 +129,13 @@ were two ways to reconcile at import time:
 
 The 2026-07-29 live run took option 1, because the "hidden" secret turned
 out not to be hidden at all: `signals-agent-studio-agent-shared-secret`
-already carried the full baseline label set, already had the CES
-service-agent `secretAccessor` grant `secrets.tf` declares, and its
-payload matched the deployed `AGENT_SHARED_SECRET` (verified via plan-JSON
-state comparison, not by printing it). Option 2 would have duplicated all
-of that and added a console repoint step for zero benefit. Two config
+already had the CES service-agent `secretAccessor` grant `secrets.tf`
+declares, and its payload matched the deployed `AGENT_SHARED_SECRET`
+(verified via plan-JSON state comparison, not by printing it). Option 2
+would have duplicated all of that and added a console repoint step for zero
+benefit. (One claim from that run was wrong and is corrected here: the live
+secret does **not** carry the baseline labels. The 2026-07-30 plan shows all
+three being added, which is a pending cloud write, not a no-op.) Two config
 consequences to know about:
 
 - `agent_shared_secret_id` is set to the live secret's ID in
@@ -144,3 +146,52 @@ consequences to know about:
   `toolsets.tf` -- a `google_secret_manager_secret_version` resource
   reference can only ever render a pinned `versions/N`, which would show
   as a permanent diff against the live `latest` wiring.
+
+## State reconciliation (2026-07-30)
+
+Between the 2026-07-29 reconcile and 2026-07-30, live moved and state did
+not: issue 09's widget tools were built in the console, and issue #3's
+commentary work published two new app versions. A plan run as issue #3's AC4
+evidence came back **4 to add, 7 to change, 2 to destroy** -- an apply would
+have done real damage. All three causes were state/config drift, fixed with
+imports and one `lifecycle` block, no cloud writes:
+
+1. **The app version was replacing, not moving.** `app_version_id` sits in
+   `google_ces_app_version.current`'s `ignore_changes` (the import gap above),
+   so re-pinning it in `terraform.tfvars` does not move what state manages --
+   state still held the 28 July version, and the ForceNew `display_name`
+   change drove a destroy-and-create that would have minted a *third* version
+   and repointed the deployment at it. Fixed by `terraform state rm` of the
+   stale version followed by `terraform import` of the live one. **Re-pinning
+   `app_version_id` after any publish always needs that rm + import pair;
+   editing tfvars alone is not enough.**
+2. **Both widget tools were planned as creates**, because `tools.tf` was
+   added (2026-07-29) without importing the console-built pair, and
+   `product_carousel_tool_id` / `product_details_tool_id` were left at their
+   greenfield defaults. Fixed by reading the two UUIDs from the agent's
+   `tools` list via read-only CES REST, setting them in `terraform.tfvars`,
+   and importing both.
+3. **The shared-secret version was replacing on every run.**
+   `var.agent_shared_secret_value` is deliberately unset in the committed
+   tfvars (it defaults to null and is passed via
+   `TF_VAR_agent_shared_secret_value` only on a greenfield create), so on the
+   import path the config value reads null against the adopted version's real
+   data. Both `secret_data` and `is_secret_data_base64` are ForceNew, so the
+   plan replaced the live version -- rotating `AGENT_SHARED_SECRET` out from
+   under the Vercel env and breaking both toolsets' API-key auth as a side
+   effect of any unrelated apply. Fixed with `lifecycle.ignore_changes` on
+   both attributes in `secrets.tf`; rotation stays a deliberate human op.
+
+The plan after those fixes is **0 to add, 10 to change, 0 to destroy** -- no
+replacements, no destroys. The residual ten are all safe, and all still
+un-applied:
+
+- `deletion_policy` `DELETE` -> `PREVENT` on the eight `google_ces_*`
+  resources. Provider-local bookkeeping; no API call.
+- `google_ces_toolset.catalog`'s `open_api_schema` gains the `image` response
+  field (required, with the widget-grounding description) -- repo ahead of
+  live, from the issue 09 widget work. Applying pushes it to the console.
+- The baseline labels land on the Secret Manager secret (`environment`,
+  `snowplow-owner`, `system`).
+
+Applying those three is a human op per runbook §12 and has not been done.
