@@ -1,0 +1,14 @@
+{
+  "displayName": "searchCatalog",
+  "name": "5b78051e-1af2-4980-bb4d-8fdaf0373bec",
+  "openApiToolset": {
+    "apiAuthentication": {
+      "apiKeyConfig": {
+        "apiKeySecretVersion": "$env_var",
+        "keyName": "$env_var",
+        "requestLocation": "HEADER"
+      }
+    },
+    "openApiSchema": "toolsets/searchCatalog/open_api_toolset/open_api_schema.yaml"
+  }
+}

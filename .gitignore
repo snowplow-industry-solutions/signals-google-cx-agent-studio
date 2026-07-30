@@ -15,3 +15,5 @@ node_modules/
 *.tfstate
 *.tfstate.*
 *.tfvars
+terraform/crash.log
+terraform/crash.*.log
