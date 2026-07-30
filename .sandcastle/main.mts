@@ -8,9 +8,11 @@
 //   4. Final review Fable      (last iteration of the review loop)
 //   5. PR           Haiku emits <pr-title>/<pr-body>; host pushes branch + opens
 //                   a real GitHub PR (manual testing plan in the body)
-//   6. Merge        host-side  local --no-ff merge + push (GitHub marks the PR
-//                   merged), unless checkpoint issue — those leave the PR open
-//                   for the human to test and merge.
+//   6. Merge        host-side  only with SANDCASTLE_AUTO_MERGE=1 on a
+//                   non-checkpoint issue: local --no-ff merge + push (GitHub
+//                   marks the PR merged). Default is no merge — approved work
+//                   stops at an open PR plus an alert, and the human tests and
+//                   merges it.
 //
 // Alerts land as macOS notifications + .sandcastle/logs/ALERTS.md.
 // Issue status labels are only ever changed host-side (this script via
@@ -33,6 +35,12 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
 const MAX_ISSUES_PER_RUN = 5;
 const MAX_FIX_CYCLES = 2; // review→fix rounds before parking the issue
+
+// Auto-merge is opt-in. Off by default: approved work stops at an open PR and an
+// alert, and the human merges after testing. tracker.sh reads the same variable —
+// with auto-merge off, awaiting-human-test no longer satisfies a downstream
+// issue's blocker, because the work isn't on main yet.
+const AUTO_MERGE = process.env.SANDCASTLE_AUTO_MERGE === "1";
 
 const implementer = () => sandcastle.claudeCode("claude-sonnet-5");
 const reviewer = () => sandcastle.claudeCode("claude-fable-5", { effort: "high" });
@@ -272,11 +280,12 @@ async function processIssue(issue: Issue): Promise<void> {
   }
 
   // 6. Merge / gate (host side) ----------------------------------------------
-  if (issue.checkpoint) {
+  if (issue.checkpoint || !AUTO_MERGE) {
     tracker("set-status", issue.id, "awaiting-human-test");
+    const why = issue.checkpoint ? "checkpoint issue" : "auto-merge disabled";
     alert(
-      "Checkpoint ready for manual test",
-      `#${issue.id} done — PR NOT merged (checkpoint): ${prUrl}. Test per the PR plan, merge on GitHub, pull main, then set-status ${issue.id} done.`,
+      "PR raised — ready for manual test",
+      `#${issue.id} done — PR NOT merged (${why}): ${prUrl}. Test per the PR plan, merge on GitHub, pull main, then set-status ${issue.id} done.`,
     );
     return;
   }
@@ -319,7 +328,7 @@ async function processIssue(issue: Issue): Promise<void> {
 // ---------------------------------------------------------------------------
 
 if (!mainIsClean()) {
-  console.error("Working tree is dirty — commit or stash before an AFK run (auto-merge needs a clean tree).");
+  console.error("Working tree is dirty — commit or stash before an AFK run (the pipeline cuts branches from main and may merge into it).");
   process.exit(1);
 }
 
