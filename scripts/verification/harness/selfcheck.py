@@ -58,6 +58,63 @@ def run_event_name_cases():
     return failures
 
 
+def run_ac3_url_cases():
+    failures = 0
+    ac3_predicate = checks.PREDICATES.get("ac3-spa-nav")
+    if not ac3_predicate:
+        return 0
+    for label, click_obs, expected_pass in AC3_URL_CASES:
+        obs_obj = obs(click=click_obs)
+        results = ac3_predicate(obs_obj)
+        actual_pass = all(r.passed for r in results)
+        ok = actual_pass == expected_pass
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  ac3-url {mark} {label:<30} -> {actual_pass!r}"
+              + ("" if ok else f"  expected {expected_pass!r}"))
+    return failures
+
+
+def _find_nested_mutables(obj, base_obj, path=[]):
+    """Recursively find all nested mutable containers (lists/dicts) in obj that
+    differ from base_obj, so we can test them for aliasing."""
+    mutables = []
+    if isinstance(obj, dict) and isinstance(base_obj, dict):
+        for key in obj:
+            if key not in base_obj or obj[key] != base_obj[key]:
+                child_mutables = _find_nested_mutables(
+                    obj[key],
+                    base_obj.get(key),
+                    path + [key]
+                )
+                mutables.extend(child_mutables)
+    elif isinstance(obj, list):
+        if not isinstance(base_obj, list) or obj != base_obj:
+            mutables.append((path, obj))
+        if isinstance(base_obj, list):
+            for i, item in enumerate(obj):
+                if isinstance(item, (dict, list)):
+                    base_item = base_obj[i] if i < len(base_obj) else None
+                    child_mutables = _find_nested_mutables(
+                        item,
+                        base_item,
+                        path + [i]
+                    )
+                    mutables.extend(child_mutables)
+    elif isinstance(obj, dict) and not isinstance(base_obj, dict):
+        if obj:
+            mutables.append((path, obj))
+        for key in obj:
+            if isinstance(obj[key], (dict, list)):
+                child_mutables = _find_nested_mutables(
+                    obj[key],
+                    None,
+                    path + [key]
+                )
+                mutables.extend(child_mutables)
+    return mutables
+
+
 def test_fixture_aliasing():
     """Verify fixtures don't alias shared mutable references.
 
@@ -75,26 +132,13 @@ def test_fixture_aliasing():
         good_initial = copy.deepcopy(good)
         bad_initial = copy.deepcopy(bad)
 
-        mutation_path = None
-        mutation_target = None
+        mutables = _find_nested_mutables(bad, BASE_OBS)
 
-        if "turns" in bad and bad["turns"]:
-            if "wire" in bad["turns"][-1]:
-                mutation_path = ("turns", -1, "wire")
-                mutation_target = bad["turns"][-1]["wire"]
-        elif "browse" in bad and isinstance(bad["browse"], dict):
-            if "paths" in bad["browse"] and isinstance(bad["browse"]["paths"], list):
-                mutation_path = ("browse", "paths")
-                mutation_target = bad["browse"]["paths"]
-        elif "signalsContext" in bad and isinstance(bad["signalsContext"], dict):
-            if "profile" in bad["signalsContext"] and isinstance(bad["signalsContext"]["profile"], dict):
-                profile = bad["signalsContext"]["profile"]
-                if profile:
-                    first_key = list(profile.keys())[0]
-                    mutation_path = ("signalsContext", "profile", first_key)
-                    mutation_target = profile
+        if not mutables:
+            print(f"  fixture aliasing {checks.PASS_MARK} {check_id}: no custom mutables to test")
+            continue
 
-        if mutation_target is not None:
+        for path, mutation_target in mutables:
             if isinstance(mutation_target, list):
                 mutation_target.append("ALIASING-TEST")
             elif isinstance(mutation_target, dict):
@@ -110,10 +154,12 @@ def test_fixture_aliasing():
 
             if not mutation_ok:
                 failures += 1
-                print(f"  fixture aliasing {checks.FAIL_MARK} {check_id}: "
+                path_str = ".".join(str(p) for p in path)
+                print(f"  fixture aliasing {checks.FAIL_MARK} {check_id} at {path_str}: "
                       f"siblings_ok={siblings_ok} others_ok={others_ok} base_ok={base_ok}")
             else:
-                print(f"  fixture aliasing {checks.PASS_MARK} {check_id}: no aliasing detected")
+                path_str = ".".join(str(p) for p in path)
+                print(f"  fixture aliasing {checks.PASS_MARK} {check_id} at {path_str}: no aliasing")
 
             if isinstance(mutation_target, list):
                 mutation_target.pop()
@@ -174,6 +220,30 @@ def click_result(clickedUri="/products/chunky-mohair-pullover",
         "chatMessagesAfter": chatMessagesAfter,
         "cardsAfter": cardsAfter,
     }
+
+
+AC3_URL_CASES = [
+    ("exact path match", click_result(
+        clickedUri="/products/chunky-mohair-pullover",
+        afterUrl="http://localhost:3000/products/chunky-mohair-pullover"
+    ), True),
+    ("path with trailing slash", click_result(
+        clickedUri="/products/chunky-mohair-pullover",
+        afterUrl="http://localhost:3000/products/chunky-mohair-pullover/"
+    ), True),
+    ("path with query string", click_result(
+        clickedUri="/products/chunky-mohair-pullover",
+        afterUrl="http://localhost:3000/products/chunky-mohair-pullover?ref=cx-agent"
+    ), True),
+    ("path with hash", click_result(
+        clickedUri="/products/chunky-mohair-pullover",
+        afterUrl="http://localhost:3000/products/chunky-mohair-pullover#section"
+    ), True),
+    ("wrong product suffix false positive", click_result(
+        clickedUri="/products/pullover",
+        afterUrl="http://localhost:3000/products/mohair-pullover"
+    ), False),
+]
 
 
 FIXTURES = {
@@ -238,6 +308,7 @@ def run():
 
     failures = run_event_name_cases()
     failures += test_fixture_aliasing()
+    failures += run_ac3_url_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
     predicate_failures = 0
     for check_id in checks.CHECK_ORDER:

@@ -7,6 +7,7 @@ observation) possible.
 """
 
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from harness.config import MIN_PROSE
 
@@ -137,8 +138,16 @@ def check_spa_navigation(obs):
         )]
 
     after = click.get("afterUrl") or ""
-    landed = "/products/" in after and after.rstrip("/").endswith(
-        (click["clickedUri"] or "").rstrip("/").split("/")[-1])
+    clicked_uri = (click.get("clickedUri") or "").rstrip("/")
+
+    if not after or not clicked_uri:
+        landed = False
+    else:
+        after_path = urlsplit(after).path.rstrip("/")
+        clicked_last = clicked_uri.split("/")[-1]
+        after_last = after_path.split("/")[-1] if after_path else ""
+        landed = clicked_last and clicked_last == after_last
+
     survived = bool(click.get("spaProbeSurvived"))
     preserved = (click.get("chatMessagesAfter") or 0) > 0 and \
                 (click.get("cardsAfter") or 0) > 0
