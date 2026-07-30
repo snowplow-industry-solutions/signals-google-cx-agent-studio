@@ -7,6 +7,7 @@ import {
   trackCheckoutStartedSpec,
   trackCheckoutStepViewedSpec,
 } from "@/snowtype/snowplow";
+import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
 import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { SignalsDebugPanel } from "@/components/Demo/SignalsDebugPanel";
@@ -21,21 +22,40 @@ const checkoutSteps = ["shipping", "payment", "review"] as const;
 type CheckoutStep = (typeof checkoutSteps)[number];
 
 export function CheckoutPage() {
-  const { lineItems, subtotal, clearCart } = useCart();
+  const { lineItems, cartReady, subtotal, clearCart } = useCart();
   const { attributes } = useSignals();
   const { highlightPersonalization } = useDemoMode();
   const [step, setStep] = useState<CheckoutStep>("shipping");
 
   useEffect(() => {
-    const tracking = createCheckoutStepTrackingProps(step, lineItems, products);
-
-    if (tracking.kind === "started") {
-      trackCheckoutStartedSpec(tracking.props);
+    if (!cartReady) {
       return;
     }
 
-    trackCheckoutStepViewedSpec(tracking.props);
-  }, [lineItems, step]);
+    let cancelled = false;
+
+    const trackWhenReady = async () => {
+      await waitForSnowplowTracker();
+      if (cancelled) {
+        return;
+      }
+
+      const tracking = createCheckoutStepTrackingProps(step, lineItems, products);
+
+      if (tracking.kind === "started") {
+        trackCheckoutStartedSpec(tracking.props);
+        return;
+      }
+
+      trackCheckoutStepViewedSpec(tracking.props);
+    };
+
+    void trackWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartReady, lineItems, step]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 lg:px-10">

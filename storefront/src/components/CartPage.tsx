@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 
 import { trackCartViewedSpec } from "@/snowtype/snowplow";
+import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
 import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { SignalsDebugPanel } from "@/components/Demo/SignalsDebugPanel";
@@ -14,7 +15,7 @@ import { deriveCartRecommendations } from "@/utils/personalization";
 import { createCartViewedTrackingProps } from "@/utils/snowtypeTracking";
 
 export function CartPage() {
-  const { lineItems, subtotal, removeItem } = useCart();
+  const { lineItems, cartReady, subtotal, removeItem } = useCart();
   const { attributes } = useSignals();
   const { highlightPersonalization } = useDemoMode();
 
@@ -43,8 +44,27 @@ export function CartPage() {
   );
 
   useEffect(() => {
-    trackCartViewedSpec(createCartViewedTrackingProps(lineItems, products));
-  }, [lineItems]);
+    if (!cartReady) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const trackWhenReady = async () => {
+      await waitForSnowplowTracker();
+      if (cancelled) {
+        return;
+      }
+
+      trackCartViewedSpec(createCartViewedTrackingProps(lineItems, products));
+    };
+
+    void trackWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartReady, lineItems]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
