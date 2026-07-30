@@ -182,16 +182,35 @@ imports and one `lifecycle` block, no cloud writes:
    effect of any unrelated apply. Fixed with `lifecycle.ignore_changes` on
    both attributes in `secrets.tf`; rotation stays a deliberate human op.
 
-The plan after those fixes is **0 to add, 10 to change, 0 to destroy** -- no
-replacements, no destroys. The residual ten are all safe, and all still
-un-applied:
+The plan after those fixes was **0 to add, 10 to change, 0 to destroy** -- no
+replacements, no destroys. What the ten actually were:
 
-- `deletion_policy` `DELETE` -> `PREVENT` on the eight `google_ces_*`
-  resources. Provider-local bookkeeping; no API call.
+- `deletion_policy` `DELETE` -> `PREVENT` on the **nine** `google_ces_*`
+  resources (agent, app, root-agent association, app version, deployment, both
+  tools, both toolsets). Provider-local bookkeeping; no API call.
+- `google_ces_deployment.web_widget` gains `app_version`, unset in state
+  because the provider does not populate it on import. It resolves to the
+  version already serving, so the write is idempotent -- but it is a write to
+  the deployment, not bookkeeping.
 - `google_ces_toolset.catalog`'s `open_api_schema` gains the `image` response
   field (required, with the widget-grounding description) -- repo ahead of
-  live, from the issue 09 widget work. Applying pushes it to the console.
-- The baseline labels land on the Secret Manager secret (`environment`,
-  `snowplow-owner`, `system`).
+  live, from the issue 09 widget work. Confirmed a real divergence, not an
+  import artefact: the rest of that schema planned as unchanged. Safe to
+  require, because `/api/agent/catalog` returns `image` on every result
+  (`storefront/src/app/api/agent/catalog/route.ts`).
+- The baseline labels land on the Secret Manager secret (`environment: dev`,
+  `snowplow-owner: cc017`, `system: signals-gecx-demo`) -- the one genuine
+  cloud write. Hyphen label key and lowercase cost centre are the GCP form of
+  the tagging policy. No `data-classification`: Secret Manager is not in the
+  stateful-storage set that requires it.
 
-Applying those three is a human op per runbook §12 and has not been done.
+**Applied 2026-07-30** (human-run per runbook §12, from a saved plan). `terraform
+plan` afterwards: *"No changes. Your infrastructure matches the configuration."*
+The §11.5 walkthrough was re-run against the live agent after the apply and
+passed -- four widget turns, each with prose plus a rendered card, SPA
+click-through intact, zero-match query degrading to text -- so pushing the
+`image` field to the console disturbed nothing.
+
+**State has no remote backend.** `terraform/terraform.tfstate` is local and
+gitignored, and it is the only record of the imports above; a fresh clone would
+replay the whole drift. Keep a copy off the machine that holds it.
