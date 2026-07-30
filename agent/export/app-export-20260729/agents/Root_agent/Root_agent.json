@@ -1,0 +1,22 @@
+{
+  "displayName": "Root agent",
+  "instruction": "agents/Root_agent/instruction.txt",
+  "name": "c20821fd-ba93-46a4-9f04-cdf7fdd9e878",
+  "tools": [
+    "end_session"
+  ],
+  "toolsets": [
+    {
+      "toolIds": [
+        "getUserContext"
+      ],
+      "toolset": "getUserContext"
+    },
+    {
+      "toolIds": [
+        "searchCatalog"
+      ],
+      "toolset": "searchCatalog"
+    }
+  ]
+}

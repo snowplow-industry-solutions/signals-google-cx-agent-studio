@@ -1,0 +1,12 @@
+{
+  "displayName": "chat-widget",
+  "name": "a684134f-d8e9-4247-8ef1-a1d0bbb5c829",
+  "widgetTool": {
+    "name": "chat-widget",
+    "parameters": {
+      "description": "You can write your own schema here.",
+      "type": "OBJECT"
+    },
+    "widgetType": "CUSTOM"
+  }
+}

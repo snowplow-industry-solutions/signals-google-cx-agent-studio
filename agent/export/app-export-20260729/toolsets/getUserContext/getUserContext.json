@@ -1,0 +1,14 @@
+{
+  "displayName": "getUserContext",
+  "name": "d9ab6afd-67a8-4cf0-b85e-daaacac4c4dc",
+  "openApiToolset": {
+    "apiAuthentication": {
+      "apiKeyConfig": {
+        "apiKeySecretVersion": "$env_var",
+        "keyName": "$env_var",
+        "requestLocation": "HEADER"
+      }
+    },
+    "openApiSchema": "toolsets/getUserContext/open_api_toolset/open_api_schema.yaml"
+  }
+}

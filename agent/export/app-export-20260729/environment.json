@@ -1,0 +1,26 @@
+{
+  "toolsets": {
+    "getUserContext": {
+      "openApiToolset": {
+        "apiAuthentication": {
+          "apiKeyConfig": {
+            "apiKeySecretVersion": "projects/engineering-sandbox/secrets/signals-agent-studio-agent-shared-secret/versions/latest",
+            "keyName": "x-agent-api-key"
+          }
+        },
+        "url": "https://signals-google-gecx-storefront.vercel.app"
+      }
+    },
+    "searchCatalog": {
+      "openApiToolset": {
+        "apiAuthentication": {
+          "apiKeyConfig": {
+            "apiKeySecretVersion": "projects/engineering-sandbox/secrets/signals-agent-studio-agent-shared-secret/versions/latest",
+            "keyName": "x-agent-api-key"
+          }
+        },
+        "url": "https://signals-google-gecx-storefront.vercel.app"
+      }
+    }
+  }
+}
