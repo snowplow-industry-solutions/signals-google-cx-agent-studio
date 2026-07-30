@@ -8,8 +8,9 @@
 #                        satisfy blockers. If a host process dies mid-issue,
 #                        reset manually: tracker.sh set-status <id> ready-for-agent
 #   ready-for-human      human task; satisfies blockers only when done
-#   awaiting-human-test  agent finished; satisfies blockers UNLESS the issue
-#                        carries the "checkpoint:human-test-required" label
+#   awaiting-human-test  agent finished; satisfies blockers only when
+#                        SANDCASTLE_AUTO_MERGE=1 (so the work is on main) and the
+#                        issue carries no "checkpoint:human-test-required" label
 #   needs-human          parked by the pipeline; human must intervene
 #   done                 issue closed; always satisfies blockers
 #
@@ -64,11 +65,16 @@ fetch_all() {
   gh issue list --state all --limit 200 --json number,title,state,labels,body,url
 }
 
-# A blocker is satisfied when its issue is done (closed), or awaiting-human-test
-# on a non-checkpoint issue (auto-merged work counts as available to build on).
-# An unresolvable blocker reference never satisfies.
+# A blocker is satisfied when its issue is done (closed), or — only with
+# SANDCASTLE_AUTO_MERGE=1, where the pipeline pushes approved work to main —
+# awaiting-human-test on a non-checkpoint issue (auto-merged work counts as
+# available to build on). With auto-merge off, that work sits on an unmerged
+# branch, so only "done" satisfies. An unresolvable blocker reference never
+# satisfies.
 cmd_list() {
-  fetch_all | jq "$JQ_LIB"'
+  local auto_merge=false
+  if [ "${SANDCASTLE_AUTO_MERGE:-}" = "1" ]; then auto_merge=true; fi
+  fetch_all | jq --argjson auto_merge "$auto_merge" "$JQ_LIB"'
     . as $all
     | [ .[]
         | select(status_of == "ready-for-agent")
@@ -76,7 +82,8 @@ cmd_list() {
                    | (first($all[] | select(.number == $n)) // null) as $b
                    | if $b == null then false
                      else ($b | status_of) == "done"
-                          or ((($b | status_of) == "awaiting-human-test")
+                          or ($auto_merge
+                              and (($b | status_of) == "awaiting-human-test")
                               and (($b | is_checkpoint) | not))
                      end
                  ] | all)

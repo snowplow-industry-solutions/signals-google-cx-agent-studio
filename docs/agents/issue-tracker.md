@@ -12,9 +12,13 @@ The PRD stays in-repo at `.scratch/signals-cx-agent-demo/PRD.md`.
   `needs-info`, `wontfix`). An open issue with no status label reads as
   `needs-triage`. Exactly one status label at a time — `tracker.sh set-status`
   maintains that invariant.
+- Auto-merge is opt-in (`SANDCASTLE_AUTO_MERGE=1 npm run afk`). By default the
+  pipeline never merges: approved work lands as an open PR plus an alert, and a
+  human tests and merges it. With auto-merge off, only a closed issue satisfies
+  a blocker — `awaiting-human-test` work sits on an unmerged branch.
 - Checkpoint issues carry the `checkpoint:human-test-required` label: the
-  pipeline never auto-merges them, and `awaiting-human-test` on them does not
-  satisfy blockers.
+  pipeline never auto-merges them even with auto-merge on, and
+  `awaiting-human-test` on them does not satisfy blockers.
 - Blockers are `#N` references inside a `## Blocked by` section of the issue
   body. `.sandcastle/tracker.sh` parses exactly that shape.
 - Comments and conversation history are ordinary GitHub issue comments.
