@@ -964,6 +964,81 @@ properties. Checked on production: no clashing default styling, no
    - Evidence: `.scratch/signals-cx-agent-demo/widget-renderer-{carousel,
      details,carousel-click,tokenmode-probe}-prod-20260730.png`.
 
+   **Verification run, 2026-07-30 ~13:27 and ~14:40 UTC (issue #3, agent
+   commentary alongside widget cards; Playwright against the deployed
+   storefront + live agent): PASS on the second instruction iteration —
+   6/6 widget turns carried commentary text.**
+
+   Two console instruction iterations were published and measured (versions
+   `70baa168…` then `a3d587a5…`; the publish also re-pins the widget
+   deployment automatically, so live traffic moved with it):
+
+   - **Iteration 1** (a general "always speak alongside a widget" bullet in
+     constraint 5 plus a matching taskflow line): **3/6.** The split was not
+     random — all three `productDetails` turns carried text, all three
+     `productCarousel` turns carried none.
+   - **Root cause, from the model's own chunk sequence in
+     `diagnosticInfo`:** nothing was dropped downstream. Details turns ran
+     `getUserContext` → `searchCatalog` → **text chunk** → widget call.
+     Carousel turns ran the two tools in parallel and went straight to the
+     widget call, emitting no text chunk at all — so the response carried a
+     single `outputs[]` entry with `payload` and no `text` sibling. The model
+     treated a carousel as the whole reply.
+   - **Iteration 2** (name `productCarousel` explicitly as equally bound by
+     the rule, require the message be written as reply text *first*, and
+     state that the widget call's `summary` argument is never shown to the
+     shopper): **6/6**, three carousel and three details turns, each
+     delivering `outputs = [text, payload]`.
+   - **AC3 — does the structured payload carry an agent-authored summary
+     field? No, and the reason is now known rather than guessed.** Delivered
+     payloads carry only fixed schema fields: carousel
+     `{productDetails[], type}`, details
+     `{title, subtitle, uri, productId, price, imageUris, type}`. But the
+     model *does* author prose in a non-schema `summary` argument on the
+     widget **tool call** (e.g. *"A carousel showcasing the Satin Evening
+     Pouch ($760), Patent Slingback Heel ($860)…"*, visible only in
+     `diagnosticInfo`) — and the platform strips it before delivery. So there
+     is no agent-authored text to render above the card rail, the issue #3
+     fallback branch is closed, and no storefront change was needed. Telling
+     the model that `summary` is invisible is what moved the carousel turns.
+   - **No regression to §11.5 steps 2–6 / issue #1:** all 6 turns rendered
+     cards (3 carousels, 3 details), no raw `{@Widget:` token appeared, a
+     card click still SPA-navigated
+     (`/products/midnight-silk-slip-dress`, chat panel and prior cards
+     preserved), the zero-match control still degraded to plain text with no
+     invented product, and zero console errors or warnings were captured
+     across both runs. Storefront tests 165/165 green, no storefront change.
+   - **Delivery mode: all 12 widget turns across both runs arrived as
+     structured `outputs[].payload`** (console mark *"Rewrote widget payload
+     to rich-message template"*). The in-band `{@Widget: …}` token mode again
+     did not occur live, so the commentary behaviour is verified for the
+     payload path only; the token path's own prose was already observed on
+     2026-07-29.
+   - **Caveat on these two runs, and it is not a small one:
+     `getUserContext` returned `profile: {}` and `"No events buffered.
+     Based on last 100 recorded events for the last 3600 seconds."` on all
+     12 turns**, despite six page views with a 6s dwell each and a 25s
+     settle before opening chat. Recommendations stayed catalog-grounded via
+     `searchCatalog`, so the commentary and card results above hold, but the
+     **personalisation path was not exercised** — these turns ran the
+     constraint 6 degraded/unknown-session behaviour. **Root cause found
+     later the same day and filed as issue #7:** `product_viewed` is never
+     sent on a full page load. An ungated effect in `ProductPage.tsx` tracks
+     the view before `SnowplowProvider` registers the tracker, so the
+     browser tracker silently no-ops while the app still logs success. This
+     script browses product pages by full page load and therefore generated
+     zero product views; the ~10:40 run in the entry above browsed by SPA
+     click and did get session-grounded context. Neither Signals ingestion
+     latency nor `snowplow_session_id` linkage is involved — the earlier
+     theories in this entry's first draft were wrong.
+   - Verification scripts: `commentary.py` in the 2026-07-30 handoff temp
+     directory (adapted from the §11.5 walkthrough script; extracts prose
+     with `[data-widget-card]` subtrees removed so card text cannot be
+     mistaken for commentary, and waits for real reply content because
+     `ces-messenger` inserts an empty placeholder `<li>` on send — waiting on
+     that placeholder attributes each reply to the following turn). Not
+     committed; a committed harness is proposed as follow-up work.
+
 ### 11.6 Current state: renderer live in production (revert kept as fallback)
 
 Resolved 2026-07-30: **the renderer path won; no console revert.** The
