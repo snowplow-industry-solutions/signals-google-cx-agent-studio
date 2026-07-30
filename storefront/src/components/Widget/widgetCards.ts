@@ -96,11 +96,13 @@ export function normalizeWidgetPayload(payload: unknown): WidgetCardContext | nu
   return single ? { kind: "details", items: [single] } : null;
 }
 
-const CARD_BG = "color-mix(in srgb, var(--background, #131311) 88%, white)";
-const CARD_BORDER = "1px solid rgba(247, 241, 231, 0.14)";
-const TEXT_COLOR = "var(--foreground, #f7f1e7)";
-const MUTED_COLOR = "var(--muted, rgba(247, 241, 231, 0.62))";
-const ACCENT_COLOR = "var(--accent, #b79559)";
+// Exported so other shadow-DOM injections (e.g. useWidgetLoadingIndicator)
+// share the same luxury-palette tokens instead of redefining them.
+export const CARD_BG = "color-mix(in srgb, var(--background, #131311) 88%, white)";
+export const CARD_BORDER = "1px solid rgba(247, 241, 231, 0.14)";
+export const TEXT_COLOR = "var(--foreground, #f7f1e7)";
+export const MUTED_COLOR = "var(--muted, rgba(247, 241, 231, 0.62))";
+export const ACCENT_COLOR = "var(--accent, #b79559)";
 
 function styled<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
