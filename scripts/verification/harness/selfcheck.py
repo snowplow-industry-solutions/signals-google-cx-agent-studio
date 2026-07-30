@@ -59,30 +59,70 @@ def run_event_name_cases():
 
 
 def test_fixture_aliasing():
-    """Verify fixtures don't alias shared mutable references to turn dicts.
+    """Verify fixtures don't alias shared mutable references.
 
     This test catches regressions where obs() overrides share nested dicts
     instead of deep-copying them, which would cause mutations in one fixture
-    to silently corrupt others.
+    to silently corrupt others. Sweeps every fixture pair to ensure all use
+    proper factory construction.
     """
     failures = 0
 
-    good, bad = FIXTURES["ac7-zero-match"]
+    for check_id in FIXTURES:
+        good, bad = FIXTURES[check_id]
 
-    good_wire_initial = copy.deepcopy(good["turns"][-1]["wire"])
-    bad_wire_initial = copy.deepcopy(bad["turns"][-1]["wire"])
+        all_initial = copy.deepcopy(FIXTURES)
+        good_initial = copy.deepcopy(good)
+        bad_initial = copy.deepcopy(bad)
 
-    bad["turns"][-1]["wire"].append("ALIASING-TEST")
+        mutation_path = None
+        mutation_target = None
 
-    good_wire_now = good["turns"][-1]["wire"]
-    unaffected = good_wire_now == good_wire_initial
+        if "turns" in bad and bad["turns"]:
+            if "wire" in bad["turns"][-1]:
+                mutation_path = ("turns", -1, "wire")
+                mutation_target = bad["turns"][-1]["wire"]
+        elif "browse" in bad and isinstance(bad["browse"], dict):
+            if "paths" in bad["browse"] and isinstance(bad["browse"]["paths"], list):
+                mutation_path = ("browse", "paths")
+                mutation_target = bad["browse"]["paths"]
+        elif "signalsContext" in bad and isinstance(bad["signalsContext"], dict):
+            if "profile" in bad["signalsContext"] and isinstance(bad["signalsContext"]["profile"], dict):
+                profile = bad["signalsContext"]["profile"]
+                if profile:
+                    first_key = list(profile.keys())[0]
+                    mutation_path = ("signalsContext", "profile", first_key)
+                    mutation_target = profile
 
-    mark = checks.PASS_MARK if unaffected else checks.FAIL_MARK
-    if not unaffected:
-        failures += 1
-    print(f"  fixture aliasing {mark} mutations don't cross fixtures")
+        if mutation_target is not None:
+            if isinstance(mutation_target, list):
+                mutation_target.append("ALIASING-TEST")
+            elif isinstance(mutation_target, dict):
+                mutation_target["ALIASING-TEST"] = True
 
-    bad["turns"][-1]["wire"].pop()
+            good_now = good
+            siblings_ok = good_now == good_initial
+            others_ok = all(FIXTURES[other_id] == all_initial[other_id]
+                           for other_id in FIXTURES if other_id != check_id)
+            base_ok = BASE_OBS == copy.deepcopy(BASE_OBS)
+
+            mutation_ok = siblings_ok and others_ok and base_ok
+
+            if not mutation_ok:
+                failures += 1
+                print(f"  fixture aliasing {checks.FAIL_MARK} {check_id}: "
+                      f"siblings_ok={siblings_ok} others_ok={others_ok} base_ok={base_ok}")
+            else:
+                print(f"  fixture aliasing {checks.PASS_MARK} {check_id}: no aliasing detected")
+
+            if isinstance(mutation_target, list):
+                mutation_target.pop()
+            elif isinstance(mutation_target, dict):
+                del mutation_target["ALIASING-TEST"]
+
+    mark = checks.PASS_MARK if failures == 0 else checks.FAIL_MARK
+    summary = "all fixture pairs are aliasing-safe"
+    print(f"  fixture aliasing {mark} {summary}")
 
     return failures
 
@@ -122,6 +162,20 @@ def zero_match_turn(label="5-zero-match",
     }
 
 
+def click_result(clickedUri="/products/chunky-mohair-pullover",
+                 beforeUrl="http://localhost:3000/collections/accessory-atelier",
+                 afterUrl="http://localhost:3000/products/chunky-mohair-pullover",
+                 spaProbeSurvived=True, chatMessagesAfter=11, cardsAfter=4):
+    return {
+        "clickedUri": clickedUri,
+        "beforeUrl": beforeUrl,
+        "afterUrl": afterUrl,
+        "spaProbeSurvived": spaProbeSurvived,
+        "chatMessagesAfter": chatMessagesAfter,
+        "cardsAfter": cardsAfter,
+    }
+
+
 FIXTURES = {
     "ac1-commentary": (
         obs(turns=[turn()]),
@@ -131,6 +185,10 @@ FIXTURES = {
         obs(turns=[turn()]),
         obs(turns=[turn(cards=[], raw_token=True)]),
     ),
+    "ac3-spa-nav": (
+        obs(click=click_result()),
+        obs(click=click_result(spaProbeSurvived=False, cardsAfter=0)),
+    ),
     "ac4-mode": (
         obs(turns=[turn()]),
         obs(turns=[turn(mode="UNRENDERABLE")]),
@@ -138,6 +196,25 @@ FIXTURES = {
     "ac5-console": (
         obs(console={"errors": 0, "warnings": 0, "lines": []}),
         obs(console={"errors": 2, "warnings": 1, "lines": []}),
+    ),
+    "ac6-collector": (
+        obs(browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
+                    "productViewed": 2, "sids": ["a1b2"],
+                    "events": {"product_viewed": 2, "pv": 5}}),
+        obs(browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
+                    "productViewed": 0, "sids": ["a1b2"],
+                    "events": {"pv": 5}}),
+    ),
+    "ac6-signals": (
+        obs(signalsContext={"profile": {"total_product_views": 2,
+                                        "recently_viewed_product_ids": "p1, p2"},
+                            "recent_activity": "- product_viewed: p1",
+                            "agent_instructions": ""}),
+        obs(signalsContext={"profile": {},
+                            "recent_activity": "No events buffered. Based on last "
+                                               "100 recorded events for the last "
+                                               "3600 seconds.",
+                            "agent_instructions": ""}),
     ),
     "ac7-zero-match": (
         obs(turns=[turn(), zero_match_turn()]),
