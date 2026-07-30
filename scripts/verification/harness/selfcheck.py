@@ -58,6 +58,35 @@ def run_event_name_cases():
     return failures
 
 
+def test_fixture_aliasing():
+    """Verify fixtures don't alias shared mutable references to turn dicts.
+
+    This test catches regressions where obs() overrides share nested dicts
+    instead of deep-copying them, which would cause mutations in one fixture
+    to silently corrupt others.
+    """
+    failures = 0
+
+    good, bad = FIXTURES["ac7-zero-match"]
+
+    good_wire_initial = copy.deepcopy(good["turns"][-1]["wire"])
+    bad_wire_initial = copy.deepcopy(bad["turns"][-1]["wire"])
+
+    bad["turns"][-1]["wire"].append("ALIASING-TEST")
+
+    good_wire_now = good["turns"][-1]["wire"]
+    unaffected = good_wire_now == good_wire_initial
+
+    mark = checks.PASS_MARK if unaffected else checks.FAIL_MARK
+    if not unaffected:
+        failures += 1
+    print(f"  fixture aliasing {mark} mutations don't cross fixtures")
+
+    bad["turns"][-1]["wire"].pop()
+
+    return failures
+
+
 def turn(label="2a-carousel", prose="Here are three evening pieces I think work.",
          cards=None, raw_token=False, mode="payload-mode", widget=True):
     return {
@@ -77,13 +106,20 @@ def turn(label="2a-carousel", prose="Here are three evening pieces I think work.
     }
 
 
-ZERO_MATCH_OK = {
-    "label": "5-zero-match",
-    "prompt": "Do you have any neon orange swimwear under $15?",
-    "prose": "We have nothing in neon orange at that price. Shall I broaden the search?",
-    "cards": [], "rawToken": False, "mode": None, "wire": [],
-    "isWidgetTurn": False, "screenshot": "turn-5.png",
-}
+def zero_match_turn(label="5-zero-match",
+                     prose="We have nothing in neon orange at that price. Shall I broaden the search?",
+                     cards=None):
+    return {
+        "label": label,
+        "prompt": "Do you have any neon orange swimwear under $15?",
+        "prose": prose,
+        "cards": cards if cards is not None else [],
+        "rawToken": False,
+        "mode": None,
+        "wire": [],
+        "isWidgetTurn": False,
+        "screenshot": "turn-5.png",
+    }
 
 
 FIXTURES = {
@@ -104,8 +140,8 @@ FIXTURES = {
         obs(console={"errors": 2, "warnings": 1, "lines": []}),
     ),
     "ac7-zero-match": (
-        obs(turns=[turn(), ZERO_MATCH_OK]),
-        obs(turns=[turn(), dict(ZERO_MATCH_OK, cards=[
+        obs(turns=[turn(), zero_match_turn()]),
+        obs(turns=[turn(), zero_match_turn(cards=[
             {"kind": "base_product_detail",
              "items": [{"uri": "/products/neon-orange-swim-brief",
                         "img": None, "text": ["Neon Orange Swim Brief", "$12"]}]}])]),
@@ -124,6 +160,7 @@ def run():
         return 1
 
     failures = run_event_name_cases()
+    failures += test_fixture_aliasing()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
     predicate_failures = 0
     for check_id in checks.CHECK_ORDER:
