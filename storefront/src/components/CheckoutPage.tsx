@@ -22,12 +22,16 @@ const checkoutSteps = ["shipping", "payment", "review"] as const;
 type CheckoutStep = (typeof checkoutSteps)[number];
 
 export function CheckoutPage() {
-  const { lineItems, subtotal, clearCart } = useCart();
+  const { lineItems, cartReady, subtotal, clearCart } = useCart();
   const { attributes } = useSignals();
   const { highlightPersonalization } = useDemoMode();
   const [step, setStep] = useState<CheckoutStep>("shipping");
 
   useEffect(() => {
+    if (!cartReady) {
+      return;
+    }
+
     let cancelled = false;
 
     const trackWhenReady = async () => {
@@ -51,7 +55,7 @@ export function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [lineItems, step]);
+  }, [cartReady, lineItems, step]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 lg:px-10">

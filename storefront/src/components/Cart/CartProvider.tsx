@@ -17,6 +17,9 @@ import { createCartUpdatedTrackingProps } from "@/utils/snowtypeTracking";
 
 interface CartContextValue {
   lineItems: CartLineItem[];
+  // False until the stored cart has been loaded, so consumers that track the
+  // cart do not report the empty pre-hydration snapshot.
+  cartReady: boolean;
   itemCount: number;
   subtotal: number;
   addItem: (productId: string) => void;
@@ -30,23 +33,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Start empty on both server and client so SSR markup matches the first
   // client render; the stored cart is loaded after hydration.
   const [lineItems, setLineItems] = useState<CartLineItem[]>([]);
+  const [cartReady, setCartReady] = useState(false);
   const hasHydratedCart = useRef(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("atelier-signals-cart");
-    if (!stored) {
-      return;
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as CartLineItem[];
+        if (parsed.length > 0) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- deferred localStorage load must run post-hydration so SSR markup matches the first client render
+          setLineItems(parsed);
+        }
+      } catch {
+        // Ignore malformed stored carts.
+      }
     }
 
-    try {
-      const parsed = JSON.parse(stored) as CartLineItem[];
-      if (parsed.length > 0) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- deferred localStorage load must run post-hydration so SSR markup matches the first client render
-        setLineItems(parsed);
-      }
-    } catch {
-      // Ignore malformed stored carts.
-    }
+    // Batched with setLineItems above, so consumers see the stored cart and
+    // readiness in the same commit.
+    setCartReady(true);
   }, []);
 
   useEffect(() => {
@@ -69,6 +76,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     return {
       lineItems,
+      cartReady,
       itemCount,
       subtotal,
       addItem: (productId) => {
@@ -142,7 +150,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setLineItems([]);
       },
     };
-  }, [lineItems]);
+  }, [cartReady, lineItems]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

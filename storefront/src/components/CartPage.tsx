@@ -15,7 +15,7 @@ import { deriveCartRecommendations } from "@/utils/personalization";
 import { createCartViewedTrackingProps } from "@/utils/snowtypeTracking";
 
 export function CartPage() {
-  const { lineItems, subtotal, removeItem } = useCart();
+  const { lineItems, cartReady, subtotal, removeItem } = useCart();
   const { attributes } = useSignals();
   const { highlightPersonalization } = useDemoMode();
 
@@ -44,6 +44,10 @@ export function CartPage() {
   );
 
   useEffect(() => {
+    if (!cartReady) {
+      return;
+    }
+
     let cancelled = false;
 
     const trackWhenReady = async () => {
@@ -60,7 +64,7 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [lineItems]);
+  }, [cartReady, lineItems]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
