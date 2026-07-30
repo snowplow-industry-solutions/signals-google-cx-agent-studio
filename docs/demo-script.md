@@ -74,15 +74,29 @@ trigger for the seeded fallback session substitution in
 `docs/runbook.md`'s "Seeded fallback session" section; swap sessions and
 continue without narrating the hiccup.
 
-## Scene 3 — Grounded recommendation (~45s)
+## Scene 3 — Grounded recommendation, rendered as product cards (~60s)
 
 1. Ask: *"What would you pair with this coat for an evening event?"*
 2. The agent should call `searchCatalog` scoped to the shopper's context
    (Maison Cendre / evening) and recommend a real catalog product by name,
    designer, and price — never an invented item.
+3. The reply lands as **product cards inside the chat** — photo, designer,
+   name, price — in the storefront's own dark palette rather than a
+   paragraph of text. Say nothing for a beat and let them draw.
+4. Click a card. It opens that product's page **without a reload**: the
+   chat panel stays open, the conversation is still there, and the view is
+   tracked like any other in-app navigation — which is exactly the state
+   Scene 4 continues from.
 
-Talking point: *"That's not a generic suggestion — it just searched our
-actual catalog, filtered by what it already knows I like."*
+Talking points: *"That's not a generic suggestion — it just searched our
+actual catalog, filtered by what it already knows I like."* Then, over the
+cards: *"And it's not describing products at me — those are real catalog
+items rendered right in the conversation, straight into the storefront."*
+
+If the reply comes back as prose with no cards, don't chase it — the model
+sometimes answers a "couple of pieces" ask in words alone. Follow up with
+*"what else would work with that?"*, which reliably renders a carousel;
+there is nothing to fix live.
 
 ## Scene 4 — "Prove it's real-time" beat (~45s)
 

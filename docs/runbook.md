@@ -806,6 +806,12 @@ renders with whatever default styling `ces-messenger` ships, which may or
 may not read as "acceptable" against the dark luxury palette (`--accent:
 #b79559` etc.) without further work.
 
+**Resolved 2026-07-30:** moot in the end — `ces-messenger` never renders
+these widgets itself (§11.5), so the cards are drawn by the storefront's
+own renderer with inline styles that inherit the palette's custom
+properties. Checked on production: no clashing default styling, no
+`WIDGET_CUSTOM_CSS` change required.
+
 ### 11.5 Verification walkthrough
 
 1. Confirm §11.3's two widget tools show up correctly in a simulator turn
@@ -898,32 +904,91 @@ may not read as "acceptable" against the dark luxury palette (`--accent:
    12 reviews, a nonexistent `/reviews` URL) despite instructions to omit
    them — the renderer discards both fields unconditionally.
 
-### 11.6 Current state: renderer built (branch), prod path decision open
+   **Verification run, 2026-07-30 ~10:40–10:55 UTC (Playwright walkthrough
+   against the deployed storefront + live widget-enabled agent, with the
+   merged renderer live in production): PASS on steps 2–6.** Re-run of the
+   2026-07-29 FAIL above; the §11.2 risk is now neutralised client-side
+   rather than resolved upstream.
 
-Decision after the §11.5 failure (2026-07-29): **revert the live agent to
-text-only, build issue 09's client-side renderer in parallel**, and
-re-enable widgets only if that renderer ships solid before the recording.
+   - **Deployment precondition confirmed first:** the production bundle
+     carries the renderer — `/_next/static/chunks/3f112757ff33e01b.js`
+     contains `@Widget:`, `data-widget-card`, `payload-received`,
+     `registerTemplate`, `registerRichMessageHandler` and the
+     `product_detail` type check.
+   - **Step 2 (multi-product recommendation): PASS.** Carousels rendered
+     with image, designer, name, price and a working link per card — e.g.
+     Satin Evening Pouch $760 / Atelier Lune + Patent Slingback Heel $860
+     / Arc Studio + Quilted Chain Shoulder Bag $1,120 / Arc Studio, and a
+     winter set (Camel Cashmere Wrap Coat $2,380, Chunky Mohair Pullover
+     $720, Suede Chelsea Ankle Boot $780). Every item was a real catalog
+     product, grounded in that session's own browsing. Agent-side quirk
+     worth knowing for the demo: a *"couple of accessories"* phrasing came
+     back as prose promising a selection plus a **single** details card —
+     a composition choice by the model, not a rendering fault; follow-up
+     asks ("what else would work with that?") produced carousels.
+   - **Step 3 (single named product): PASS.** Details cards rendered for
+     Sculpted Silver Cuff Watch $980 / Arc Studio and Noir
+     Double-Breasted Blazer $1,480 / Maison Cendre.
+   - **Step 4 (card click): PASS.** A carousel item click landed on
+     `/products/chunky-mohair-pullover`; a details-card click landed on
+     `/products/noir-double-breasted-blazer`. Both navigated **via the SPA
+     router** — an in-page probe variable survived the navigation (so no
+     full page load), the chat panel stayed open, and all prior messages
+     and rendered cards were still present afterwards.
+   - **Step 5 (zero-match query): PASS.** *"Do you have any neon orange
+     swimwear under $15?"* → plain-text reply stating the catalog has no
+     such item plus an offer to broaden. No widget, no invented product,
+     no error talk.
+   - **Step 6 (styling): PASS, no `custom-css` work needed.** Cards read as
+     part of the dark luxury palette — panel-dark card background,
+     uppercase muted designer line, `--accent` (#b79559) price, image
+     flush at the card top, carousel as a horizontal rail. None of the
+     Vue-green default noted in §9.4 appears anywhere on the cards.
+   - **No console errors or warnings** across both sessions (117 console
+     lines captured, zero error/warn).
+   - **Delivery mode: all 8 live widget turns arrived as structured
+     `outputs[].payload`** (console mark *"Rewrote widget payload to
+     rich-message template"*; response bodies carrying
+     `product_detail_carousel` / `base_product_detail`). The in-band
+     `{@Widget: …}` token mode **did not occur live in this run**. Since a
+     single-mode pass proves only one path, the token path was exercised
+     against the *deployed* bundle directly: injecting the verbatim
+     2026-07-29 live token into the widget's shadow-DOM message list made
+     the observer swap it for a two-card carousel (correct title,
+     designer, price, `uri`) and suppress the raw token (console mark
+     *"Rendered rich-response widget token(s) in chat"*). That is a
+     **synthetic injection, not an agent-emitted token** — the live-agent
+     token mode remains unobserved in production since the renderer
+     shipped, and would only matter if the model reverted to it mid-demo,
+     which this probe shows the deployed code handles.
+   - Evidence: `.scratch/signals-cx-agent-demo/widget-renderer-{carousel,
+     details,carousel-click,tokenmode-probe}-prod-20260730.png`.
 
-Status as of 2026-07-29 evening: the renderer is **built and verified
-against localhost** (`sandcastle/09-widget-token-renderer`, unmerged —
-see the §11.5 addendum), while the live console agent still runs the
-widget-enabled instructions (revert not yet performed). That opens a
-second path: instead of reverting, **deploy the renderer-equipped
-storefront to Vercel and re-run §11.5 against production** — if it
-passes, the widget moment ships in the demo and no console revert is
-needed. The revert procedure below remains the safety fallback either
-way; what must not persist is the current in-between state (live agent
-emits widgets, deployed storefront can't render them).
+### 11.6 Current state: renderer live in production (revert kept as fallback)
 
-The two instruction variants live side by side in the repo:
+Resolved 2026-07-30: **the renderer path won; no console revert.** The
+client-side renderer is merged to `main` (`eca007c`), deployed to the
+production storefront, and the §11.5 walkthrough re-run against
+production passed steps 2–6 (see the 2026-07-30 entry above). The live
+console agent keeps its widget-enabled instructions, and the widget
+moment ships in the demo.
 
-- `agent/instructions.console.txt` — the **text-only** version, matching
-  what the live console agent runs **after the revert** (until the revert
-  happens — or if it's skipped in favour of the renderer — the live agent
-  runs the widgets variant below, and Terraform's instruction reference
-  must track whichever is actually live).
-- `agent/instructions.console.widgets.txt` — the widget-enabled variant
-  verified agent-side in §11.5 (correct invocations, grounded data).
+The two instruction variants still live side by side in the repo:
+
+- `agent/instructions.console.widgets.txt` — the widget-enabled variant,
+  **what the live agent runs**, and what `terraform/agent.tf` references
+  (byte-identical to the live instructions as of 2026-07-29).
+- `agent/instructions.console.txt` — the **text-only** version, kept only
+  as the revert target below. If the revert is ever performed,
+  Terraform's instruction reference must be swapped to track it, since
+  that file has to keep mirroring whatever is actually live.
+
+**Fallback only:** the procedures below are now contingency, not plan.
+Reach for the revert if widgets regress before the recording (e.g. the
+model starts emitting a shape the renderer can't draw, or the deployed
+storefront has to be rolled back to a pre-`eca007c` build, which would
+put the live agent back in the state where it emits widgets nothing
+renders).
 
 **Revert procedure (console):**
 
@@ -936,7 +1001,7 @@ The two instruction variants live side by side in the repo:
 3. Publish a new deployment version and confirm a live chat recommendation
    comes back as clean prose with no `{@Widget:` text.
 
-**Re-enable procedure (only after issue 09's renderer is verified):**
+**Re-enable procedure (undo a revert — the renderer is already verified):**
 
 1. Re-attach both widget tools to the Root agent node.
 2. Paste `agent/instructions.console.widgets.txt` into the Root agent
