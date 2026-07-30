@@ -1,7 +1,10 @@
 # PR: 09 — Client-side rich-response widget renderer
 
-**Branch:** sandcastle/09-widget-token-renderer (unmerged by request)
-**Issue:** .scratch/signals-cx-agent-demo/issues/09-product-cards-stretch.md
+**Branch:** sandcastle/09-widget-token-renderer (merged to `main`, `eca007c`)
+**Issue:** GitHub issue #1 (migrated from
+.scratch/signals-cx-agent-demo/issues/09-product-cards-stretch.md)
+**Status:** live in production; §11.5 verified against the deployed site
+on 2026-07-30
 
 ## Summary
 
@@ -55,13 +58,26 @@ Zero agent/console changes: everything lives in the storefront wrapper.
   conversation intact; cards re-rendered from restored session history
   after a full reload. Screenshots committed alongside this file.
 
+## Production verification (2026-07-30)
+
+Runbook §11.5 steps 2–6 re-run against
+`https://signals-google-gecx-storefront.vercel.app` with the live
+widget-enabled agent: **PASS on all five.** Carousel and details cards
+render with image/designer/name/price; card clicks SPA-navigate to the
+right `/products/<slug>` with the conversation intact; a zero-match query
+degrades to plain text with no invented fields; card styling matches the
+dark luxury palette with no `custom-css` change needed; no console
+errors. Full log, including the agent-side "couple of accessories →
+single card" composition quirk, in runbook §11.5. Evidence:
+`widget-renderer-{carousel,details,carousel-click,tokenmode-probe}-prod-20260730.png`.
+
 ## Not covered / follow-ups
 
-- Production verification: deploy the renderer-equipped storefront, then
-  re-run runbook §11.5 against the deployed site (decision pending —
-  §11.6; console revert remains the fallback).
-- Token mode verified live only pre-renderer (deployed-site test) and via
-  unit tests locally; the model has since favoured structured payloads.
-  Both paths ship regardless.
-- Demo-script widget moment (issue 09 criterion) — only after the prod
-  decision.
+- All 8 live widget turns in the production run used the **structured
+  payload** mode; the in-band `{@Widget: …}` token mode has not been
+  emitted by the live agent since the renderer shipped. The token path
+  was confirmed working in the deployed bundle by injecting the verbatim
+  2026-07-29 token into the widget's shadow DOM (raw token suppressed,
+  cards drawn) — synthetic, not agent-emitted.
+- Structured-payload turns carry no commentary text of their own — that
+  is issue #3 (12 — agent commentary), not a defect here.
