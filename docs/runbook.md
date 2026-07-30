@@ -599,6 +599,17 @@ verification step, the `AGENT_SHARED_SECRET` value from §7):
    "Maison Cendre"`) and `recent_activity` lists the product views/cart-add
    just performed. An empty/degraded payload (`{"profile":{},...}`) means
    the seed didn't take — wait longer and re-check, or repeat step 2.
+
+   **Before blaming ingestion lag, check the navigation style.** Issue #7:
+   until the fix on `sandcastle/issue-7` is deployed, a product page reached
+   by a **full page load** (typing/pasting the URL, a hard refresh, or the
+   debug panel's Reset Chat, which reloads by design) never sends
+   `product_viewed` — the tracker isn't registered yet, the event is dropped
+   silently, and the console still logs success. A session browsed entirely
+   that way yields `{"profile":{}}` no matter how long you wait. Until the
+   fix is live, seed by starting on the home page or a collection and
+   **clicking** through to each product; after it is live, an empty profile
+   is once again a real ingestion signal.
 6. Record the seeded session id and verification result here so it's
    ready to hand during rehearsal/recording:
    - Seeded `domain_sessionid`: `<PLACEHOLDER: fill in during human prep>`
