@@ -7,6 +7,7 @@ import {
   trackCheckoutStartedSpec,
   trackCheckoutStepViewedSpec,
 } from "@/snowtype/snowplow";
+import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
 import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { SignalsDebugPanel } from "@/components/Demo/SignalsDebugPanel";
@@ -27,14 +28,29 @@ export function CheckoutPage() {
   const [step, setStep] = useState<CheckoutStep>("shipping");
 
   useEffect(() => {
-    const tracking = createCheckoutStepTrackingProps(step, lineItems, products);
+    let cancelled = false;
 
-    if (tracking.kind === "started") {
-      trackCheckoutStartedSpec(tracking.props);
-      return;
-    }
+    const trackWhenReady = async () => {
+      await waitForSnowplowTracker();
+      if (cancelled) {
+        return;
+      }
 
-    trackCheckoutStepViewedSpec(tracking.props);
+      const tracking = createCheckoutStepTrackingProps(step, lineItems, products);
+
+      if (tracking.kind === "started") {
+        trackCheckoutStartedSpec(tracking.props);
+        return;
+      }
+
+      trackCheckoutStepViewedSpec(tracking.props);
+    };
+
+    void trackWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
   }, [lineItems, step]);
 
   return (
