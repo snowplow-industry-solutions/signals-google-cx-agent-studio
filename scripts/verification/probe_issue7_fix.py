@@ -14,7 +14,6 @@ Variant A browses three products with full page loads (the #7 repro), variant B
 by SPA link clicks (the control that always worked).
 """
 
-import base64
 import json
 import os
 import sys
@@ -22,92 +21,17 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get("PROBE_BASE", "http://localhost:3000")
-OUT = os.environ.get(
-    "VERIFY_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
-)
-os.makedirs(OUT, exist_ok=True)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from harness.collector import Recorder  # noqa: E402
+from harness.config import out_dir, probe_base  # noqa: E402
+
+BASE = probe_base()
+OUT = out_dir()
 REPORT = f"{OUT}/probe-issue7-report.json"
 
 PATHS = ["/products/ivory-silk-column-dress",
          "/products/silk-twill-square-scarf",
          "/products/noir-double-breasted-blazer"]
-
-
-def event_name(ev):
-    """Event name for one collector payload entry."""
-    if ev.get("e") == "pv":
-        return "pv"
-    raw = ev.get("ue_pr")
-    if not raw:
-        encoded = ev.get("ue_px")
-        if not encoded:
-            return ev.get("e") or "unknown"
-        try:
-            raw = base64.urlsafe_b64decode(encoded + "==").decode("utf-8")
-        except Exception:
-            return "undecodable"
-    try:
-        schema = json.loads(raw)["data"]["schema"]
-    except Exception:
-        return "unparseable"
-    # iglu:com.snowplow_demo.fashion/product_viewed/jsonschema/1-0-0
-    return schema.split("/")[1] if "/" in schema else schema
-
-
-class Recorder:
-    def __init__(self, page):
-        self.console, self.events, self.responses, self.failed = [], [], [], []
-        self.sids = set()
-        page.on("console", self._console)
-        page.on("request", self._request)
-        page.on("response", self._response)
-        page.on("requestfailed", self._failed)
-
-    def _is_collector(self, url):
-        return "/com.snowplowanalytics.snowplow/" in url or "/tp2" in url
-
-    def _console(self, msg):
-        try:
-            text = msg.text[:300]
-        except Exception:
-            return
-        if "[Signals Demo]" in text:
-            self.console.append(text)
-
-    def _request(self, req):
-        if not self._is_collector(req.url):
-            return
-        try:
-            body = json.loads(req.post_data or "{}")
-        except Exception:
-            return
-        for ev in body.get("data", []):
-            if ev.get("sid"):
-                self.sids.add(ev["sid"])
-            self.events.append({"t": time.time(), "name": event_name(ev),
-                                "sid": ev.get("sid")})
-
-    def _response(self, resp):
-        if self._is_collector(resp.url):
-            self.responses.append({"t": time.time(), "status": resp.status})
-
-    def _failed(self, req):
-        if self._is_collector(req.url):
-            self.failed.append({"t": time.time(),
-                                "failure": (req.failure or "")[:80]})
-
-    def counts(self):
-        tally = {}
-        for ev in self.events:
-            tally[ev["name"]] = tally.get(ev["name"], 0) + 1
-        return tally
-
-    def forwarded_id(self):
-        for line in reversed(self.console):
-            if "Passed domain_sessionid" in line:
-                return line.split("sessionId: ")[-1].rstrip("}").strip()
-        return None
 
 
 def run_variant(browser, label, spa):
