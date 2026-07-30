@@ -3,6 +3,7 @@
 import { trackPageView } from "@snowplow/browser-tracker";
 import { useEffect, useRef } from "react";
 
+import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
 import {
   trackProductListViewedSpec,
   trackProductViewedSpec,
@@ -34,6 +35,33 @@ export function trackDemoProductView(product: Product) {
   } catch (error) {
     console.error("[Signals Demo] Product view tracking failed", error);
   }
+}
+
+// The browser tracker silently no-ops when no tracker is registered yet, and
+// child effects run before SnowplowProvider's, so a fresh page load would drop
+// this event without throwing.
+export function useTrackDemoProductView(product: Product) {
+  const trackedProductId = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const trackWhenReady = async () => {
+      await waitForSnowplowTracker();
+      if (cancelled || trackedProductId.current === product.id) {
+        return;
+      }
+
+      trackedProductId.current = product.id;
+      trackDemoProductView(product);
+    };
+
+    void trackWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product]);
 }
 
 interface ProductListTrackingArgs {
