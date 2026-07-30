@@ -4,6 +4,7 @@ import { getDomainSessionId } from "@snowplow/browser-tracker";
 import Script from "next/script";
 import { useCallback, useEffect, useRef } from "react";
 
+import { useWidgetLoadingIndicator } from "@/components/Widget/useWidgetLoadingIndicator";
 import { useWidgetTokenRenderer } from "@/components/Widget/useWidgetTokenRenderer";
 import type { CesMessengerElement } from "@/types/ces-messenger";
 import { logSignalsDemo } from "@/utils/demo";
@@ -39,6 +40,9 @@ export function CesMessengerWidget() {
   // as raw text) as product cards. Idles harmlessly while the agent runs
   // the text-only instruction variant.
   useWidgetTokenRenderer(elementRef);
+
+  // Issue 13: typing/"still working" indicator — upstream ships none.
+  useWidgetLoadingIndicator(elementRef);
 
   const handleLoaded = useCallback(() => {
     const element = elementRef.current;
