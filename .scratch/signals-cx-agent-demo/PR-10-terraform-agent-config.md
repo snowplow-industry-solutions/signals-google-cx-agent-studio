@@ -283,3 +283,21 @@ credentials (gcloud CLI token was stale; ADC worked throughout).
   updated in README since the config now matches the issue's exact
   shape), allowedOrigins localhost cleanup (rehearsal-day item; tfvars
   mirrors live including localhost so the plan stays clean until then).
+
+## QA verification record (2026-07-29/30, issue #2 checkpoint)
+
+- Jordan's first `terraform plan` matched the accepted count (0/9/0) but
+  surfaced real drift on `google_ces_agent.root`: the issue 09 widget work
+  (console, 2026-07-29 14:46Z, post-reconcile) had added widget constraints
+  to the live instruction and attached two widget tools. Applying as-was
+  would have reverted the prod-verified widget behaviour.
+- Reconciled config to live in `3a6eb23`: agent instruction repointed at
+  `agent/instructions.console.widgets.txt` (byte-identical to live; file
+  content identical to main's copy), both widget tools adopted as
+  `google_ces_tool` resources in `terraform/tools.tf` (parameter schemas
+  mirrored from live) and imported — 12 imports total.
+- Final plan, human-verified 2026-07-30: `Plan: 0 to add, 11 to change,
+  0 to destroy`; every diff is an accepted artifact class (deletion_policy
+  ×9, deployment app_version backfill == live, secret labels backfill,
+  secret-version zero-field update). Clean-plan criterion PASS.
+- exportApp snapshot + label decisions unchanged from the 2026-07-29 record.
