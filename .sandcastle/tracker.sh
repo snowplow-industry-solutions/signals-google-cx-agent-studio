@@ -1,119 +1,133 @@
 #!/usr/bin/env bash
-# Issue tracker over local markdown files (.scratch/signals-cx-agent-demo/issues/).
+# Issue tracker over GitHub Issues (repo inferred from the origin remote:
+# snowplow-industry-solutions/signals-google-cx-agent-studio).
 #
-# Statuses (Status: line in each issue file):
+# Statuses are labels on the open issue; a closed issue is "done":
 #   ready-for-agent      eligible for the agent pipeline
 #   in-progress          claimed by a running pipeline; not eligible, does not
 #                        satisfy blockers. If a host process dies mid-issue,
 #                        reset manually: tracker.sh set-status <id> ready-for-agent
 #   ready-for-human      human task; satisfies blockers only when done
 #   awaiting-human-test  agent finished; satisfies blockers UNLESS the issue
-#                        carries "Checkpoint: human-test-required"
+#                        carries the "checkpoint:human-test-required" label
 #   needs-human          parked by the pipeline; human must intervene
-#   done                 verified complete; always satisfies blockers
+#   done                 issue closed; always satisfies blockers
+#
+# An open issue with none of the status labels reads as "needs-triage" and is
+# never eligible. Blockers are "#N" references inside a "## Blocked by"
+# section of the issue body.
 #
 # Usage:
 #   tracker.sh list                    JSON array of issues eligible to work on
 #   tracker.sh list-all                JSON array of every issue with status
-#   tracker.sh view <id>               print the issue file
-#   tracker.sh set-status <id> <st>    rewrite the Status: line
-#   tracker.sh park <id>               set needs-human and append findings from stdin
+#   tracker.sh view <id>               print the issue (body + comments)
+#   tracker.sh set-status <id> <st>    swap the status label ("done" closes)
+#   tracker.sh park <id>               set needs-human and comment findings from stdin
 #
-# <id> is the filename without .md, e.g. 04-catalog-endpoint.
+# <id> is the GitHub issue number, e.g. 3.
+#
+# Auth: uses GH_TOKEN from the environment, falling back to the GH_TOKEN line
+# in .sandcastle/.env (gitignored), then to whatever `gh auth login` stored.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ISSUES_DIR="$REPO_ROOT/.scratch/signals-cx-agent-demo/issues"
+cd "$REPO_ROOT"
 
-status_of() { # <file>
-  grep -m1 '^Status:' "$1" | sed 's/^Status:[[:space:]]*//' | tr -d '[:space:]'
+export GH_PAGER=cat # a configured pager eats output in non-interactive runs
+
+if [ -z "${GH_TOKEN:-}" ] && [ -f "$SCRIPT_DIR/.env" ]; then
+  GH_TOKEN="$(grep -m1 '^GH_TOKEN=' "$SCRIPT_DIR/.env" | cut -d= -f2- || true)"
+  if [ -n "$GH_TOKEN" ]; then export GH_TOKEN; fi
+fi
+
+read -r -d '' JQ_LIB <<'JQ' || true
+def status_of:
+  if .state == "CLOSED" then "done"
+  else ([.labels[].name
+         | select(. == "ready-for-agent" or . == "in-progress"
+                  or . == "ready-for-human" or . == "awaiting-human-test"
+                  or . == "needs-human")]
+        | first) // "needs-triage"
+  end;
+def is_checkpoint: any(.labels[].name; . == "checkpoint:human-test-required");
+def blockers:
+  ((.body // "") | gsub("\r"; ""))
+  | (try (match("## Blocked by(.*?)(\n## |$)"; "m").captures[0].string) catch "")
+  | [scan("#(\\d+)") | .[0] | tonumber];
+def summary: {id: (.number | tostring), number, title, status: status_of,
+              checkpoint: is_checkpoint, url};
+JQ
+
+fetch_all() {
+  gh issue list --state all --limit 200 --json number,title,state,labels,body,url
 }
 
-is_checkpoint() { # <file> -> exit 0 if checkpoint
-  grep -q '^Checkpoint: human-test-required' "$1"
-}
-
-blockers_of() { # <file> -> one blocker filename per line
-  awk '/^## Blocked by/{flag=1; next} /^## /{flag=0} flag' "$1" \
-    | grep -o '`[^`]*\.md`' | tr -d '`' || true
-}
-
-# A blocker is satisfied when its issue is done, or awaiting-human-test on a
-# non-checkpoint issue (auto-merged work counts as available to build on).
-blocker_satisfied() { # <blocker filename>
-  local f="$ISSUES_DIR/$1"
-  [ -f "$f" ] || { echo "warn: blocker $1 not found" >&2; return 1; }
-  local st; st="$(status_of "$f")"
-  [ "$st" = "done" ] && return 0
-  if [ "$st" = "awaiting-human-test" ] && ! is_checkpoint "$f"; then return 0; fi
-  return 1
-}
-
-issue_json() { # <file> -> single JSON object
-  local f="$1"
-  local id title st cp
-  id="$(basename "$f" .md)"
-  title="$(grep -m1 '^# ' "$f" | sed 's/^# *//')"
-  st="$(status_of "$f")"
-  if is_checkpoint "$f"; then cp=true; else cp=false; fi
-  jq -n --arg id "$id" --arg title "$title" --arg status "$st" \
-        --arg file "${f#"$REPO_ROOT"/}" --argjson checkpoint "$cp" \
-        '{id: $id, title: $title, status: $status, file: $file, checkpoint: $checkpoint}'
-}
-
-cmd_list() { # eligible issues only
-  local out="[]"
-  for f in "$ISSUES_DIR"/*.md; do
-    [ "$(status_of "$f")" = "ready-for-agent" ] || continue
-    local ok=true
-    while IFS= read -r b; do
-      [ -n "$b" ] || continue
-      blocker_satisfied "$b" || { ok=false; break; }
-    done < <(blockers_of "$f")
-    $ok || continue
-    out="$(jq --argjson item "$(issue_json "$f")" '. + [$item]' <<<"$out")"
-  done
-  jq . <<<"$out"
+# A blocker is satisfied when its issue is done (closed), or awaiting-human-test
+# on a non-checkpoint issue (auto-merged work counts as available to build on).
+# An unresolvable blocker reference never satisfies.
+cmd_list() {
+  fetch_all | jq "$JQ_LIB"'
+    . as $all
+    | [ .[]
+        | select(status_of == "ready-for-agent")
+        | select([ blockers[] as $n
+                   | (first($all[] | select(.number == $n)) // null) as $b
+                   | if $b == null then false
+                     else ($b | status_of) == "done"
+                          or ((($b | status_of) == "awaiting-human-test")
+                              and (($b | is_checkpoint) | not))
+                     end
+                 ] | all)
+        | summary ]'
 }
 
 cmd_list_all() {
-  local out="[]"
-  for f in "$ISSUES_DIR"/*.md; do
-    out="$(jq --argjson item "$(issue_json "$f")" '. + [$item]' <<<"$out")"
-  done
-  jq . <<<"$out"
+  fetch_all | jq "$JQ_LIB"'[ .[] | summary ]'
 }
 
-issue_file() { # <id>
-  local f="$ISSUES_DIR/$1.md"
-  [ -f "$f" ] || { echo "error: no issue '$1' in $ISSUES_DIR" >&2; exit 1; }
-  echo "$f"
+cmd_view() { # body first, then the comment thread (--comments alone shows only comments)
+  gh issue view "$1"
+  echo ""
+  gh issue view "$1" --comments
 }
-
-cmd_view() { cat "$(issue_file "$1")"; }
 
 cmd_set_status() { # <id> <status>
-  local f; f="$(issue_file "$1")"
-  case "$2" in
+  local id="$1" st="$2"
+  case "$st" in
     ready-for-agent|in-progress|ready-for-human|awaiting-human-test|needs-human|done) ;;
-    *) echo "error: unknown status '$2'" >&2; exit 1 ;;
+    *) echo "error: unknown status '$st'" >&2; exit 1 ;;
   esac
-  sed -i.bak "s/^Status:.*/Status: $2/" "$f" && rm -f "$f.bak"
-  echo "set $1 -> $2"
+  if [ "$st" = "done" ]; then
+    gh issue close "$id" --reason completed >/dev/null
+    echo "set #$id -> done (closed)"
+    return
+  fi
+  local state
+  state="$(gh issue view "$id" --json state -q .state)"
+  if [ "$state" = "CLOSED" ]; then gh issue reopen "$id" >/dev/null; fi
+  local current remove=""
+  current="$(gh issue view "$id" --json labels -q '[.labels[].name] | join(",")')"
+  local s
+  for s in ready-for-agent in-progress ready-for-human awaiting-human-test needs-human; do
+    [ "$s" = "$st" ] && continue
+    case ",$current," in *,"$s",*) remove="$remove --remove-label $s" ;; esac
+  done
+  # shellcheck disable=SC2086  # $remove holds whole flags; labels have no spaces
+  gh issue edit "$id" --add-label "$st" $remove >/dev/null
+  echo "set #$id -> $st"
 }
 
 cmd_park() { # <id>, findings on stdin
-  local f; f="$(issue_file "$1")"
-  cmd_set_status "$1" needs-human >/dev/null
+  local id="$1"
   {
-    echo ""
     echo "## Parked by pipeline ($(date '+%Y-%m-%d %H:%M'))"
     echo ""
     cat -
-  } >>"$f"
-  echo "parked $1"
+  } | gh issue comment "$id" --body-file - >/dev/null
+  cmd_set_status "$id" needs-human >/dev/null
+  echo "parked #$id"
 }
 
 case "${1:-}" in
@@ -122,5 +136,5 @@ case "${1:-}" in
   view)       cmd_view "${2:?usage: tracker.sh view <id>}" ;;
   set-status) cmd_set_status "${2:?id}" "${3:?status}" ;;
   park)       cmd_park "${2:?id}" ;;
-  *) grep '^#' "$0" | head -20; exit 1 ;;
+  *) grep '^#' "$0" | head -28; exit 1 ;;
 esac

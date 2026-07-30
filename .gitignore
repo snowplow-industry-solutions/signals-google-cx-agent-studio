@@ -6,11 +6,14 @@ node_modules/
 .claude/worktrees/
 .claude/settings.local.json
 
-# Terraform (terraform/) -- never commit state or real variable values
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.*
-terraform/*.tfvars
-!terraform/terraform.tfvars.example
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# Terraform local state — .tf config files are tracked; tfvars hold live
+# resource IDs and stay local
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
 terraform/crash.log
 terraform/crash.*.log

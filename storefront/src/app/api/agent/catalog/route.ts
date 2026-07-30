@@ -15,6 +15,7 @@ interface CatalogResult {
   color: ColorFamily;
   price: number;
   url: string;
+  image: string;
 }
 
 function toCatalogResult(product: Product): CatalogResult {
@@ -26,6 +27,7 @@ function toCatalogResult(product: Product): CatalogResult {
     color: product.colorFamily,
     price: product.price,
     url: `/products/${product.slug}`,
+    image: product.image,
   };
 }
 

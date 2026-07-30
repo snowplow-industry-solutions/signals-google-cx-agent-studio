@@ -546,7 +546,408 @@ via `custom-css` from there.
 7. Record the result (pass/fail + timestamp) here:
    `<PLACEHOLDER: widget end-to-end verification run log>`.
 
-## 10. Terraform: codify, import, and re-apply
+## 10. Demo script, seeded fallback session, and rehearsal
+
+Covers `.scratch/signals-cx-agent-demo/issues/08-demo-polish-and-recording.md`:
+turns the working, human-verified integration (§7–9) into the recorded
+webinar deliverable. The demo script and the fallback-session/rehearsal
+procedures below are prepared in the repo; **rehearsing, recording,
+delivering, and the console allowed-origins cleanup in §10.3 are
+human-triggered** — outside this sandbox.
+
+### 10.1 Demo script
+
+`docs/demo-script.md` — scene-by-scene choreography, talking points, and the
+"prove it's real-time" beat. Written against the real product catalog
+(`storefront/src/data/products.ts`) so the browsing described there is
+exactly reproducible against the live deployed site.
+
+### 10.2 Seeded fallback session
+
+Purpose: a known-good `domain_sessionid` with rich, verified attributes,
+ready to substitute live during the recording if the pipeline hasn't
+propagated attributes in time (Signals ingestion lag, a dropped event, a
+flaky trial-org call) — so a hiccup doesn't ruin the take.
+
+**Preparation** (human-runnable; requires the deployed site and, for the
+verification step, the `AGENT_SHARED_SECRET` value from §7):
+
+1. Open the deployed storefront in a fresh/incognito browser window (no
+   prior `_sp_id` cookie), default demo mode so the debug panel is visible.
+2. Run the exact browse sequence from `docs/demo-script.md` Scene 1: view
+   the Noir Double-Breasted Blazer, Burgundy Silk Evening Gown, and Camel
+   Cashmere Wrap Coat product pages, then add the Camel Cashmere Wrap Coat
+   to cart. Using the same sequence as the script means the seeded
+   session's attributes match what the script narrates even if it's
+   substituted mid-take.
+3. Wait ~15 seconds for the pipeline to propagate events into the Profile
+   Store, then confirm the debug panel shows a non-empty "Favorite
+   designer" (Maison Cendre) and "Favorite category" before continuing.
+4. Capture the session's `domain_sessionid` from devtools (Application →
+   Cookies → `_sp_id.<hash>`, or the console one-liner):
+   ```js
+   document.cookie.split("; ").find((c) => c.startsWith("_sp_id.")).split("=")[1].split(".")[5]
+   ```
+5. Verify retrievability — confirm the agent-facing context endpoint
+   actually returns that session's attributes, the same contract the live
+   agent calls:
+   ```
+   curl -s -H "x-agent-api-key: $AGENT_SHARED_SECRET" \
+     "https://<deployed-url>/api/agent/context?session_id=<captured-domain_sessionid>"
+   ```
+   Confirm the response's `profile` is non-empty (e.g. `favorite_designer:
+   "Maison Cendre"`) and `recent_activity` lists the product views/cart-add
+   just performed. An empty/degraded payload (`{"profile":{},...}`) means
+   the seed didn't take — wait longer and re-check, or repeat step 2.
+6. Record the seeded session id and verification result here so it's
+   ready to hand during rehearsal/recording:
+   - Seeded `domain_sessionid`: `<PLACEHOLDER: fill in during human prep>`
+   - Verification result (pass/fail + timestamp):
+     `<PLACEHOLDER: fill in during human prep>`
+
+**Live substitution procedure** (if the pipeline hiccups during rehearsal
+or recording): the widget always reads the *real* browser session id via
+`getDomainSessionId()` (`storefront/src/components/Widget/CesMessengerWidget.tsx`),
+so forcing the seeded id means overriding what's passed to the agent, the
+same `setQueryParameters` mechanism §9.1's widget-pin check already
+exercises:
+
+```js
+document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: "<seeded-domain_sessionid>" });
+```
+
+Run this in devtools before opening (or continuing) the chat, then proceed
+with the scripted conversation as normal — the agent's tool calls now
+resolve against the seeded session's known-good attributes instead of the
+live one.
+
+### 10.3 Rehearsal checklist
+
+Run through before recording. All console/live steps are human-only.
+
+- [ ] **Remove the temporary `http://localhost:3000` entry** from the
+      chat channel's allowed-origins list in the CX Agent Studio console
+      (§9.2) — added for local testing only, must not ship in the
+      recording or the public webinar.
+- [ ] `npm run verify:deploy -- https://<deployed-url>` passes all checks
+      (§7 step 4 / §9.3 step 3) against the current deployed URL.
+- [ ] Seeded fallback session (§10.2) prepared and verified retrievable
+      today, not from a stale prior run — Signals trial-org state and
+      agentic-context windows (max 3600s) can go stale between sessions.
+- [ ] Fresh/incognito browser window ready, no leftover `_sp_id` cookie
+      from earlier testing.
+- [ ] Debug panel visible (default demo mode) and showing live values as
+      you browse the Scene 1 sequence from `docs/demo-script.md`.
+- [ ] Chat widget renders correctly themed, no console errors, "Start
+      conversation" succeeds (no Recaptcha-token error — §9.2's toggle).
+- [ ] "Reset Chat" control (`SignalsDebugPanel`) confirmed to actually
+      start a clean conversation, so retakes don't carry over prior chat
+      history.
+- [ ] Do at least one full run-through of `docs/demo-script.md` end to end
+      with no manual intervention required (no swapping to the fallback
+      session, no restarting the widget) before treating the setup as
+      recording-ready.
+
+### 10.4 Recording and delivery
+
+Human-only, after rehearsal passes: record the take following
+`docs/demo-script.md`, then deliver per marketing's request. Target date:
+**Thursday 7 August 2026** (`docs/design.md`, PRD).
+
+## 11. Rich response widgets (product carousel / product details)
+
+Covers `.scratch/signals-cx-agent-demo/issues/11-rich-response-widgets.md`:
+polish so the agent's recommendations render as visual product widgets in
+chat instead of plain text. The widget-tool Parameters schemas
+(`agent/tools/product-carousel.widget.json`,
+`agent/tools/product-details.widget.json`), the `image` field added to the
+`searchCatalog` tool, and the agent-instructions updates are prepared in
+the repo; **creating the two widget tools in the console, attaching them
+to the Root agent node, and all live rendering verification below are
+human-triggered** — outside this sandbox. Requires the agent from §8 and
+the widget embed from §9.
+
+### 11.1 Confirmed against official docs (not guessed)
+
+- **The mechanism exists and is called "rich response widgets."** CX Agent
+  Studio's dedicated docs page
+  ([docs.cloud.google.com](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps/rich-response-widget))
+  confirms: "You can use rich response widgets to create rich, interactive
+  UI elements for your user interface," built on **widget tools**,
+  referenced in agent instructions with `{@Widget: widget_name}` syntax
+  (parallel to this agent's existing `{@TOOL: ...}` references). The page
+  notes: "The current implementation of rich response widgets is built on
+  widget tools. A future implementation will be stand alone."
+- **Widget Type names, confirmed from the widget tools docs page**
+  ([docs.cloud.google.com](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/widget)):
+  `PRODUCT_CAROUSEL` ("Displays a scrollable carousel of products"),
+  `PRODUCT_DETAILS` ("Shows detailed information about a single product"),
+  plus `QUICK_ACTIONS`, `PRODUCT_COMPARISON`, `ORDER_SUMMARY` (not used by
+  this issue). This is exactly the carousel / product-details split the
+  issue asks for.
+- **The Parameters schema is author-defined ONLY for the `CUSTOM` widget
+  type — typed widgets carry a fixed Google contract.** (Corrected
+  2026-07-29 against the live console; the earlier reading of the docs'
+  generic "Parameters: The input schema for the widget data..." wording
+  as author-defined-for-all-types was wrong.) Creating a
+  `PRODUCT_CAROUSEL` or `PRODUCT_DETAILS` tool from the console template
+  auto-fills a Google-defined schema and the schema editor is
+  **read-only** ("Cannot edit in read-only editor"); only a `CUSTOM`
+  widget tool offers a writable schema ("You can write your own schema
+  here."). The fixed contracts are captured verbatim (via the CES REST
+  API `tools` endpoint) in `agent/tools/product-carousel.widget.json`
+  and `product-details.widget.json`: the carousel takes a
+  `productDetails[]` array (Google's property name, despite belonging to
+  the *carousel*) of `{title, subtitle, price (string), productId, uri,
+  imageUris[]}`; the details widget takes the same fields flat, plus
+  optional `rating`/`review` (always omitted — the catalog has neither).
+  The agent instructions map `searchCatalog`'s `CatalogResult` fields
+  onto them: `title`←`name`, `subtitle`←`designer`, `price`←`price` as a
+  dollar string, `productId`←the `url` slug, `uri`←storefront base URL +
+  `url`, `imageUris`←`[image]`. A fixed contract is also the good case
+  for rendering: it's the shape a widget-aware messenger build knows how
+  to draw natively.
+
+### 11.2 Risk: does the pinned `ces-messenger` render these? (RESOLVED 2026-07-29: NO — see §11.5 log)
+
+Live verification confirmed the risk: `ces-messenger` prints widget
+invocations as literal text (the token arrives in-band in the response
+text; rendering is a hosted-`chat-messenger` client-side feature). The
+original risk analysis below is kept as written — it called the mechanism
+correctly — and §11.5's log carries the evidence and the demo-impact
+warning. Issue 09's custom-render fallback is the path forward.
+
+This was the reason this issue kept `Checkpoint: human-test-required` and
+the acceptance criteria below stayed unchecked rather than assumed:
+
+- Neither rich-response-widget docs page states which web-widget component
+  generation renders the output — both just say "your client... presents
+  the widget," matching the generic "web widget deployment option."
+- Issue 07 (`docs/runbook.md` §9.1) already pinned this repo to the
+  **open-source `ces-messenger`** component specifically because it's the
+  only one documenting `setQueryParameters()`, the mechanism the entire
+  "browse → chat already knows" demo depends on. The **hosted
+  `chat-messenger`** build (Google's console-generated embed snippet,
+  loaded from a different gstatic path) does *not* document that method.
+- A Google developer-forum thread cited in that same section
+  ([discuss.google.dev](https://discuss.google.dev/t/hosted-versus-open-source-ces-messenger-web-component/334696))
+  states, in a Feb–Mar 2026 exchange with a Google representative: the
+  hosted build ships "a few other Rich Message Templates (fex. the Product
+  Carousel) that are not available on Github" (i.e. not in the open-source
+  `ces-messenger` repo), and "the hosted CES Messenger script and the
+  open-source GitHub component are not necessarily kept fully in sync." As
+  of that thread there was no confirmation that these built-in widgets had
+  reached, or would reach, the open-source library. The open-source
+  repo's own rich-message docs
+  (`ces-messenger` GitHub, `doc/message_templates.md`) describe a
+  Handlebars-based custom-template system with generic built-ins (buttons,
+  lists, forms) and do not mention `PRODUCT_CAROUSEL`, `PRODUCT_DETAILS`,
+  "widget tools," or CX Agent Studio's rich-response-widget feature at
+  all — suggesting these are two different rendering mechanisms that may
+  not be the same feature, and the forum's "Product Carousel" gap may
+  apply directly to what this issue needs.
+- **Net finding**: the specific rich message template named "Product
+  Carousel" is documented as hosted-`chat-messenger`-only as of that
+  thread (five months stale relative to this build; no newer public source
+  confirming or denying parity was found). This repo cannot switch to
+  `chat-messenger` without losing `setQueryParameters` (breaking the
+  session-context mechanism issues 06/07 depend on), and this sandbox has
+  no browser/console access to test rendering directly. **This is a
+  genuine, undecided compatibility question, not a guessed field name** —
+  it can only be resolved by the human running §11.5 below against the
+  live deployment.
+- If §11.5 shows the widgets don't render on `ces-messenger` (raw JSON,
+  plain text, or a console/widget error instead of a card), treat this
+  issue as **not shippable as specified** for the carousel/details visual
+  criteria below, and feed the finding back into
+  `.scratch/signals-cx-agent-demo/issues/09-product-cards-stretch.md`
+  (already kept open pending this finding, not closed `wontfix`) — 09's
+  `registerClientSideFunction` custom-render path becomes the fallback.
+
+### 11.3 Create the two widget tools (console)
+
+1. In CX Agent Studio, on the agent from §8, open the rich response
+   widgets builder (rich response widgets icon in the agent builder, per
+   §11.1's citation).
+2. Create a widget tool named `productCarousel` from the
+   `PRODUCT_CAROUSEL` template. **Do not attempt to edit the Parameters
+   schema** — for typed widgets the console auto-fills Google's fixed
+   contract and the editor is read-only (§11.1). Verify it matches the
+   captured copy in `agent/tools/product-carousel.widget.json`; a
+   mismatch means Google changed the contract — re-capture the schema
+   (CES REST `GET .../apps/<app_id>/tools`) and update the repo file and
+   the instruction mapping instead of fighting the console.
+3. Create a second widget tool named `productDetails` from the
+   `PRODUCT_DETAILS` template — same deal: accept the fixed schema,
+   verify against `agent/tools/product-details.widget.json`.
+4. Attach both to the Root agent node (same **+** affordance used for the
+   OpenAPI tools in §8.3) — watch for the same detachment gotcha noted in
+   Troubleshooting for the OpenAPI tools if you re-import anything later.
+5. Re-paste `agent/instructions.console.txt` into the Root agent node's
+   instructions field (it now includes constraint 5, Rich Response
+   Widgets, and the updated taskflow step referencing
+   `{@Widget: productCarousel}` / `{@Widget: productDetails}`) — use the
+   editor's `@` picker to (re-)resolve the `{@Widget: ...}` references if
+   the console flags them as unresolved, same as the `{@TOOL: ...}`
+   guidance in §8.2.
+
+### 11.4 Styling against the luxury theme
+
+No documented CSS custom properties or shadow-DOM parts specific to rich
+response widgets were found in any source checked (mirroring the same gap
+noted for the base widget chrome in §9.4) — the `custom-css` attribute
+already set in `CesMessengerWidget.tsx` is the only confirmed hook. This is
+a **verify-at-build item for the human**: once §11.3 is done and a widget
+actually renders (contingent on §11.2), inspect it in the live browser's
+shadow DOM and extend `WIDGET_CUSTOM_CSS` in
+`storefront/src/components/Widget/CesMessengerWidget.tsx` if any
+widget-specific selectors are found; otherwise the carousel/details card
+renders with whatever default styling `ces-messenger` ships, which may or
+may not read as "acceptable" against the dark luxury palette (`--accent:
+#b79559` etc.) without further work.
+
+### 11.5 Verification walkthrough
+
+1. Confirm §11.3's two widget tools show up correctly in a simulator turn
+   before testing live: ask for "a couple of accessories to go with an
+   evening look" and confirm the trace shows a `productCarousel` widget
+   call with real catalog data (not model-invented fields).
+2. On the deployed site (real browser, real widget): browse a category
+   with 2+ products, open chat, and ask for recommendations from that
+   category. **Expected:** the reply renders as an actual visual carousel
+   card (image, name, designer, price, clickable link), not raw JSON or
+   plain text. **If it renders as plain text/JSON instead**: this is the
+   §11.2 risk materializing — record it as a finding in this section and
+   in issue 09, rather than retrying.
+3. Ask about one specific product by name. **Expected:** the reply renders
+   as a single product-details card with a working link back into the
+   storefront (clicking it lands on that product's page).
+4. Click the link in a rendered carousel item. **Expected:** navigates to
+   the correct `/products/<slug>` page on the deployed storefront (proves
+   the `uri` = base URL + `searchCatalog`'s `url` construction is
+   correct end-to-end).
+5. Ask a question that would normally trigger a recommendation, but for a
+   filter combination with zero catalog matches (e.g. an out-of-stock
+   combination). **Expected:** the agent falls back to a plain-text
+   response (or broadens the search per the existing grounding
+   instructions) — no widget rendered with invented data, no error talk.
+6. Visually compare the rendered widget(s) against the storefront's dark
+   luxury palette. Note any clashing default styling (e.g. the same
+   Vue-green default noted for buttons in §9.4) for a `custom-css` fix.
+7. Record the result (pass/fail + timestamp, and the §11.2 finding either
+   way) here:
+
+   **Verification run, 2026-07-29 ~15:10 UTC (Playwright walkthrough
+   against the deployed storefront + live agent, new deployment version
+   `a8c48c30…` published minutes earlier): FAIL on rendering — the §11.2
+   risk is CONFIRMED.**
+
+   - **Agent side: fully correct.** Both queries behaved exactly as
+     instructed. Accessories query → grounded prose plus a
+     `productCarousel` invocation whose `productDetails[]` payload
+     carried three real catalog items *from the live session's own
+     browsing* (Silk Twill Square Scarf $340 / Atelier Lune,
+     Hammered Gold Cuff Bracelet $680 / Arc Studio, Felt Cloche Hat
+     $410 / Arc Studio), every field matching the fixed schema —
+     `title`, `subtitle`, dollar-string `price`, slug `productId`,
+     absolute `uri`, single-element `imageUris`. Single-product query →
+     equivalent correct `productDetails` invocation. (One benign quirk:
+     the model appends a `summary:` argument that isn't in the schema.)
+   - **Rendering: the pinned open-source `ces-messenger` printed the
+     entire `{@Widget: productCarousel(payload: …)}` token as literal
+     text inside the chat bubble.** No carousel, no card, no console
+     error — and visibly *worse* than plain text for a shopper.
+   - **Wire-format root cause (decisive for the fallback):** the
+     `runSession` response delivers the widget invocation **in-band in
+     `outputs[].text`** — there is no structured widget/richContent
+     field in the payload at all. So the token→card transformation is
+     purely a client-side text-parsing feature of the hosted
+     `chat-messenger`, absent from the open-source component. This also
+     means issue 09's custom-render fallback is *feasible without any
+     agent-side change*: parse the `{@Widget: name(payload: {…})}`
+     token out of the message text, render a custom card, suppress the
+     raw string (note the payload uses unquoted JS-object keys, not
+     strict JSON).
+   - Steps 4–6 (link click-through, zero-result degradation, styling)
+     were not reachable — nothing rendered to click or style.
+   - **Demo impact: the live agent now emits raw widget tokens in chat.**
+     Until either issue 09's client-side renderer exists or the console
+     instructions are reverted to the pre-widget text-only version (and
+     the widget tools detached + a new version published), live
+     conversations look broken. Do not record the demo in this state.
+
+   **Addendum, 2026-07-29 ~15:45 UTC (issue 09 renderer, local dev):**
+   further live turns showed the wire format is **bimodal** — the same
+   agent/version sometimes ships the widget as (1) the in-band text token
+   above, and sometimes as (2) a **structured `outputs[].payload`** with a
+   `type` discriminator (`product_detail_carousel` for the carousel,
+   `base_product_detail` for the details widget) and **no text output at
+   all** — which stock `ces-messenger` drops as a completely **blank
+   reply** (arguably worse than the raw token). Issue 09's renderer
+   (`sandcastle/09-widget-token-renderer`, storefront-side) handles both:
+   mode 1 via a shadow-DOM observer that swaps complete tokens for cards,
+   mode 2 via the component's own extension surface (`payload-received`
+   hook rewriting the payload onto a registered card template, plus
+   `registerRichMessageHandler` for clicks). Verified live against
+   localhost with the widget-enabled agent: carousel and details cards
+   render with image/designer/title/price, card clicks route through the
+   SPA router (conversation preserved — a full page load would remount
+   the widget), and cards re-render from restored session history after a
+   reload. One more model quirk for the record: a structured details
+   payload arrived with **invented** `rating`/`review` values (4.5 stars,
+   12 reviews, a nonexistent `/reviews` URL) despite instructions to omit
+   them — the renderer discards both fields unconditionally.
+
+### 11.6 Current state: renderer built (branch), prod path decision open
+
+Decision after the §11.5 failure (2026-07-29): **revert the live agent to
+text-only, build issue 09's client-side renderer in parallel**, and
+re-enable widgets only if that renderer ships solid before the recording.
+
+Status as of 2026-07-29 evening: the renderer is **built and verified
+against localhost** (`sandcastle/09-widget-token-renderer`, unmerged —
+see the §11.5 addendum), while the live console agent still runs the
+widget-enabled instructions (revert not yet performed). That opens a
+second path: instead of reverting, **deploy the renderer-equipped
+storefront to Vercel and re-run §11.5 against production** — if it
+passes, the widget moment ships in the demo and no console revert is
+needed. The revert procedure below remains the safety fallback either
+way; what must not persist is the current in-between state (live agent
+emits widgets, deployed storefront can't render them).
+
+The two instruction variants live side by side in the repo:
+
+- `agent/instructions.console.txt` — the **text-only** version, matching
+  what the live console agent runs **after the revert** (until the revert
+  happens — or if it's skipped in favour of the renderer — the live agent
+  runs the widgets variant below, and Terraform's instruction reference
+  must track whichever is actually live).
+- `agent/instructions.console.widgets.txt` — the widget-enabled variant
+  verified agent-side in §11.5 (correct invocations, grounded data).
+
+**Revert procedure (console):**
+
+1. Root agent node → Instructions → paste the full contents of
+   `agent/instructions.console.txt` (re-resolve any flagged `{@TOOL: …}`
+   references with the `@` picker, per §8.2).
+2. Detach `productCarousel` and `productDetails` from the Root agent node
+   (leave the widget *tools* in place in the app — only the attachment
+   goes; re-enabling is then a re-attach, not a re-create).
+3. Publish a new deployment version and confirm a live chat recommendation
+   comes back as clean prose with no `{@Widget:` text.
+
+**Re-enable procedure (only after issue 09's renderer is verified):**
+
+1. Re-attach both widget tools to the Root agent node.
+2. Paste `agent/instructions.console.widgets.txt` into the Root agent
+   node's instructions (re-resolve `{@TOOL: …}`/`{@Widget: …}` refs).
+3. Publish a new version and re-run the §11.5 walkthrough end-to-end —
+   this time expecting the storefront's own renderer (not
+   `ces-messenger`) to draw the cards.
+4. Swap the contents of `agent/instructions.console.txt` and update
+   Terraform state/plan accordingly (the file must keep mirroring live).
+
+## 12. Terraform: codify, import, and re-apply
 
 Covers `.scratch/signals-cx-agent-demo/issues/10-terraform-agent-config.md`:
 backs the console-built app/agent/toolsets/deployment from §8–9 with
@@ -560,7 +961,7 @@ import, `terraform plan`, the `apps.exportApp` snapshot call, and applying
 labels to the live project — is human-triggered**, outside this sandbox.
 Requires the console-built resources from §8 and §9 to already exist.
 
-### 10.1 Ownership boundary
+### 12.1 Ownership boundary
 
 See `terraform/README.md` for the full breakdown. Summary: Terraform owns
 the app, root agent (instructions from file), the app/root-agent
@@ -573,9 +974,9 @@ Enterprise for CX enablement/licensing/allowlisting, and
 a `labels` field, so the baseline tagging policy
 (`system=signals-gecx-demo`, `snowplow-owner=cc017`, `environment=dev`)
 reaches only the Secret Manager secret Terraform introduces; project-level
-labels are applied out-of-band (10.6).
+labels are applied out-of-band (12.6).
 
-### 10.2 Finding the real resource IDs
+### 12.2 Finding the real resource IDs
 
 Every ID below is a required `terraform/variables.tf` input with no
 default — fill in `terraform/terraform.tfvars` (gitignored; copy from
@@ -584,7 +985,7 @@ default — fill in `terraform/terraform.tfvars` (gitignored; copy from
 | Variable | Where to find it |
 |---|---|
 | `project_id` | Snowplow-managed sandbox GCP project ID (IAM & Admin → Settings) |
-| `location` | The app's resource-name location segment — console URL when viewing the app, or the `name` field in an `apps.exportApp` response (10.5) |
+| `location` | The app's resource-name location segment — console URL when viewing the app, or the `name` field in an `apps.exportApp` response (12.5) |
 | `app_id` | Console → app settings, or the `name` field's `apps/{app_id}` segment |
 | `agent_id` | Console → Root Agent node settings, or the agent's resource name |
 | `context_toolset_id` | Console → the `getUserContext` toolset's settings |
@@ -603,9 +1004,9 @@ and its `/agents`, `/toolsets`, `/versions`, `/deployments` children — the
 stale but ADC still worked.
 
 `terraform/secrets.tf`'s `agent_shared_secret_id`/`agent_shared_secret_value`
-are a separate decision — see 10.4 before importing anything toolset-related.
+are a separate decision — see 12.4 before importing anything toolset-related.
 
-### 10.3 Import sequence
+### 12.3 Import sequence
 
 From `terraform/`, with `terraform.tfvars` filled in and
 `terraform init` run once:
@@ -699,7 +1100,7 @@ the same day, the QA plan surfaced the issue 09 widget work (console-built
 `productDetails`/`productCarousel` tools, 14:46Z) as drift; both were
 imported as `google_ces_tool.*` — 12 imports total.
 
-### 10.4 Confirm a clean plan
+### 12.4 Confirm a clean plan
 
 ```
 TF_VAR_agent_shared_secret_value=<the live AGENT_SHARED_SECRET value> \
@@ -784,9 +1185,9 @@ tools' secret references) into `environment.json` — an export-format
 artifact, not drift (`terraform plan` showed no schema diff). Checked the
 extracted files for the shared-secret value before committing: not present.
 
-### 10.6 Tagging: apply at the project level
+### 12.6 Tagging: apply at the project level
 
-`google_ces_app`/`google_ces_agent` have no `labels` field (10.1), so the
+`google_ces_app`/`google_ces_agent` have no `labels` field (12.1), so the
 baseline policy would have to be applied directly to the project, not
 through Terraform:
 
@@ -801,20 +1202,20 @@ that already carries org-managed labels (`team=engineering`,
 `cost-allocation=r-d`, `service_type=engineering_sandbox`, …) and hosts
 other teams' workloads — stamping this demo's `system`/`snowplow-owner`
 labels on the whole project would mislabel everyone's resources. This
-section's assumption of a dedicated project only holds after a §10.7
+section's assumption of a dedicated project only holds after a §12.7
 re-create into one. As deployed, the baseline label set reaches the one
 labellable resource the config manages — the Secret Manager secret, whose
 live labels were confirmed compliant (`system=signals-gecx-demo`,
 `snowplow-owner=cc017`, `environment=dev`) — and project-level labelling
 is deliberately skipped.
 
-### 10.7 Re-apply after trial expiry / re-publish a change
+### 12.7 Re-apply after trial expiry / re-publish a change
 
 1. Re-run §1–9 against the fresh trial org/project to get new console-built
    resources (Terraform doesn't create these greenfield — see
    `terraform/README.md`; it manages what already exists).
 2. Update `terraform.tfvars` with the new project/app/agent/toolset/version/
-   deployment IDs, re-run 10.3–10.4 against the new project.
+   deployment IDs, re-run 12.3–12.4 against the new project.
 3. **For a content-only change** (e.g. edited `agent/instructions.md`) on an
    already-imported project: don't edit `google_ces_app_version.current` in
    place — app versions are immutable. Add a new
@@ -822,7 +1223,6 @@ is deliberately skipped.
    `google_ces_deployment.web_widget.app_version` at it, `apply`, then
    remove the old version resource once the deployment's cutover is
    confirmed in the console.
-
 ## Troubleshooting
 
 - **First `terraform plan` after §10.3 import wants to destroy and
@@ -965,17 +1365,42 @@ is deliberately skipped.
   shadow styles default `--host-primary-color` to `#42b883`; the embed sets
   that variable to the site's `--accent` on the host element, and the
   `custom-css` attribute is the hook for any further shadow-DOM styling.
+- **Agent recommends products but the reply is plain text / raw JSON
+  instead of a carousel or product card** — this is the §11.2 risk: the
+  pinned `ces-messenger` component may not implement the specific rich
+  message templates CX Agent Studio's widget-tool feature relies on (a
+  Google forum thread documents this gap for the hosted vs. open-source
+  builds, unresolved as of that thread). Confirm the widget tools are
+  actually attached to the Root agent node (§11.3 step 4, same detachment
+  gotcha as the OpenAPI tools) before concluding it's this risk rather than
+  a wiring mistake. If confirmed, record the finding in
+  `docs/runbook.md` §11.2/§11.5 and in issue
+  `09-product-cards-stretch.md`, and fall back to that issue's
+  `registerClientSideFunction` approach.
+- **Widget tool call shows in the trace but the console flags `{@Widget:
+  ...}` as unresolved in the instructions editor** — same fix as the
+  `{@TOOL: ...}` case (§8.2): delete the reference and re-insert it with
+  the editor's `@` picker rather than hand-typing.
+- **Carousel/details card renders but the product link 404s or points at
+  the wrong product** — check the widget's `uri` field was built as the
+  deployed base URL literally prefixed to `searchCatalog`'s `url` field
+  (§11.1); a common mistake is the model using the site-relative `url`
+  value alone, which won't navigate correctly from inside the chat widget.
 - **`terraform plan` shows a diff on the toolsets' `api_authentication`
   after import** — expected if the fresh-secret path in `terraform/README.md`
   ("Secret reconciliation") was chosen instead of importing the console's
   hidden secret; clears after applying and re-pointing both tools' console
   auth config at the new Secret Manager secret version.
-- **`terraform apply` on `google_ces_app`/`google_ces_agent` 400s with a
-  model-availability error** — check provider issue
+- **`terraform apply` on `google_ces_app` 400s with a model-availability
+  error** — check provider issue
   [#26231](https://github.com/hashicorp/terraform-provider-google/issues/26231)
   (open as of 2026-07-28): `gemini-3-flash` + `temperature` in the `us`
-  location. This config only sets `model_settings` on `google_ces_agent`,
-  not `google_ces_app`, but the underlying restriction may still apply.
+  location. After the 2026-07-29 reconciliation this config sets
+  `model_settings` on `google_ces_app` (the console stores it there; the
+  agent inherits) — the exact shape the issue reports. Import and `plan`
+  are unaffected; the risk is confined to an `apply` that has to send
+  those fields (see `terraform/README.md` "Known risk to check before
+  relying on apply").
 - **Import fails with "resource already managed" or a format error on the
   resource ID** — double-check the ID format against the specific
   resource's accepted forms (they differ slightly — e.g. `google_ces_app`

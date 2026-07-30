@@ -94,7 +94,7 @@ components:
   schemas:
     CatalogResult:
       type: object
-      required: [name, designer, category, occasion, color, price, url]
+      required: [name, designer, category, occasion, color, price, url, image]
       properties:
         name:
           type: string
@@ -111,3 +111,9 @@ components:
         url:
           type: string
           description: Site-relative product page path, e.g. `/products/camel-cashmere-wrap-coat`.
+        image:
+          type: string
+          description: >
+            Absolute product image URL. Source data for the productCarousel /
+            productDetails rich response widgets (docs/runbook.md §10) --
+            ground every widget image in this field, never an invented URL.

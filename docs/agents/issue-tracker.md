@@ -1,23 +1,54 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub Issues
 
-Issues and PRDs for this repo live as markdown files in `.scratch/`.
+Issues live on GitHub: `snowplow-industry-solutions/signals-google-cx-agent-studio`.
+The PRD stays in-repo at `.scratch/signals-cx-agent-demo/PRD.md`.
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The PRD is `.scratch/<feature-slug>/PRD.md`
-- Implementation issues are `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
-- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- Issue IDs are GitHub issue numbers (`#N`).
+- Pipeline/triage state is a label on the issue; a closed issue means `done`.
+  Status labels: `ready-for-agent`, `in-progress`, `ready-for-human`,
+  `awaiting-human-test`, `needs-human` (plus triage labels `needs-triage`,
+  `needs-info`, `wontfix`). An open issue with no status label reads as
+  `needs-triage`. Exactly one status label at a time — `tracker.sh set-status`
+  maintains that invariant.
+- Checkpoint issues carry the `checkpoint:human-test-required` label: the
+  pipeline never auto-merges them, and `awaiting-human-test` on them does not
+  satisfy blockers.
+- Blockers are `#N` references inside a `## Blocked by` section of the issue
+  body. `.sandcastle/tracker.sh` parses exactly that shape.
+- Comments and conversation history are ordinary GitHub issue comments.
+- Never use closing keywords (`closes #N`, `fixes #N`) in PRs — issues are
+  closed by a human after the manual test passes, not by a merge.
+
+## Tooling
+
+`.sandcastle/tracker.sh` wraps `gh` with the pipeline's semantics
+(`list`, `list-all`, `view`, `set-status`, `park`). Auth comes from `GH_TOKEN`
+in the environment or `.sandcastle/.env` (gitignored), falling back to
+`gh auth login` state. Sandboxed pipeline agents get no GitHub credentials;
+only the host touches the tracker.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+`gh issue create` with the appropriate status label (usually `needs-triage`
+or `ready-for-agent`), a `## Blocked by` section when dependencies exist, and
+the `checkpoint:human-test-required` label when a human must gate the merge.
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+`gh issue view <n> --comments` (or `.sandcastle/tracker.sh view <n>` for body
+plus comments in one shot). The user will normally pass the issue number.
 
-## Planned migration
+## Migration record (2026-07-29)
 
-This repo will move to GitHub as `snowplow-industry-solutions/signals-google-cx-agent-studio` (repo requested from IT, name provisional). When it lands: re-run /setup-matt-pocock-skills to switch this file to the GitHub tracker, and port any open `.scratch/` issues to GitHub Issues. Local git is already in use; `git remote add origin … && git push` preserves history.
+The tracker previously lived as markdown under
+`.scratch/signals-cx-agent-demo/issues/`; done issues and the PR-file records
+remain there as history. Open issues were ported:
+
+| Local file | GitHub issue |
+| --- | --- |
+| `09-product-cards-stretch.md` | #1 |
+| `10-terraform-agent-config.md` | #2 |
+| `12-agent-commentary-with-widgets.md` | #3 |
+| `13-chat-loading-indicator.md` | #4 |
