@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 
 import { trackCartViewedSpec } from "@/snowtype/snowplow";
+import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
 import { useCart } from "@/components/Cart/CartProvider";
 import { useDemoMode } from "@/components/Demo/DemoModeProvider";
 import { SignalsDebugPanel } from "@/components/Demo/SignalsDebugPanel";
@@ -43,7 +44,22 @@ export function CartPage() {
   );
 
   useEffect(() => {
-    trackCartViewedSpec(createCartViewedTrackingProps(lineItems, products));
+    let cancelled = false;
+
+    const trackWhenReady = async () => {
+      await waitForSnowplowTracker();
+      if (cancelled) {
+        return;
+      }
+
+      trackCartViewedSpec(createCartViewedTrackingProps(lineItems, products));
+    };
+
+    void trackWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
   }, [lineItems]);
 
   return (
