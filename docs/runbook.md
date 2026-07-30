@@ -600,16 +600,15 @@ verification step, the `AGENT_SHARED_SECRET` value from §7):
    just performed. An empty/degraded payload (`{"profile":{},...}`) means
    the seed didn't take — wait longer and re-check, or repeat step 2.
 
-   **Before blaming ingestion lag, check the navigation style.** Issue #7:
-   until the fix on `sandcastle/issue-7` is deployed, a product page reached
-   by a **full page load** (typing/pasting the URL, a hard refresh, or the
-   debug panel's Reset Chat, which reloads by design) never sends
-   `product_viewed` — the tracker isn't registered yet, the event is dropped
-   silently, and the console still logs success. A session browsed entirely
-   that way yields `{"profile":{}}` no matter how long you wait. Until the
-   fix is live, seed by starting on the home page or a collection and
-   **clicking** through to each product; after it is live, an empty profile
-   is once again a real ingestion signal.
+   An empty profile is a real ingestion signal again as of 2026-07-30. Before
+   then it usually was not: issue #7 meant a product page reached by a **full
+   page load** (typing/pasting the URL, a hard refresh, or the debug panel's
+   Reset Chat, which reloads by design) never sent `product_viewed` — the
+   tracker wasn't registered yet, the event was dropped silently, and the
+   console logged success anyway, so a session browsed that way yielded
+   `{"profile":{}}` no matter how long you waited. **Fixed and verified in
+   production 2026-07-30** (PR #12, §10.2.1 below); browsing style no longer
+   changes what Signals receives, so seed however the demo script reads best.
 6. Record the seeded session id and verification result here so it's
    ready to hand during rehearsal/recording:
    - Seeded `domain_sessionid`: `<PLACEHOLDER: fill in during human prep>`
@@ -631,6 +630,32 @@ Run this in devtools before opening (or continuing) the chat, then proceed
 with the scripted conversation as normal — the agent's tool calls now
 resolve against the seeded session's known-good attributes instead of the
 live one.
+
+### 10.2.1 Event-delivery verification (issue #7, production)
+
+**Run 2026-07-30 ~19:5x UTC, deployed storefront with PR #12 merged and live:
+PASS.** Playwright, two fresh sessions per variant, collector POST bodies
+decoded to event level (`ue_px` → schema name) — request counts alone hide this
+class of bug, and the storefront's console logs success either way.
+
+| Browsing style, 3 products | before the fix | after |
+| --- | --- | --- |
+| Full page loads | **0** `product_viewed` | **3** |
+| SPA link clicks | 2 (the landing view missing) | **3** |
+| Full load of `/cart` + `/checkout` | 1 `cart_viewed`, 1 `checkout_started` | 1, 1 — no duplicates |
+
+- All collector responses 200, zero `requestfailed`, in both variants.
+- `GET /api/agent/context?session_id=…` ~60s later, full-page-load session
+  `b2cb7fbc-312e-4dc7-a3bd-f3623009f04d`: `total_product_views: 3`,
+  `recently_viewed_product_ids: p2, p6, p1`, 10 attributes. SPA session
+  `ab3a142e-…`: same shape. Both were `{"profile":{}}`-class failures before.
+- **Reset Chat between takes is safe now:** the post-reload page view is
+  tracked (`product_viewed` before and after the reset, same
+  `domain_sessionid` — `endSession()` clears the *widget's* conversation, not
+  the Snowplow session).
+- Scripts: `scripts/verification/` (issue #9's dir). The #7 probe decodes
+  per-event names rather than counting requests; adapt that when a check needs
+  to prove a specific event reached the collector.
 
 ### 10.3 Rehearsal checklist
 
