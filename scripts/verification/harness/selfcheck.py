@@ -6,7 +6,7 @@ runs reported PASS while carrying the empty profile that turned out to be issue
 here, and run() fails if one is missing.
 """
 
-from harness import checks
+from harness import checks, collector
 
 # Minimal observation skeleton. Fixtures deep-copy this and corrupt one area,
 # so a predicate reading the wrong key gets an empty default rather than a
@@ -30,6 +30,33 @@ def obs(**overrides):
     return merged
 
 
+# (name, collector payload entry, expected event_name result)
+EVENT_NAME_CASES = [
+    ("page view", {"e": "pv"}, "pv"),
+    ("unencoded ue_pr", {"e": "ue", "ue_pr": '{"data":{"schema":'
+        '"iglu:com.snowplow_demo.fashion/product_viewed/jsonschema/1-0-0"}}'},
+     "product_viewed"),
+    ("base64 ue_px", {"e": "ue", "ue_px": "eyJkYXRhIjp7InNjaGVtYSI6ImlnbHU6Y29t"
+        "LnNub3dwbG93X2RlbW8uZmFzaGlvbi9jYXJ0X3ZpZXdlZC9qc29uc2NoZW1hLzEtMC0wIn19"},
+     "cart_viewed"),
+    ("no event fields", {}, "unknown"),
+    ("undecodable ue_px", {"e": "ue", "ue_px": "!!!not base64!!!"}, "undecodable"),
+    ("unparseable json", {"e": "ue", "ue_pr": "{not json"}, "unparseable"),
+]
+
+
+def run_event_name_cases():
+    failures = 0
+    for label, payload, expected in EVENT_NAME_CASES:
+        actual = collector.event_name(payload)
+        ok = actual == expected
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  event_name {mark} {label:<20} -> {actual!r}"
+              + ("" if ok else f"  expected {expected!r}"))
+    return failures
+
+
 FIXTURES = {
     "ac5-console": (
         obs(console={"errors": 0, "warnings": 0, "lines": []}),
@@ -44,7 +71,9 @@ def run():
         print(f"  {checks.FAIL_MARK} no selfcheck fixture for: {', '.join(missing)}")
         return 1
 
-    failures = 0
+    failures = run_event_name_cases()
+    total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
+    predicate_failures = 0
     for check_id in checks.CHECK_ORDER:
         fn = checks.PREDICATES.get(check_id)
         if fn is None:
@@ -53,10 +82,9 @@ def run():
         passes = all(r.passed for r in fn(good))
         fires = any(not r.passed for r in fn(bad))
         ok = passes and fires
-        failures += 0 if ok else 1
+        predicate_failures += 0 if ok else 1
         print(f"  {check_id:<16} fires {checks.PASS_MARK if fires else checks.FAIL_MARK}"
               f"  passes {checks.PASS_MARK if passes else checks.FAIL_MARK}")
 
-    total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
-    print(f"\n  {total - failures}/{total} predicates proven both ways")
-    return 1 if failures else 0
+    print(f"\n  {total - predicate_failures}/{total} predicates proven both ways")
+    return 1 if (failures or predicate_failures) else 0

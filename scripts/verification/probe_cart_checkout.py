@@ -9,7 +9,10 @@ import sys
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from probe_issue7_fix import BASE, Recorder  # noqa: E402
+from harness.collector import Recorder  # noqa: E402
+from harness.config import probe_base  # noqa: E402
+
+BASE = probe_base()
 
 
 def main():
