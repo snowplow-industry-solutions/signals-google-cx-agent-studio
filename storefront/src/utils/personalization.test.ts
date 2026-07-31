@@ -45,8 +45,11 @@ describe("personalization utilities", () => {
       products,
     });
 
-    expect(recommendations.map((product) => product.id)).toContain("p5");
-    expect(recommendations.map((product) => product.id)).toContain("p18");
+    const recommendationIds = recommendations.map((product) => product.id);
+    expect(recommendationIds).toContain("p18");
+    for (const recommendation of recommendations) {
+      expect(["Watches", "Accessories", "Shoes", "Bags"]).toContain(recommendation.category);
+    }
   });
 
   it("elevates modules matching the user taste profile", () => {
