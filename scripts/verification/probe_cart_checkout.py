@@ -1,5 +1,5 @@
 """Audit check for the same defect class: do cart_viewed and checkout_started
-survive a full page load? Reuses the Recorder from probe_issue7_fix.py.
+survive a full page load? Reuses the Recorder from harness/collector.py.
 """
 
 import json

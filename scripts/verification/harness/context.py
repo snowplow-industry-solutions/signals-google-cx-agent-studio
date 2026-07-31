@@ -11,7 +11,6 @@ Signals answers 12-33s after an event (probe_latency.py) and runbook 10.2.1 saw
 
 import json
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 

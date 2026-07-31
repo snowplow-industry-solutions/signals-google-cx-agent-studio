@@ -17,7 +17,6 @@ by SPA link clicks (the control that always worked).
 import json
 import os
 import sys
-import time
 
 from playwright.sync_api import sync_playwright
 
