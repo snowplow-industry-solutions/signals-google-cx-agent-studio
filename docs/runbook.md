@@ -1192,6 +1192,50 @@ properties. Checked on production: no clashing default styling, no
    the console lines the 2026-07-31 run already captured, with no browser and no
    contact with production.
 
+   **Verification run, 2026-07-31 ~15:55 UTC (production, first run on the
+   rotated `AGENT_SHARED_SECRET`): PASS — 18/18 checks, `ac6-signals`
+   included.** Run as the acceptance gate for the §12 rotation of the shared
+   secret (Secret Manager `signals-agent-studio-agent-shared-secret`; new
+   canonical version 3, Vercel env replaced and redeployed, old versions 1–2
+   disabled and then destroyed after this run, Terraform state re-imported to
+   version 3 with a clean `plan` — "No changes").
+
+   - **A first post-rotation run failed 5/9, and the failure was real.** All
+     three zero-instance widget checks (`ac1`/`ac2`/`ac4`) fired plus
+     `ac3-spa-nav`: five turns of fluent prose with zero catalog data and
+     `wire: []` throughout, while the harness's own `/api/agent/context` poll
+     — and therefore `ac6-signals` — passed. That split is the signature of
+     the agent's tool calls failing auth while the direct path stays healthy.
+     The `ac0`/zero-instance guards added in the follow-up above are exactly
+     what surfaced it; the pre-fix harness would have printed a smaller
+     all-green run and exit 0.
+   - **Root cause: the new secret version was created with `print f '%s'`
+     (note the space) instead of `printf '%s'`.** zsh's `print` builtin
+     happily printed all three arguments, so the stored payload was
+     `f %s <value>\n` — 70 bytes against the deployed 64. Every CES tool call
+     fetched that payload via `versions/latest` (GCP audit logs show a fetch
+     pair per turn) and was 401'd by the storefront's strict-equality check.
+     Proven without printing either value: SHA-256 of the version payload vs
+     the deployed value, then hash-matching the reconstructed
+     `f %s <value>\n` form. Fixed by adding version 3 from the canonical
+     value; hash-verified byte-identical before re-running.
+   - **Pitfall (now standing rotation guidance):** load secret versions with
+     `printf '%s' "$VAR" | gcloud secrets versions add <id> --data-file=-`,
+     then verify before trusting: `gcloud secrets versions access N ... |
+     wc -c` must equal the expected length, and a piped SHA-256 must match
+     the source. Never `echo`, never zsh `print`, never paste into the
+     console form. Command substitution strips trailing newlines, so length
+     checks must be piped, not captured.
+   - **Terraform import form matters:** importing the new version by the
+     project-*number* resource name (`projects/112482720186/...`) left the
+     ForceNew `secret` attribute mismatched against the config's
+     project-*ID* form and planned a destroy-and-create. Re-importing as
+     `projects/engineering-sandbox/secrets/.../versions/3` yielded
+     "No changes."
+   - **The redaction confirmation promised above is closed:** this run's
+     report JSON carries zero residual high-entropy runs (one redaction
+     marker present), confirming `harness/redact.py` on live output.
+
 ### 11.6 Current state: renderer live in production (revert kept as fallback)
 
 Resolved 2026-07-30: **the renderer path won; no console revert.** The
