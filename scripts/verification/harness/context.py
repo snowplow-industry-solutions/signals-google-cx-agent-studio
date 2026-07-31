@@ -34,6 +34,8 @@ def fetch_context(base, secret, session_id, opener=None):
 
 
 def is_populated(payload):
+    if not isinstance(payload, dict):
+        return False
     profile = (payload or {}).get("profile") or {}
     activity = (payload or {}).get("recent_activity") or ""
     return bool(profile) and NO_EVENTS_MARKER not in activity
@@ -61,7 +63,7 @@ def poll_context(base, secret, session_id, timeout_s=90, interval_s=10,
         sleep(interval_s)
 
     elapsed = clock() - started
-    if last is None:
+    if last is None or not isinstance(last, dict):
         return {"profile": {}, "recent_activity": "", "agent_instructions": "",
                 "polledAfterSeconds": elapsed, "attempts": attempts,
                 "error": last_error or "no response"}

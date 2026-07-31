@@ -116,10 +116,19 @@ def run_context_cases():
                                clock=clock, sleep=sleep)
     cases.append(("reports a transport error", "error" in got))
 
+    ticks["t"] = 0.0
+    got = context.poll_context("http://x", "s", "sid", timeout_s=30,
+                               opener=_canned_opener([1, 2, 3]),
+                               clock=clock, sleep=sleep)
+    cases.append(("handles non-dict JSON body",
+                  isinstance(got, dict) and "error" in got))
+
     cases.append(("is_populated rejects the empty-buffer marker",
                   not context.is_populated(empty)))
     cases.append(("is_populated accepts a real profile",
                   context.is_populated(full)))
+    cases.append(("is_populated rejects non-dict payloads",
+                  not context.is_populated([1, 2, 3]) and not context.is_populated("string")))
 
     failures = 0
     for label, ok in cases:
