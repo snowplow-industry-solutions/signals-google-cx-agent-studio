@@ -16,6 +16,7 @@ FAIL_MARK = "✗"
 
 PREDICATES = {}
 CHECK_ORDER = [
+    "ac0-turns",
     "ac1-commentary",
     "ac2-cards",
     "ac3-spa-nav",
@@ -74,18 +75,57 @@ def predicate(check_id):
 
 
 def evaluate(obs):
+    """Run every registered predicate over one observation.
+
+    A predicate that returns nothing is recorded as a FAILURE, not skipped.
+    The per-turn checks iterate widget turns, and a turn that timed out has no
+    cards, so it is not a widget turn -- which meant a run where every turn
+    timed out produced zero results and reported all-green. Silence is the one
+    thing this harness must never read as a pass.
+    """
     run = CheckRun()
     for check_id in CHECK_ORDER:
         fn = PREDICATES.get(check_id)
         if fn is None:
             continue
-        for result in fn(obs):
+        results = list(fn(obs))
+        if not results:
+            run.record(CheckResult(
+                id=check_id,
+                label="had at least one instance to evaluate",
+                passed=False,
+                detail="no instances to evaluate -- the check asserted nothing",
+            ))
+            continue
+        for result in results:
             run.record(result)
     return run
 
 
 def _widget_turns(obs):
     return [t for t in obs.get("turns", []) if t.get("isWidgetTurn")]
+
+
+@predicate("ac0-turns")
+def check_turns_completed(obs):
+    """AC0: every planned turn ran and came back with a reply.
+
+    The gate in front of every per-turn check. `timedOut` was recorded by phase
+    A from the first commit and read by nobody: a turn that times out has no
+    cards, so it is not a widget turn, so ac1/ac2/ac4 emit no results for it.
+    Three of five turns timing out still printed `8/8 checks passed`, exit 0.
+    """
+    turns = obs.get("turns") or []
+    expected = obs.get("expectedTurns")
+    timed_out = [t.get("label") for t in turns if t.get("timedOut")]
+    counted = isinstance(expected, int) and expected > 0 and len(turns) == expected
+    return [CheckResult(
+        id="ac0-turns",
+        label="every planned turn ran and returned a reply",
+        passed=counted and not timed_out,
+        detail=(f"{len(turns)} turn(s) recorded, expectedTurns={expected!r}; "
+                f"timed out: {timed_out or 'none'}"),
+    )]
 
 
 @predicate("ac1-commentary")
@@ -166,17 +206,20 @@ def check_spa_navigation(obs):
 def check_delivery_mode(obs):
     """AC4: the delivery mode per turn is one of the two known-good ones.
 
-    Recording the mode alone would not catch 'Widget payload unrenderable',
-    which is the failure path.
+    Reads the whole `modes` list, not just the last mark. A turn rendering two
+    cards where the first fails logs ["UNRENDERABLE", "payload-mode"], and an
+    assertion on the last entry alone reports payload-mode and passes -- the
+    failure path this check exists for, masked by a later success.
     """
     results = []
     for t in _widget_turns(obs):
+        modes = t.get("modes") or []
         mode = t.get("mode")
         results.append(CheckResult(
             id=f"ac4-mode[{t['label']}]",
             label="delivery mode is payload-mode or token-mode",
-            passed=mode in VALID_MODES,
-            detail=f"mode={mode!r} wire={t.get('wire')}",
+            passed="UNRENDERABLE" not in modes and mode in VALID_MODES,
+            detail=f"mode={mode!r} modes={modes} wire={t.get('wire')}",
         ))
     return results
 
@@ -277,6 +320,19 @@ def check_signals_profile(obs):
 # It cannot prove the predicate is reading the field phase A actually writes.
 # These faults corrupt a REAL observation between phases, so a predicate wired
 # to the wrong key passes its selfcheck and still fails here.
+#
+# Each fault corrupts ONE term of its predicate, and the matching `bad` fixture
+# in selfcheck.py corrupts a different one. A fault that breaks two terms of a
+# conjunction proves only whichever short-circuits first: the original
+# _fault_cards emptied `cards` as well as flipping `rawToken`, so
+# `bool(cards) and not raw` never reached the token term -- and deleting that
+# term outright still passed both mechanisms.
+
+def _fault_turns(obs):
+    # Drop a recorded turn, so the expectedTurns half of ac0 fires. The
+    # timedOut half is proven by the ac0-turns selfcheck fixture pair.
+    obs["turns"] = list(obs.get("turns") or [])[1:]
+
 
 def _fault_commentary(obs):
     for t in obs.get("turns", []):
@@ -285,24 +341,28 @@ def _fault_commentary(obs):
 
 
 def _fault_cards(obs):
+    # rawToken ONLY -- leave the cards in place. This is the issue #1 leak, and
+    # it is the term a card-emptying fault could never reach.
     for t in obs.get("turns", []):
         if t.get("isWidgetTurn"):
-            t["cards"] = []
             t["rawToken"] = True
 
 
 def _fault_mode(obs):
+    # Mask an UNRENDERABLE behind a later success, leaving `mode` valid: the
+    # only corruption that proves the predicate reads the whole `modes` list.
     for t in obs.get("turns", []):
         if t.get("isWidgetTurn"):
-            t["mode"] = "UNRENDERABLE"
+            t["modes"] = ["UNRENDERABLE"] + list(t.get("modes") or [])
 
 
 def _fault_zero_match(obs):
+    # rawToken ONLY, for the same reason as _fault_cards: `not cards and not
+    # raw` short-circuits on the cards term, so an invented-card fault leaves
+    # the token term unproven.
     for t in obs.get("turns", []):
         if t.get("label", "").endswith("zero-match"):
-            t["cards"] = [{"kind": "base_product_detail",
-                           "items": [{"uri": "/products/invented", "img": None,
-                                      "text": ["Invented Product"]}]}]
+            t["rawToken"] = True
 
 
 def _fault_console(obs):
@@ -329,6 +389,7 @@ def _fault_spa_nav(obs):
 
 
 FAULTS = {
+    "ac0-turns": _fault_turns,
     "ac1-commentary": _fault_commentary,
     "ac2-cards": _fault_cards,
     "ac3-spa-nav": _fault_spa_nav,

@@ -4,11 +4,19 @@ A predicate that cannot fail is worse than no predicate: the 2026-07-30 issue #3
 runs reported PASS while carrying the empty profile that turned out to be issue
 #7. Every predicate registered in checks.PREDICATES must have a fixture pair
 here, and run() fails if one is missing.
+
+A fixture pair alone is not enough for a predicate whose verdict is a
+conjunction. `bool(cards) and not raw` short-circuits, so a bad fixture that
+empties `cards` *and* sets `rawToken` never reaches the token term -- deleting
+that term outright passed both the fixture pair and the fault hook. Each
+conjunction therefore gets a named case list below that drives one term at a
+time, on the AC3_URL_CASES pattern.
 """
 
 import copy
+import re
 
-from harness import checks, collector, context
+from harness import checks, collector, context, redact
 
 # Minimal observation skeleton. Fixtures deep-copy this and corrupt one area,
 # so a predicate reading the wrong key gets an empty default rather than a
@@ -20,6 +28,7 @@ BASE_OBS = {
     "signalsContext": {"profile": {}, "recent_activity": "",
                        "agent_instructions": ""},
     "turns": [],
+    "expectedTurns": 0,
     "click": {},
     "console": {"errors": 0, "warnings": 0, "lines": []},
 }
@@ -137,20 +146,77 @@ def run_context_cases():
     return failures
 
 
-def run_ac3_url_cases():
+def run_predicate_cases(prefix, check_id, cases):
+    """Extra named cases for one predicate, beyond its single fixture pair.
+
+    A fixture pair proves a predicate can pass and can fail. It does not prove
+    that *each term* of a conjunction can fail: a bad fixture that breaks two
+    terms only ever exercises whichever short-circuits first. These lists cover
+    the terms the fixture pair and the fault hook cannot isolate on their own.
+    """
+    fn = checks.PREDICATES.get(check_id)
+    if fn is None:
+        print(f"  {prefix:<9} {checks.FAIL_MARK} no predicate registered for {check_id}")
+        return 1
     failures = 0
-    ac3_predicate = checks.PREDICATES.get("ac3-spa-nav")
-    if not ac3_predicate:
-        return 0
-    for label, click_obs, expected_pass in AC3_URL_CASES:
-        obs_obj = obs(click=click_obs)
-        results = ac3_predicate(obs_obj)
-        actual_pass = all(r.passed for r in results)
+    for label, obs_obj, expected_pass in cases:
+        results = fn(obs_obj)
+        # An empty result list is not a pass -- see checks.evaluate().
+        actual_pass = bool(results) and all(r.passed for r in results)
         ok = actual_pass == expected_pass
         failures += 0 if ok else 1
         mark = checks.PASS_MARK if ok else checks.FAIL_MARK
-        print(f"  ac3-url {mark} {label:<30} -> {actual_pass!r}"
+        print(f"  {prefix:<9} {mark} {label:<44} -> {actual_pass!r}"
               + ("" if ok else f"  expected {expected_pass!r}"))
+    return failures
+
+
+def run_evaluate_cases():
+    """evaluate() must never report all-green on an observation that asserted
+    nothing.
+
+    Exercised through evaluate() rather than through a single predicate,
+    because the empty-result rule lives there and it is what stands between a
+    run whose turns all timed out and `8/8 checks passed`, exit 0.
+    """
+    failures = 0
+    for label, obs_obj, expect_pass, must_fail in EVALUATE_CASES:
+        run = checks.evaluate(obs_obj)
+        actual_pass = run.exit_code == 0
+        failed_ids = [r.id for r in run.failed]
+        missing = [want for want in must_fail
+                   if not any(fid.startswith(want) for fid in failed_ids)]
+        ok = actual_pass == expect_pass and bool(run.results) and not missing
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  evaluate  {mark} {label:<44} -> exit {run.exit_code}, "
+              f"{len(run.failed)}/{len(run.results)} failed"
+              + ("" if ok else f"  expected pass={expect_pass!r}"
+                               f"{', never failed: ' + ', '.join(missing) if missing else ''}"))
+    return failures
+
+
+def run_redact_cases():
+    """The redactor is a security control, so it gets the same treatment as a
+    predicate: cases that must be redacted and cases that must not."""
+    failures = 0
+    for label, line, should_change in REDACT_CASES:
+        got = redact.redact_line(line)
+        changed = got != line
+        leaked = _looks_like_token(got)
+        ok = changed == should_change and not (should_change and leaked)
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  redact    {mark} {label:<44} -> "
+              f"{'redacted' if changed else 'untouched'}"
+              + ("" if ok else f"  expected {'redacted' if should_change else 'untouched'}"
+                               f"{', residual token material' if leaked else ''}"))
+    # Idempotence: running the redactor twice must not re-mangle a clean line.
+    twice_ok = all(redact.redact_line(redact.redact_line(line))
+                   == redact.redact_line(line) for _l, line, _c in REDACT_CASES)
+    failures += 0 if twice_ok else 1
+    print(f"  redact    {checks.PASS_MARK if twice_ok else checks.FAIL_MARK} "
+          f"{'redaction is idempotent':<44}")
     return failures
 
 
@@ -253,7 +319,14 @@ def test_fixture_aliasing():
 
 
 def turn(label="2a-carousel", prose="Here are three evening pieces I think work.",
-         cards=None, raw_token=False, mode="payload-mode", widget=True):
+         cards=None, raw_token=False, mode="payload-mode", modes=None,
+         widget=True, timed_out=False):
+    """One widget turn as phase A records it.
+
+    `modes` defaults to [mode] so the two stay consistent unless a case
+    deliberately drives them apart -- which is the whole point of the
+    UNRENDERABLE-masked-by-a-later-success case.
+    """
     return {
         "label": label,
         "prompt": "Can you recommend a couple of accessories?",
@@ -264,27 +337,41 @@ def turn(label="2a-carousel", prose="Here are three evening pieces I think work.
                         "img": "https://example/1.jpg",
                         "text": ["Satin Evening Pouch", "$760"]}]}],
         "rawToken": raw_token,
+        "modes": list(modes) if modes is not None else ([mode] if mode else []),
         "mode": mode,
         "wire": ["wire:structured-payload"],
         "isWidgetTurn": widget,
+        "timedOut": timed_out,
         "screenshot": "turn-2a.png",
     }
 
 
 def zero_match_turn(label="5-zero-match",
                      prose="We have nothing in neon orange at that price. Shall I broaden the search?",
-                     cards=None):
+                     cards=None, raw_token=False, timed_out=False):
     return {
         "label": label,
         "prompt": "Do you have any neon orange swimwear under $15?",
         "prose": prose,
         "cards": cards if cards is not None else [],
-        "rawToken": False,
+        "rawToken": raw_token,
+        "modes": [],
         "mode": None,
         "wire": [],
         "isWidgetTurn": False,
+        "timedOut": timed_out,
         "screenshot": "turn-5.png",
     }
+
+
+def invented_card():
+    """A card the zero-match control must never produce. A factory, not a
+    constant: two fixtures sharing one dict is the aliasing bug this file
+    already has a regression test for."""
+    return {"kind": "base_product_detail",
+            "items": [{"uri": "/products/neon-orange-swim-brief",
+                       "img": None,
+                       "text": ["Neon Orange Swim Brief", "$12"]}]}
 
 
 def click_result(clickedUri="/products/chunky-mohair-pullover",
@@ -301,38 +388,198 @@ def click_result(clickedUri="/products/chunky-mohair-pullover",
     }
 
 
+def complete_obs(**overrides):
+    """A whole run in which every check id produces at least one PASSING result.
+
+    The baseline for the evaluate() cases: start from all-green, then break one
+    thing, so a failure can only come from the thing that was broken.
+    """
+    merged = obs(
+        turns=[turn(), turn(label="3-details"), zero_match_turn()],
+        expectedTurns=3,
+        click=click_result(),
+        browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
+                "productViewed": 2, "sids": ["a1b2"],
+                "events": {"product_viewed": 2, "pv": 5}},
+        signalsContext={"profile": {"total_product_views": 2},
+                        "recent_activity": "- product_viewed: p1",
+                        "agent_instructions": ""},
+        console={"errors": 0, "warnings": 0, "lines": []},
+    )
+    merged.update(copy.deepcopy(overrides))
+    return merged
+
+
+def _timed_out_run():
+    """What a run looks like when the agent never answers: turns recorded, all
+    of them empty, none of them a widget turn. This shape reported 8/8 green."""
+    return complete_obs(
+        turns=[turn(label=lbl, prose="", cards=[], mode=None, widget=False,
+                    timed_out=True)
+               for lbl in ("2a-carousel", "3-details")]
+              + [zero_match_turn(timed_out=True)],
+        expectedTurns=3,
+    )
+
+
+def _text_only_run():
+    """Every turn answered, none of them rendered a card. ac0 is clean, so the
+    only thing standing between this and an all-green report is evaluate()
+    refusing to treat an empty result list as a pass."""
+    return complete_obs(
+        turns=[turn(cards=[], mode=None, widget=False), zero_match_turn()],
+        expectedTurns=2,
+    )
+
+
+def _drop(observation, key):
+    del observation[key]
+    return observation
+
+
 AC3_URL_CASES = [
-    ("exact path match", click_result(
+    ("exact path match", obs(click=click_result(
         clickedUri="/products/chunky-mohair-pullover",
         afterUrl="http://localhost:3000/products/chunky-mohair-pullover"
-    ), True),
-    ("path with trailing slash", click_result(
+    )), True),
+    ("path with trailing slash", obs(click=click_result(
         clickedUri="/products/chunky-mohair-pullover",
         afterUrl="http://localhost:3000/products/chunky-mohair-pullover/"
-    ), True),
-    ("path with query string", click_result(
+    )), True),
+    ("path with query string", obs(click=click_result(
         clickedUri="/products/chunky-mohair-pullover",
         afterUrl="http://localhost:3000/products/chunky-mohair-pullover?ref=cx-agent"
-    ), True),
-    ("path with hash", click_result(
+    )), True),
+    ("path with hash", obs(click=click_result(
         clickedUri="/products/chunky-mohair-pullover",
         afterUrl="http://localhost:3000/products/chunky-mohair-pullover#section"
-    ), True),
-    ("wrong product suffix false positive", click_result(
+    )), True),
+    ("wrong product suffix false positive", obs(click=click_result(
         clickedUri="/products/pullover",
         afterUrl="http://localhost:3000/products/mohair-pullover"
-    ), False),
+    )), False),
 ]
 
+# AC0: the count term and the timeout term, each on its own. The fixture pair
+# drives the timeout term and the fault hook drives the count term, but neither
+# covers a missing expectedTurns, which is what a phase A that forgot to write
+# the field would look like.
+AC0_TURN_CASES = [
+    ("every planned turn ran", obs(turns=[turn(), zero_match_turn()],
+                                   expectedTurns=2), True),
+    ("one turn timed out", obs(turns=[turn(), zero_match_turn(timed_out=True)],
+                               expectedTurns=2), False),
+    ("fewer turns recorded than planned",
+     obs(turns=[turn()], expectedTurns=2), False),
+    ("more turns recorded than planned",
+     obs(turns=[turn(), turn(label="3-details"), zero_match_turn()],
+         expectedTurns=2), False),
+    ("no turns recorded at all", obs(turns=[], expectedTurns=5), False),
+    ("expectedTurns never written by phase A",
+     _drop(obs(turns=[turn(), zero_match_turn()]), "expectedTurns"), False),
+    ("expectedTurns is zero", obs(turns=[], expectedTurns=0), False),
+]
 
+# AC2: `bool(cards) and not raw`. The raw-token term is the issue #1 leak and
+# the reason this harness exists; it needs a case where cards ARE present.
+AC2_TOKEN_CASES = [
+    ("cards rendered, no raw token", obs(turns=[turn()]), True),
+    ("raw {@Widget: token alongside rendered cards",
+     obs(turns=[turn(raw_token=True)]), False),
+    ("no cards, no raw token", obs(turns=[turn(cards=[])]), False),
+    ("neither cards nor a clean reply",
+     obs(turns=[turn(cards=[], raw_token=True)]), False),
+]
+
+# AC4: the whole `modes` list, not just the last mark.
+AC4_MODE_CASES = [
+    ("single payload-mode mark", obs(turns=[turn()]), True),
+    ("single token-mode mark", obs(turns=[turn(mode="token-mode")]), True),
+    ("UNRENDERABLE masked by a later success",
+     obs(turns=[turn(mode="payload-mode",
+                     modes=["UNRENDERABLE", "payload-mode"])]), False),
+    ("UNRENDERABLE as the only mark",
+     obs(turns=[turn(mode="UNRENDERABLE", modes=["UNRENDERABLE"])]), False),
+    ("no renderer mark at all",
+     obs(turns=[turn(mode=None, modes=[])]), False),
+]
+
+# AC7: `not cards and not raw`, same short-circuit as AC2.
+AC7_TOKEN_CASES = [
+    ("degraded to plain text", obs(turns=[turn(), zero_match_turn()]), True),
+    ("invented a product card",
+     obs(turns=[turn(), zero_match_turn(cards=[invented_card()])]), False),
+    ("raw {@Widget: token in the degraded reply",
+     obs(turns=[turn(), zero_match_turn(raw_token=True)]), False),
+    ("no zero-match control turn in the run", obs(turns=[turn()]), False),
+]
+
+EVALUATE_CASES = [
+    # (label, observation, expected overall pass, ids that must be among the
+    #  failures -- matched as a prefix, since per-turn ids carry a [label])
+    ("a complete run stays green", complete_obs(), True, ()),
+    ("every turn timed out", _timed_out_run(), False,
+     ("ac0-turns", "ac1-commentary", "ac2-cards", "ac4-mode")),
+    ("turns answered but no cards anywhere", _text_only_run(), False,
+     ("ac1-commentary", "ac2-cards", "ac4-mode")),
+]
+
+# Token shapes the redactor must catch, and benign lines it must leave alone.
+# Every value here is synthetic. The domain_sessionid line is load-bearing:
+# collector.Recorder.forwarded_id() parses it to find the session to poll
+# Signals for, so redacting it would break session detection.
+_HEAD = "EXAMPLE-TOKEN-HEAD-0123456789abcdef0123"
+_TAIL = "0123456789abcdef-EXAMPLE-TOKEN-TAIL"
+
+REDACT_CASES = [
+    ("ellipsis-truncated value (the real captured shape)",
+     "Token received from token broker: {chatToken: " + _HEAD + "…" + _TAIL
+     + ", expireTime: 2026-07-31T12:02:50.687240Z}", True),
+    ("single-quoted key and value",
+     "config {'chatToken': '" + _HEAD + "'}", True),
+    ("double-quoted JSON access_token",
+     '{"access_token": "' + _HEAD + '"}', True),
+    ("authorization header with a Bearer prefix",
+     "authorization=Bearer " + _HEAD, True),
+    ("standard base64 with + / = padding",
+     "token: QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo+/aGk=", True),
+    ("a report written by the pre-fix redactor",
+     "{chatToken: <redacted>…" + _TAIL + "}", True),
+    ("domain_sessionid forwarded to the widget",
+     "[Signals Demo] Passed domain_sessionid to widget "
+     "{sessionId: 8f3c11e6-921f-4889-924d-3c5e26c92838}", False),
+    ("prose that merely mentions the word token",
+     "Rendered rich-response widget token(s) in chat", False),
+    ("a value too short to be a token", "token: abc", False),
+]
+
+# A crude high-entropy detector: a real token, a base64 blob and an
+# ellipsis-truncated tail all read as one long unpunctuated run. ISO timestamps
+# and UUIDs break every 4-13 characters, so they fall under the threshold.
+_TOKEN_RESIDUE = re.compile(r"[A-Za-z0-9_+/=]{16,}")
+
+
+def _looks_like_token(text):
+    return bool(_TOKEN_RESIDUE.search(text))
+
+
+# Each `bad` fixture breaks exactly ONE term of its predicate, and the matching
+# fault hook in checks.py breaks a different one. A fixture that breaks two
+# terms of a conjunction proves only the first.
 FIXTURES = {
+    "ac0-turns": (
+        obs(turns=[turn(), zero_match_turn()], expectedTurns=2),
+        # timeout term; the count term is the fault hook's job
+        obs(turns=[turn(timed_out=True), zero_match_turn()], expectedTurns=2),
+    ),
     "ac1-commentary": (
         obs(turns=[turn()]),
         obs(turns=[turn(prose="")]),
     ),
     "ac2-cards": (
         obs(turns=[turn()]),
-        obs(turns=[turn(cards=[], raw_token=True)]),
+        # cards term; the rawToken term is the fault hook's job
+        obs(turns=[turn(cards=[])]),
     ),
     "ac3-spa-nav": (
         obs(click=click_result()),
@@ -340,7 +587,8 @@ FIXTURES = {
     ),
     "ac4-mode": (
         obs(turns=[turn()]),
-        obs(turns=[turn(mode="UNRENDERABLE")]),
+        # last-mark term; the masked-UNRENDERABLE term is the fault hook's job
+        obs(turns=[turn(mode="UNRENDERABLE", modes=["UNRENDERABLE"])]),
     ),
     "ac5-console": (
         obs(console={"errors": 0, "warnings": 0, "lines": []}),
@@ -367,10 +615,8 @@ FIXTURES = {
     ),
     "ac7-zero-match": (
         obs(turns=[turn(), zero_match_turn()]),
-        obs(turns=[turn(), zero_match_turn(cards=[
-            {"kind": "base_product_detail",
-             "items": [{"uri": "/products/neon-orange-swim-brief",
-                        "img": None, "text": ["Neon Orange Swim Brief", "$12"]}]}])]),
+        # invented-card term; the rawToken term is the fault hook's job
+        obs(turns=[turn(), zero_match_turn(cards=[invented_card()])]),
     ),
 }
 
@@ -408,7 +654,13 @@ def run():
 
     failures = run_event_name_cases() + run_context_cases() + run_fault_cases()
     failures += test_fixture_aliasing()
-    failures += run_ac3_url_cases()
+    failures += run_redact_cases()
+    failures += run_predicate_cases("ac0-turns", "ac0-turns", AC0_TURN_CASES)
+    failures += run_predicate_cases("ac2-token", "ac2-cards", AC2_TOKEN_CASES)
+    failures += run_predicate_cases("ac3-url", "ac3-spa-nav", AC3_URL_CASES)
+    failures += run_predicate_cases("ac4-mode", "ac4-mode", AC4_MODE_CASES)
+    failures += run_predicate_cases("ac7-token", "ac7-zero-match", AC7_TOKEN_CASES)
+    failures += run_evaluate_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
     predicate_failures = 0
     for check_id in checks.CHECK_ORDER:
@@ -416,7 +668,9 @@ def run():
         if fn is None:
             continue
         good, bad = FIXTURES[check_id]
-        passes = all(r.passed for r in fn(good))
+        good_results = fn(good)
+        # An empty result list is not a pass -- see checks.evaluate().
+        passes = bool(good_results) and all(r.passed for r in good_results)
         fires = any(not r.passed for r in fn(bad))
         ok = passes and fires
         predicate_failures += 0 if ok else 1
