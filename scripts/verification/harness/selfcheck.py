@@ -268,101 +268,171 @@ def run_redact_cases():
     return failures
 
 
-def _find_nested_mutables(obj, base_obj, path=[]):
-    """Recursively find all nested mutable containers (lists/dicts) in obj that
-    differ from base_obj, so we can test them for aliasing."""
+def _find_nested_mutables(obj, path=()):
+    """Every mutable container (dict or list) reachable in obj, obj included,
+    each with its path.
+
+    Deliberately no comparison against BASE_OBS: the original sweep only
+    descended into keys whose value differed from the base, and only yielded a
+    dict when the base value was not a dict, so any container matching
+    BASE_OBS's shape -- a shared `click`, `console` or `signalsContext` dict --
+    was never mutation-tested at all. Mutating an independent container is
+    harmless (the sweep restores it), so everything is tested.
+    """
     mutables = []
-    if isinstance(obj, dict) and isinstance(base_obj, dict):
-        for key in obj:
-            if key not in base_obj or obj[key] != base_obj[key]:
-                child_mutables = _find_nested_mutables(
-                    obj[key],
-                    base_obj.get(key),
-                    path + [key]
-                )
-                mutables.extend(child_mutables)
+    if isinstance(obj, dict):
+        mutables.append((list(path), obj))
+        for key, value in obj.items():
+            mutables.extend(_find_nested_mutables(value, path + (key,)))
     elif isinstance(obj, list):
-        if not isinstance(base_obj, list) or obj != base_obj:
-            mutables.append((path, obj))
-        if isinstance(base_obj, list):
-            for i, item in enumerate(obj):
-                if isinstance(item, (dict, list)):
-                    base_item = base_obj[i] if i < len(base_obj) else None
-                    child_mutables = _find_nested_mutables(
-                        item,
-                        base_item,
-                        path + [i]
-                    )
-                    mutables.extend(child_mutables)
-    elif isinstance(obj, dict) and not isinstance(base_obj, dict):
-        if obj:
-            mutables.append((path, obj))
-        for key in obj:
-            if isinstance(obj[key], (dict, list)):
-                child_mutables = _find_nested_mutables(
-                    obj[key],
-                    None,
-                    path + [key]
-                )
-                mutables.extend(child_mutables)
+        mutables.append((list(path), obj))
+        for i, item in enumerate(obj):
+            mutables.extend(_find_nested_mutables(item, path + (i,)))
     return mutables
 
 
-def test_fixture_aliasing():
-    """Verify fixtures don't alias shared mutable references.
+def _aliasing_failures(fixtures, base_obs):
+    """Mutate every discovered container of every fixture, one at a time, and
+    report each mutation that leaks into the fixture's sibling, another
+    fixture pair, or base_obs.
 
-    This test catches regressions where obs() overrides share nested dicts
-    instead of deep-copying them, which would cause mutations in one fixture
-    to silently corrupt others. Sweeps every fixture pair to ensure all use
-    proper factory construction.
+    Every mutation is reverted before the next, and full restoration is
+    checked at the end, so the sweep can never corrupt what it guards.
+    Returns (failures, containers_tested_by_check_id); each failure is a
+    (check_id, role:path, leak-description) triple.
     """
-    failures = 0
+    initial = copy.deepcopy(fixtures)
+    base_initial = copy.deepcopy(base_obs)
+    failures = []
+    tested = {}
+    for check_id, pair in fixtures.items():
+        tested[check_id] = 0
+        for role_ix, fixture in enumerate(pair):
+            role = ("good", "bad")[role_ix]
+            sibling_ix = 1 - role_ix
+            for path, target in _find_nested_mutables(fixture):
+                if isinstance(target, list):
+                    target.append("ALIASING-TEST")
+                else:
+                    target["ALIASING-TEST"] = True
+                tested[check_id] += 1
+                sibling_ok = pair[sibling_ix] == initial[check_id][sibling_ix]
+                others_ok = all(fixtures[other] == initial[other]
+                                for other in fixtures if other != check_id)
+                base_ok = base_obs == base_initial
+                if isinstance(target, list):
+                    target.pop()
+                else:
+                    del target["ALIASING-TEST"]
+                if not (sibling_ok and others_ok and base_ok):
+                    where = ".".join(str(p) for p in path) or "<root>"
+                    failures.append((check_id, f"{role}:{where}",
+                                     f"sibling_ok={sibling_ok} "
+                                     f"others_ok={others_ok} base_ok={base_ok}"))
+    if fixtures != initial or base_obs != base_initial:
+        failures.append(("<sweep>", "<restore>",
+                         "the sweep failed to restore a mutation"))
+    return failures, tested
 
+
+def test_fixture_aliasing():
+    """Verify no two fixtures share a mutable container.
+
+    obs() takes its overrides by reference, so a container reused across
+    fixtures -- or left pointing into BASE_OBS -- lets one fixture's mutation
+    silently corrupt others. Every container of every fixture pair is
+    mutation-tested. run_aliasing_detection_cases() proves the sweep itself
+    fires for each container shape a fixture can share.
+    """
+    failures, tested = _aliasing_failures(FIXTURES, BASE_OBS)
+    by_id = {}
+    for check_id, where, leak in failures:
+        by_id.setdefault(check_id, []).append((where, leak))
     for check_id in FIXTURES:
-        good, bad = FIXTURES[check_id]
+        leaks = by_id.pop(check_id, [])
+        mark = checks.PASS_MARK if not leaks else checks.FAIL_MARK
+        print(f"  fixture aliasing {mark} {check_id}: "
+              f"{tested[check_id]} container(s) mutation-tested")
+        for where, leak in leaks:
+            print(f"        {where}: {leak}")
+    for check_id, leaks in by_id.items():  # e.g. the <sweep> restore sentinel
+        for where, leak in leaks:
+            print(f"  fixture aliasing {checks.FAIL_MARK} {check_id} {where}: {leak}")
+    mark = checks.PASS_MARK if not failures else checks.FAIL_MARK
+    print(f"  fixture aliasing {mark} all fixture pairs are aliasing-safe")
+    return len(failures)
 
-        all_initial = copy.deepcopy(FIXTURES)
-        good_initial = copy.deepcopy(good)
-        bad_initial = copy.deepcopy(bad)
 
-        mutables = _find_nested_mutables(bad, BASE_OBS)
+def run_aliasing_detection_cases():
+    """_aliasing_failures must fire for every shape of shared container.
 
-        if not mutables:
-            print(f"  fixture aliasing {checks.PASS_MARK} {check_id}: no custom mutables to test")
-            continue
+    The original sweep only descended into keys whose value differed from
+    BASE_OBS and only yielded a dict when the base value was not a dict, so a
+    shared `click`, `console` or `signalsContext` dict -- any container
+    matching BASE_OBS's shape -- was invisible: ac3-spa-nav, ac5-console and
+    ac6-signals reported "no custom mutables to test" and a green tick. Each
+    case plants one deliberately-aliased container in a synthetic fixture
+    mapping and requires the sweep to name exactly the planted pairs; the
+    clean case must stay silent.
+    """
+    shared_click = click_result()
+    shared_console = {"errors": 0, "warnings": 0, "lines": []}
+    shared_ctx = {"profile": {"total_product_views": 2},
+                  "recent_activity": "- product_viewed: p1",
+                  "agent_instructions": ""}
+    shared_profile = {"total_product_views": 2}
+    shared_turns = [turn()]
+    shared_browse = browse()
+    base = copy.deepcopy(BASE_OBS)
+    base_backed = copy.deepcopy(BASE_OBS)
+    base_backed["console"] = base["console"]
 
-        for path, mutation_target in mutables:
-            if isinstance(mutation_target, list):
-                mutation_target.append("ALIASING-TEST")
-            elif isinstance(mutation_target, dict):
-                mutation_target["ALIASING-TEST"] = True
+    cases = [
+        ("shared click dict between good and bad",
+         {"x": (obs(click=shared_click), obs(click=shared_click))},
+         copy.deepcopy(BASE_OBS), {"x"}),
+        ("shared console dict across two pairs",
+         {"x": (obs(console=shared_console), obs()),
+          "y": (obs(console=shared_console), obs())},
+         copy.deepcopy(BASE_OBS), {"x", "y"}),
+        ("shared signalsContext dict between good and bad",
+         {"x": (obs(signalsContext=shared_ctx), obs(signalsContext=shared_ctx))},
+         copy.deepcopy(BASE_OBS), {"x"}),
+        ("shared profile inside distinct signalsContexts",
+         {"x": (obs(signalsContext={"profile": shared_profile,
+                                    "recent_activity": "- pv",
+                                    "agent_instructions": ""}),
+                obs(signalsContext={"profile": shared_profile,
+                                    "recent_activity": "No events buffered.",
+                                    "agent_instructions": ""}))},
+         copy.deepcopy(BASE_OBS), {"x"}),
+        ("shared turns list between good and bad",
+         {"x": (obs(turns=shared_turns), obs(turns=shared_turns))},
+         copy.deepcopy(BASE_OBS), {"x"}),
+        ("shared browse dict between good and bad",
+         {"x": (obs(browse=shared_browse), obs(browse=shared_browse))},
+         copy.deepcopy(BASE_OBS), {"x"}),
+        ("fixture reusing a BASE_OBS container",
+         {"x": (base_backed, obs())},
+         base, {"x"}),
+        ("independent containers everywhere",
+         {"x": (obs(turns=[turn()], click=click_result()),
+                obs(turns=[turn(cards=[])], click=click_result())),
+          "y": (obs(console={"errors": 0, "warnings": 0, "lines": []}),
+                obs(console={"errors": 1, "warnings": 0, "lines": []}))},
+         copy.deepcopy(BASE_OBS), set()),
+    ]
 
-            good_now = good
-            siblings_ok = good_now == good_initial
-            others_ok = all(FIXTURES[other_id] == all_initial[other_id]
-                           for other_id in FIXTURES if other_id != check_id)
-            base_ok = BASE_OBS == copy.deepcopy(BASE_OBS)
-
-            mutation_ok = siblings_ok and others_ok and base_ok
-
-            if not mutation_ok:
-                failures += 1
-                path_str = ".".join(str(p) for p in path)
-                print(f"  fixture aliasing {checks.FAIL_MARK} {check_id} at {path_str}: "
-                      f"siblings_ok={siblings_ok} others_ok={others_ok} base_ok={base_ok}")
-            else:
-                path_str = ".".join(str(p) for p in path)
-                print(f"  fixture aliasing {checks.PASS_MARK} {check_id} at {path_str}: no aliasing")
-
-            if isinstance(mutation_target, list):
-                mutation_target.pop()
-            elif isinstance(mutation_target, dict):
-                del mutation_target["ALIASING-TEST"]
-
-    mark = checks.PASS_MARK if failures == 0 else checks.FAIL_MARK
-    summary = "all fixture pairs are aliasing-safe"
-    print(f"  fixture aliasing {mark} {summary}")
-
+    failures = 0
+    for label, fixtures, base_obs, want in cases:
+        found, _tested = _aliasing_failures(fixtures, base_obs)
+        got = {check_id for check_id, _where, _leak in found}
+        ok = got == want
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  aliasing-det {mark} {label:<44} -> "
+              f"flagged {sorted(got) or 'nothing'}"
+              + ("" if ok else f"  expected {sorted(want) or 'nothing'}"))
     return failures
 
 
@@ -871,6 +941,7 @@ def run():
     failures = run_event_name_cases() + run_context_cases() + run_fault_cases()
     failures += run_fault_isolation_cases()
     failures += test_fixture_aliasing()
+    failures += run_aliasing_detection_cases()
     failures += run_redact_cases()
     failures += run_predicate_cases("ac0-turns", "ac0-turns", AC0_TURN_CASES)
     failures += run_predicate_cases("ac2-token", "ac2-cards", AC2_TOKEN_CASES)
