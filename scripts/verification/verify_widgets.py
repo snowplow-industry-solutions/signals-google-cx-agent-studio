@@ -102,7 +102,7 @@ def _run_turn(chat, log, page, out, label, prompt):
     shot = f"verify-turn-{label}.png"
     page.screenshot(path=f"{out}/{shot}")
 
-    print(f"    cards={[c['kind'] for c in cards]} mode={modes[-1] if modes else None} "
+    print(f"    cards={[c['kind'] for c in cards]} modes={modes} "
           f"prose={len(prose)}ch timed_out={timed_out}")
 
     return {
@@ -111,7 +111,12 @@ def _run_turn(chat, log, page, out, label, prompt):
         "prose": prose,
         "cards": cards,
         "rawToken": raw_token,
-        "mode": modes[-1] if modes else None,
+        # Every renderer mark for the turn, not just the last one: a turn that
+        # renders two cards where the first fails logs
+        # ["UNRENDERABLE", "payload-mode"], and keeping only the last entry
+        # threw the failure away before any predicate could see it.
+        "modes": modes,
+        "mode": modes[-1] if modes else None,   # display only
         "wire": sorted(wire),
         "isWidgetTurn": bool(cards),
         "timedOut": timed_out,
@@ -152,6 +157,7 @@ def observe(base, secret, observation):
     observation.setdefault("browse", {})
     observation.setdefault("signalsContext", {})
     observation.setdefault("turns", [])
+    observation.setdefault("expectedTurns", len(TURNS))
     observation.setdefault("click", {})
     observation.setdefault("console", {"errors": 0, "warnings": 0, "lines": []})
 
@@ -240,6 +246,10 @@ def main(argv):
         "base": base,
         "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "complete": False,
+        # Written here, before phase A runs, so that a crash or a hung turn
+        # leaves ac0-turns something to fail against: turns recorded so far
+        # versus turns the plan called for.
+        "expectedTurns": len(TURNS),
         "browse": {}, "signalsContext": {}, "turns": [], "click": {},
         "console": {"errors": 0, "warnings": 0, "lines": []},
     }
