@@ -375,6 +375,27 @@ FIXTURES = {
 }
 
 
+def run_fault_cases():
+    """Every check id must have a fault that actually makes that check fail."""
+    failures = 0
+    for check_id in checks.CHECK_ORDER:
+        good, _bad = FIXTURES[check_id]
+        # Deep copy: the fault hooks mutate nested turn dicts, and a shallow
+        # copy would corrupt the fixtures the predicate loop reads afterwards.
+        corrupted = copy.deepcopy(good)
+        try:
+            checks.apply_fault(corrupted, check_id)
+        except KeyError:
+            print(f"  fault      {checks.FAIL_MARK} {check_id}: no fault registered")
+            failures += 1
+            continue
+        fires = any(not r.passed for r in checks.PREDICATES[check_id](corrupted))
+        failures += 0 if fires else 1
+        print(f"  fault      {checks.PASS_MARK if fires else checks.FAIL_MARK} "
+              f"{check_id} fails when injected")
+    return failures
+
+
 def run():
     missing = sorted(set(checks.PREDICATES) - set(FIXTURES))
     if missing:
@@ -385,7 +406,7 @@ def run():
         print(f"  {checks.FAIL_MARK} fixture with no predicate: {', '.join(unimplemented)}")
         return 1
 
-    failures = run_event_name_cases() + run_context_cases()
+    failures = run_event_name_cases() + run_context_cases() + run_fault_cases()
     failures += test_fixture_aliasing()
     failures += run_ac3_url_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
