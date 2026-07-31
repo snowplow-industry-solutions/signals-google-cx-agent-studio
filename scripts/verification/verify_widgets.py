@@ -50,8 +50,11 @@ TURNS = [
 ]
 
 # The CES token broker's chatToken turns up in a console debug line. Reports go
-# to a gitignored directory, but they should not carry it regardless.
-TOKEN_PATTERN = re.compile(r'("?(?:chatToken|token|access_token)"?\s*[:=]\s*)"?[\w\-\.]{16,}"?',
+# to a gitignored directory, but they should not carry it regardless. Quotes
+# around both the key and the value are optional and may be single or double
+# -- console.log renders object literals with single-quoted values by
+# default, and an unquoted or double-quoted variant misses that case.
+TOKEN_PATTERN = re.compile(r'''(["']?(?:chatToken|token|access_token)["']?\s*[:=]\s*)["']?[\w\-\.]{16,}["']?''',
                            re.IGNORECASE)
 
 
@@ -145,14 +148,21 @@ def _click_card(chat, page, out):
     }
 
 
-def observe(base, secret):
+def observe(base, secret, observation):
+    """Populate `observation` in place with the walkthrough evidence.
+
+    Takes the dict to fill rather than building and returning a fresh one:
+    the walkthrough runs for minutes against a live agent, and the caller
+    (main) keeps its own reference to this same dict, so a crash partway
+    through still leaves whatever was captured so far available to write out
+    before the exception propagates.
+    """
     out = config.out_dir()
-    observation = {
-        "base": base,
-        "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "browse": {}, "signalsContext": {}, "turns": [], "click": {},
-        "console": {"errors": 0, "warnings": 0, "lines": []},
-    }
+    observation.setdefault("browse", {})
+    observation.setdefault("signalsContext", {})
+    observation.setdefault("turns", [])
+    observation.setdefault("click", {})
+    observation.setdefault("console", {"errors": 0, "warnings": 0, "lines": []})
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, channel="chrome")
@@ -230,26 +240,47 @@ def main(argv):
     if fault:
         print(f"  !! fault injected: {fault}")
 
-    observation = None
+    # main() owns the observation dict and passes it into observe() to be
+    # filled in place (rather than observe() building and returning one), so
+    # that if observe() raises partway through, this reference still holds
+    # whatever was captured -- the finally block below writes it out before
+    # the exception propagates, instead of discarding it.
+    observation = {
+        "base": base,
+        "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "complete": False,
+        "browse": {}, "signalsContext": {}, "turns": [], "click": {},
+        "console": {"errors": 0, "warnings": 0, "lines": []},
+    }
+
+    fault_error = None
     try:
-        observation = observe(base, secret)
+        observe(base, secret, observation)
+        observation["complete"] = True
     finally:
-        if observation is not None:
-            if fault:
-                try:
-                    checks.apply_fault(observation, fault)
-                except KeyError:
-                    print(f"unknown VERIFY_FAULT id: {fault}. Known ids: "
-                          f"{', '.join(checks.CHECK_ORDER)}", file=sys.stderr)
-                    return 2
-            run = checks.evaluate(observation)
-            report = f"{out}/verify-widgets-report.json"
-            with open(report, "w") as fh:
-                json.dump({"observation": observation,
-                           "fault": fault,
-                           "checks": [vars(r) for r in run.results]}, fh, indent=2)
-            print("\n" + run.render())
-            print(f"\n  report: {report}")
+        # No `return` in this block: a return inside `finally` would silently
+        # discard an in-flight exception from observe(), which is exactly the
+        # failure mode a crash mid-walkthrough must not trigger. Whatever
+        # happens here, the original exception (if any) resumes propagating
+        # once this block finishes.
+        if fault:
+            try:
+                checks.apply_fault(observation, fault)
+            except KeyError:
+                fault_error = fault
+        run = checks.evaluate(observation)
+        report = f"{out}/verify-widgets-report.json"
+        with open(report, "w") as fh:
+            json.dump({"observation": observation,
+                       "fault": fault,
+                       "checks": [vars(r) for r in run.results]}, fh, indent=2)
+        print("\n" + run.render())
+        print(f"\n  report: {report}")
+
+    if fault_error:
+        print(f"unknown VERIFY_FAULT id: {fault_error}. Known ids: "
+              f"{', '.join(checks.CHECK_ORDER)}", file=sys.stderr)
+        return 2
 
     return run.exit_code
 
