@@ -139,7 +139,7 @@ def check_commentary(obs):
     for t in _widget_turns(obs):
         prose = (t.get("prose") or "").strip()
         results.append(CheckResult(
-            id=f"ac1-commentary[{t['label']}]",
+            id=f"ac1-commentary[{t.get('label', '<unlabelled>')}]",
             label="text bubble accompanied the cards",
             passed=len(prose) >= MIN_PROSE,
             detail=f"prose was {len(prose)} chars: {prose[:80]!r}",
@@ -155,7 +155,7 @@ def check_cards(obs):
         cards = t.get("cards") or []
         raw = bool(t.get("rawToken"))
         results.append(CheckResult(
-            id=f"ac2-cards[{t['label']}]",
+            id=f"ac2-cards[{t.get('label', '<unlabelled>')}]",
             label="cards rendered, no raw {@Widget: token",
             passed=bool(cards) and not raw,
             detail=f"{len(cards)} card(s), rawToken={raw}",
@@ -224,7 +224,7 @@ def check_delivery_mode(obs):
         modes = t.get("modes") or []
         mode = t.get("mode")
         results.append(CheckResult(
-            id=f"ac4-mode[{t['label']}]",
+            id=f"ac4-mode[{t.get('label', '<unlabelled>')}]",
             label="delivery mode is payload-mode or token-mode",
             passed="UNRENDERABLE" not in modes and mode in VALID_MODES,
             detail=f"mode={mode!r} modes={modes} wire={t.get('wire')}",
@@ -254,7 +254,7 @@ def check_zero_match(obs):
         cards = t.get("cards") or []
         raw = bool(t.get("rawToken"))
         results.append(CheckResult(
-            id=f"ac7-zero-match[{t['label']}]",
+            id=f"ac7-zero-match[{t.get('label', '<unlabelled>')}]",
             label="degraded to plain text, no invented product",
             passed=not cards and not raw,
             detail=f"{len(cards)} card(s) rendered, rawToken={raw}",
@@ -312,12 +312,16 @@ def check_signals_profile(obs):
     profile = ctx.get("profile") or {}
     activity = ctx.get("recent_activity") or ""
     unbuffered = NO_EVENTS_MARKER in activity
+    # Three states, not two: an empty string is not 'populated', and the detail
+    # is what someone reads while debugging a failed ac6-signals.
+    activity_state = ("empty-marker" if unbuffered
+                      else "populated" if activity else "empty")
     return [CheckResult(
         id="ac6-signals",
         label="Signals returned a populated profile",
         passed=bool(profile) and not unbuffered,
         detail=(f"{len(profile)} profile attribute(s), "
-                f"recent_activity={'empty-marker' if unbuffered else 'populated'}: "
+                f"recent_activity={activity_state}: "
                 f"{activity[:100]!r}"),
     )]
 
