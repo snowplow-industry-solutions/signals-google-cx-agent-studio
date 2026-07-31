@@ -16,7 +16,6 @@ Exit codes: 0 all checks passed, 1 one or more failed, 2 misconfigured.
 import datetime
 import json
 import os
-import re
 import sys
 import time
 
@@ -28,6 +27,7 @@ from harness import checks, config, selfcheck  # noqa: E402
 from harness.chat import ChatPanel, RendererLog  # noqa: E402
 from harness.collector import Recorder  # noqa: E402
 from harness.context import poll_context  # noqa: E402
+from harness.redact import redact  # noqa: E402
 
 # Browse plan. SPA clicks where possible, mirroring docs/demo-script.md;
 # probe_issue7_fix.py remains the dedicated full-load-vs-SPA regression check.
@@ -49,17 +49,8 @@ TURNS = [
     ("5-zero-match", "Do you have any neon orange swimwear under $15?"),
 ]
 
-# The CES token broker's chatToken turns up in a console debug line. Reports go
-# to a gitignored directory, but they should not carry it regardless. Quotes
-# around both the key and the value are optional and may be single or double
-# -- console.log renders object literals with single-quoted values by
-# default, and an unquoted or double-quoted variant misses that case.
-TOKEN_PATTERN = re.compile(r'''(["']?(?:chatToken|token|access_token)["']?\s*[:=]\s*)["']?[\w\-\.]{16,}["']?''',
-                           re.IGNORECASE)
-
-
-def redact(lines):
-    return [TOKEN_PATTERN.sub(r"\1<redacted>", line) for line in lines]
+# Redaction of the CES token broker's chatToken lives in harness/redact.py so
+# that the probes writing their own reports get it too.
 
 
 def _browse(page, base, out):

@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from harness.chat import ChatPanel, RendererLog  # noqa: E402
 from harness.config import ConfigError, out_dir, require_base  # noqa: E402
+from harness.redact import redact_console  # noqa: E402
 
 try:
     BASE = require_base()
@@ -144,7 +145,10 @@ def main():
         with open(f"{OUT}/walkthrough-report.json", "w") as fh:
             json.dump({"turns": results, "click": click_result,
                        "final": final, "network": log.network,
-                       "console": [[t, ty, tx] for t, ty, tx in log.console]}, fh, indent=2)
+                       # The CES chatToken shows up in a console debug line on
+                       # every run that opens the chat; it does not belong in a
+                       # file anyone might attach to an issue.
+                       "console": redact_console(log.console)}, fh, indent=2)
         print("\n=== FINAL TRANSCRIPT ===")
         for i, m in enumerate(final.get("messages", [])):
             print(f"[{i}] rawToken={m['rawToken']} cards={[c['kind'] for c in m['cards']]}")
