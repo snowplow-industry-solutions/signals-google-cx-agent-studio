@@ -24,23 +24,31 @@ Exit codes: `0` all checks passed, `1` one or more failed, `2` misconfigured.
 | `VERIFY_OUT` | no | Report and screenshot directory. Defaults to the gitignored `scripts/verification/out/`. |
 | `VERIFY_FAULT` | no | A check id whose observed input is corrupted, to prove that check can fail. |
 
-### The eight checks
+### The nine checks
 
 | id | asserts |
 | --- | --- |
+| `ac0-turns` | every planned turn ran and returned a reply — `len(turns) == expectedTurns` and no turn timed out |
 | `ac1-commentary` | every widget turn also carried a text bubble (issue #3) |
 | `ac2-cards` | cards rendered, and no raw `{@Widget:` token leaked (issue #1) |
 | `ac3-spa-nav` | a card click SPA-navigated with chat and prior cards preserved |
-| `ac4-mode` | each widget turn's delivery mode was payload-mode or token-mode |
+| `ac4-mode` | each widget turn's delivery mode was payload-mode or token-mode, with no `UNRENDERABLE` anywhere in the turn's renderer marks |
 | `ac5-console` | zero console errors or warnings across the run |
 | `ac6-collector` | `product_viewed` reached the collector, once per product page, under one session id (issue #7) |
 | `ac6-signals` | Signals returned a populated profile |
 | `ac7-zero-match` | the zero-match control turn degraded to plain text |
 
 Per-turn checks report one result per turn: `ac1-commentary[2a-carousel]`. The
-summary line counts **results, not ids** — eight check ids over a run with four
-widget turns and one zero-match control render as `17/17 checks passed`, so the
-total moves with how many widget turns the agent happens to produce.
+summary line counts **results, not ids** — nine check ids over a run with four
+widget turns and one zero-match control render as `18/18 checks passed`, so the
+total moves with how many widget turns the agent happens to produce. Do not read
+a fixed denominator as a health signal; read the exit code.
+
+`ac0-turns` is the gate in front of the per-turn checks. A turn that times out
+has no cards, so it is not a widget turn, so `ac1`/`ac2`/`ac4` would have
+nothing to say about it. For the same reason **a check that produces no results
+at all is recorded as a failure**, not skipped: `evaluate()` emits
+`no instances to evaluate` rather than letting silence read as a pass.
 
 ### Reading a failure
 
@@ -66,6 +74,15 @@ and every fault a real one, failing if any predicate cannot fail. `VERIFY_FAULT`
 corrupts a check's input during a live run, which catches a predicate that is
 sound but reads a field phase A never writes.
 
+A single fixture pair is not enough for a predicate whose verdict is a
+conjunction: `bool(cards) and not raw` short-circuits, so a bad fixture that
+empties `cards` *and* sets `rawToken` never reaches the token term — the issue
+#1 leak assertion could have been deleted outright and both mechanisms would
+still have gone green. So each `bad` fixture and its matching fault hook now
+break **different** terms, and `selfcheck.py` carries named case lists
+(`AC0_TURN_CASES`, `AC2_TOKEN_CASES`, `AC3_URL_CASES`, `AC4_MODE_CASES`,
+`AC7_TOKEN_CASES`, `EVALUATE_CASES`, `REDACT_CASES`) driving one term at a time.
+
 ## The `harness/` package
 
 Shared by `verify_widgets.py` and the five live probes, so a selector or a
@@ -77,8 +94,9 @@ decoding rule is fixed in one place rather than five.
 | `chat.py` | The widget's shadow DOM: `ChatPanel` (open/send/read_state/quiesce/wait_for_reply/click_last_card_item) and `RendererLog` (console marks, agent response bodies, console error/warning counts). |
 | `collector.py` | `Recorder` — collector POST bodies decoded to event level (`ue_px` / `ue_pr` → schema name), plus the session ids seen on the wire. |
 | `context.py` | `poll_context` / `fetch_context` / `is_populated` against `/api/agent/context`, the endpoint `getUserContext` calls. Retries because Signals answers 12–33s after an event. |
-| `checks.py` | The eight pure predicates, `CheckResult` / `CheckRun`, and the `VERIFY_FAULT` corruptions. Imports no Playwright — that is what makes both fail-proof mechanisms possible. |
-| `selfcheck.py` | Synthetic passing and failing observations per predicate, plus fixture-aliasing and URL-matching regression tests. |
+| `checks.py` | The nine pure predicates, `CheckResult` / `CheckRun`, and the `VERIFY_FAULT` corruptions. Imports no Playwright — that is what makes both fail-proof mechanisms possible. |
+| `redact.py` | `TOKEN_PATTERN` / `redact_line` / `redact` / `redact_console` — token-shaped values stripped from anything written to disk. Shared, because every script here serialises captured console output. |
+| `selfcheck.py` | Synthetic passing and failing observations per predicate, the per-term case lists, and the fixture-aliasing, URL-matching, `evaluate()` and redaction regression tests. |
 
 ## The scripts
 
@@ -143,17 +161,30 @@ Two facts, and the second does not replace the first.
 
 1. **`out/` is gitignored** — the `*-report.json` evidence files, the
    screenshots, and the session-id scratch files stay out of the repo.
-2. **`verify_widgets.py` redacts token-shaped values** from the console lines it
-   stores, so its own report does not carry the CES token broker's `chatToken`
-   verbatim. Confirmed against a real production run: the captured line reads
-   `chatToken: <redacted>`.
+2. **Every script here redacts token-shaped values** from the console lines it
+   stores, via `harness/redact.py`. `verify_widgets.py`, `commentary.py` and
+   `walkthrough.py` all run their captured console through it, so no report
+   carries the CES token broker's `chatToken`. The captured line reads
+   `chatToken: <redacted>` with **nothing after it** — verified by replaying the
+   real console lines from a production run through the redactor and confirming
+   zero residual high-entropy characters.
 
-The redaction is a second line of defence, not a licence to commit a report.
-Two limits observed on real output, both worth knowing before trusting it:
+Two things the redactor gets right that the first version did not, both worth
+knowing before trusting it:
 
-- The storefront logs the token **already truncated with an ellipsis**
-  (`<head>…<tail>`). The pattern redacts the head and stops at the `…`, so a
-  ~47-character tail survives in the report. Partial, but not nothing.
-- The **probe scripts do not redact at all** — `commentary.py` and
-  `walkthrough.py` write the console line as captured. Only `verify_widgets.py`
-  has the filter.
+- The storefront logs the token **already truncated with a Unicode ellipsis**
+  (`<head>…<tail>`). The value class includes `…`, so the tail goes with the
+  head. The first version stopped dead at the ellipsis and left ~49 characters
+  behind.
+- It is **shared, not per-script**. `commentary.py` and `walkthrough.py` used to
+  write the console line exactly as captured; only `verify_widgets.py` had a
+  filter, and it was defined in the entry script rather than the package.
+
+What it deliberately does **not** touch: `[Signals Demo] Passed
+domain_sessionid to widget {sessionId: …}`. `collector.Recorder.forwarded_id()`
+parses that line to pick the session to poll Signals for, so over-redaction
+would break session detection. `selfcheck.REDACT_CASES` holds it as a standing
+negative case, alongside the token shapes that must be caught.
+
+Redaction is still a second line of defence, not a licence to commit a report:
+`out/` stays gitignored, and screenshots are not redacted at all.

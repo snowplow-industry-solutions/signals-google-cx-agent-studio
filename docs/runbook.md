@@ -1149,6 +1149,49 @@ properties. Checked on production: no clashing default styling, no
    - Storefront baseline reconfirmed alongside the run: 171 tests across 20
      files passing, `eslint` clean, no storefront code touched.
 
+   **Follow-up, 2026-07-31 (after the run above, same branch): the redaction
+   gap and three assertion gaps were closed. The entry above is left as
+   written — it is an accurate record of what that run's harness did.**
+
+   Everything recorded above happened. What changed afterwards, from a
+   whole-branch review before the PR opened:
+
+   - **Redaction is no longer partial, and no longer per-script.**
+     `TOKEN_PATTERN` and `redact()` moved out of `verify_widgets.py` into
+     `harness/redact.py`, the value class gained the Unicode ellipsis (plus
+     base64 `+ / =` and a `Bearer` prefix), and `commentary.py` and
+     `walkthrough.py` — which wrote the console verbatim — now call it too.
+     Replaying the real console lines captured by the run above through the new
+     redactor leaves **zero** residual high-entropy characters, against 49 that
+     survived at the time. The `[Signals Demo] Passed domain_sessionid` line is
+     explicitly left intact, because `Recorder.forwarded_id()` parses it.
+     The report JSON already sitting in `out/` from the 2026-07-31 run is a
+     pre-fix artifact and still carries that tail; it is not evidence about the
+     current code, and it should not be attached anywhere.
+   - **A new `ac0-turns` check**, plus `evaluate()` recording an empty result
+     list as a failure. A turn that times out produces no cards, so it is not a
+     widget turn, so the per-turn checks said nothing about it — a run with
+     timed-out turns could report all-green and exit 0. The run above had no
+     timeouts, so its verdict is unaffected; the harness simply could not have
+     told you if it had.
+   - **`ac4-mode` now reads the whole `modes` list**, not the last renderer
+     mark. Phase A kept only `modes[-1]`, so an `UNRENDERABLE` followed by a
+     successful second card was discarded before phase B could see it. All four
+     turns above logged a single `payload-mode` mark, so again the verdict is
+     unaffected.
+   - **The `ac2` / `ac7` fault hooks now flip `rawToken` only.** Emptying
+     `cards` as well meant the conjunction short-circuited and the raw-token
+     half — the issue #1 leak — was proven by neither `--selfcheck` nor
+     `VERIFY_FAULT`. Named per-term case lists in `selfcheck.py` cover the other
+     halves.
+
+   Counts move as a result: nine check ids rather than eight, and an equivalent
+   run renders 18 results rather than 17. `--selfcheck` reports `9/9 predicates
+   proven both ways`, exit 0. **The next production run of §11.5 will confirm
+   the redaction on live output**; everything above was verified offline against
+   the console lines the 2026-07-31 run already captured, with no browser and no
+   contact with production.
+
 ### 11.6 Current state: renderer live in production (revert kept as fallback)
 
 Resolved 2026-07-30: **the renderer path won; no console revert.** The
