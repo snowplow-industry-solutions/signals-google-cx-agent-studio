@@ -70,7 +70,10 @@ VERIFY_FAULT=ac6-signals python3 scripts/verification/verify_widgets.py
 ```
 
 `--selfcheck` feeds every predicate a synthetic passing and failing observation,
-and every fault a real one, failing if any predicate cannot fail. `VERIFY_FAULT`
+failing if any predicate cannot fail. It also applies every fault twice: to that
+check's own minimal fixture, and to a whole synthetic run, where the fault must
+fail **only** its own check — a fault with collateral makes a live
+`VERIFY_FAULT` run ambiguous about what it just proved. `VERIFY_FAULT` itself
 corrupts a check's input during a live run, which catches a predicate that is
 sound but reads a field phase A never writes.
 
@@ -78,10 +81,24 @@ A single fixture pair is not enough for a predicate whose verdict is a
 conjunction: `bool(cards) and not raw` short-circuits, so a bad fixture that
 empties `cards` *and* sets `rawToken` never reaches the token term — the issue
 #1 leak assertion could have been deleted outright and both mechanisms would
-still have gone green. So each `bad` fixture and its matching fault hook now
-break **different** terms, and `selfcheck.py` carries named case lists
-(`AC0_TURN_CASES`, `AC2_TOKEN_CASES`, `AC3_URL_CASES`, `AC4_MODE_CASES`,
-`AC7_TOKEN_CASES`, `EVALUATE_CASES`, `REDACT_CASES`) driving one term at a time.
+still have gone green. So for every predicate whose verdict is a conjunction,
+the `bad` fixture and its matching fault hook now break **different** terms.
+(`ac1-commentary` is the one single-term predicate, so its fixture and its fault
+necessarily drive the same thing.) On top of that, `selfcheck.py` carries named
+case lists driving one term at a time: `AC0_TURN_CASES`, `AC2_TOKEN_CASES`,
+`AC3_URL_CASES`, `AC3_PRESERVE_CASES`, `AC4_MODE_CASES`, `AC5_CONSOLE_CASES`,
+`AC6_COLLECTOR_CASES`, `AC6_SIGNALS_CASES`, `AC7_TOKEN_CASES`, plus
+`EVALUATE_CASES` and `REDACT_CASES`.
+
+**The standard is gutting.** Delete any one term of any predicate and
+`--selfcheck` must go red. Of the 28 clauses across the nine predicates, 25 meet
+it. The three that do not are all in `ac3-spa-nav` — the no-clickable-card early
+return, and the two defensive fallbacks inside `landed` — and they are
+diagnostics rather than assertions: enumerating the `clickedUri` × `afterUrl` ×
+`spaProbeSurvived` × `chatMessagesAfter` × `cardsAfter` space shows every shape
+they reject already fails on `landed`, so they change what a failure *says*,
+never whether there is one. `check_spa_navigation`'s docstring names them, so a
+future sweep does not re-file them as gaps.
 
 ## The `harness/` package
 
@@ -95,8 +112,8 @@ decoding rule is fixed in one place rather than five.
 | `collector.py` | `Recorder` — collector POST bodies decoded to event level (`ue_px` / `ue_pr` → schema name), plus the session ids seen on the wire. |
 | `context.py` | `poll_context` / `fetch_context` / `is_populated` against `/api/agent/context`, the endpoint `getUserContext` calls. Retries because Signals answers 12–33s after an event. |
 | `checks.py` | The nine pure predicates, `CheckResult` / `CheckRun`, and the `VERIFY_FAULT` corruptions. Imports no Playwright — that is what makes both fail-proof mechanisms possible. |
-| `redact.py` | `TOKEN_PATTERN` / `redact_line` / `redact` / `redact_console` — token-shaped values stripped from anything written to disk. Shared, because every script here serialises captured console output. |
-| `selfcheck.py` | Synthetic passing and failing observations per predicate, the per-term case lists, and the fixture-aliasing, URL-matching, `evaluate()` and redaction regression tests. |
+| `redact.py` | `TOKEN_PATTERN` / `redact_line` / `redact` / `redact_console` — token-shaped values stripped from anything written to disk. Shared rather than per-script, because three of the live scripts serialise captured console output. |
+| `selfcheck.py` | Synthetic passing and failing observations per predicate, the per-term case lists, the fault-isolation sweep, and the fixture-aliasing, URL-matching, `evaluate()` and redaction regression tests. |
 
 ## The scripts
 
@@ -161,13 +178,24 @@ Two facts, and the second does not replace the first.
 
 1. **`out/` is gitignored** — the `*-report.json` evidence files, the
    screenshots, and the session-id scratch files stay out of the repo.
-2. **Every script here redacts token-shaped values** from the console lines it
-   stores, via `harness/redact.py`. `verify_widgets.py`, `commentary.py` and
-   `walkthrough.py` all run their captured console through it, so no report
-   carries the CES token broker's `chatToken`. The captured line reads
-   `chatToken: <redacted>` with **nothing after it** — verified by replaying the
-   real console lines from a production run through the redactor and confirming
-   zero residual high-entropy characters.
+2. **Every live script that stores console output redacts token-shaped values**
+   from it, via `harness/redact.py`. `verify_widgets.py`, `commentary.py` and
+   `walkthrough.py` are the three that capture console at all, and all three run
+   it through the redactor, so no report they write carries the CES token
+   broker's `chatToken`. The captured line reads `chatToken: <redacted>` with
+   **no token material after it** — the rest of the line (`expireTime`, the
+   closing brace) survives, which is the point; verified by replaying the real
+   console lines from a production run through the redactor and confirming zero
+   residual high-entropy characters.
+
+   The frozen probes do **not** redact, and they are not being changed. Four of
+   them — `probe_latency.py`, `probe_navmode.py`, `probe_rotation.py`,
+   `probe_stale.py` — filter their stored console to `[Signals Demo]`-prefixed
+   lines, so no token reaches their reports either way. Two do not:
+   `followup.py` and `probe_session.py` open the chat and dump the raw console
+   into `out/followup-report.json` and `out/probe-session-report.json`, so those
+   two files can hold the truncated `chatToken`. That is contained by point 1,
+   not by redaction: `out/` is gitignored. Do not paste from those two reports.
 
 Two things the redactor gets right that the first version did not, both worth
 knowing before trusting it:
