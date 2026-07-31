@@ -1075,6 +1075,167 @@ properties. Checked on production: no clashing default styling, no
      that placeholder attributes each reply to the following turn). Not
      committed; a committed harness is proposed as follow-up work.
 
+   **Verification run, 2026-07-31 10:57–11:00 UTC (`verify_widgets.py`, the
+   committed asserting harness from issue #9, against production
+   `https://signals-google-gecx-storefront.vercel.app`): PASS, 17/17 check
+   results green across all eight check ids.**
+
+   First run of the §11.5 walkthrough by a harness that fails rather than
+   footnotes. The count is 17 rather than 8 because the per-turn checks report
+   one result per turn — eight ids over four widget turns and one zero-match
+   control. Command:
+
+   ```sh
+   VERIFY_BASE=https://signals-google-gecx-storefront.vercel.app \
+     AGENT_SHARED_SECRET=... \
+     python3 scripts/verification/verify_widgets.py
+   ```
+
+   - `ac1-commentary` 4/4 widget turns carried a text bubble — 196, 156, 156
+     and 136 characters of prose, measured with the `[data-widget-card]`
+     subtrees removed so card text cannot be counted as commentary.
+   - `ac2-cards` 4/4 rendered cards with no raw `{@Widget:` token: two
+     `productCarousel` cards of three items each, two single-item
+     `productDetails` cards. The 2026-07-30 composition quirk — a *"couple of
+     accessories"* phrasing answered with a single details card — did **not**
+     recur; that turn produced a three-item carousel.
+   - `ac3-spa-nav` a carousel item click landed on
+     `/products/noir-double-breasted-blazer`; the in-page probe variable
+     survived the navigation (so no full page load), and the chat panel still
+     held 14 messages and 4 rendered cards afterwards.
+   - `ac4-mode` all 4 widget turns arrived as `payload-mode` — console mark
+     *"Rewrote widget payload to rich-message template"*, each with a
+     `product_detail_carousel` / `base_product_detail` discriminator visible in
+     the response body.
+   - `ac5-console` zero errors, zero warnings across 44 captured console lines.
+   - `ac6-collector` `product_viewed` 2/2 for the two product pages in the
+     browse plan, all under one session id
+     `8f3c11e6-921f-4889-924d-3c5e26c92838`. Full wire counts: `pv` 6,
+     `product_list_viewed` 6, `product_list_clicked` 2, `product_viewed` 2.
+   - `ac6-signals` `/api/agent/context` returned **10 profile attributes after
+     1s (1 attempt)**: `favorite_category`, `favorite_color_family`,
+     `favorite_designer`, `favorite_occasion`, `total_product_views`,
+     `recently_viewed_product_ids`, and the four interest-count maps
+     (`category_`, `color_family_`, `designer_`, `occasion_`). Its
+     `recent_activity` read *"Last activity 13 seconds ago. Session started 38
+     seconds ago."* rather than the `No events buffered` marker. This is the
+     check whose absence footnoted issue #7 for a day.
+   - `ac7-zero-match` plain-text degradation on *"Do you have any neon orange
+     swimwear under $15?"* — 243 characters of prose, zero cards, no token, no
+     invented product.
+   - **The assertions were proven able to fire, not just to pass.**
+     `--selfcheck` exercises all eight predicates against synthetic passing and
+     failing observations plus the fixture-aliasing and URL-matching regression
+     tests, and reported `8/8 predicates proven both ways` (exit 0).
+     `VERIFY_FAULT=ac6-signals` against this same target at 11:01–11:04 UTC
+     produced `✗ ac6-signals` with `0 profile attribute(s),
+     recent_activity=empty-marker` and exit 1, while the other 16 results
+     stayed green. Phase A of that same fault run had observed a genuinely
+     populated profile (10 attributes, session
+     `b811fbd7-c7b7-4064-8e91-225149cb3d73`) before the corruption was applied,
+     so the red line is the injected fault and not a live regression.
+   - **Coverage limit, stated rather than implied:** all 4 widget turns arrived
+     as structured `outputs[].payload`. The in-band `{@Widget:` token mode did
+     not occur, so `ac4-mode` accepted that path but did not exercise it;
+     `followup.py` retains the synthetic token-mode probe for it, and the
+     live-agent token mode remains unobserved in production since the renderer
+     shipped.
+   - Evidence: `scripts/verification/out/` (gitignored) — report JSON plus a
+     screenshot per turn. The harness redacts the CES `chatToken` from the
+     console lines it stores; the redaction is partial (the storefront logs the
+     token pre-truncated with an ellipsis and only the leading portion is
+     replaced), which is why `out/` stays gitignored regardless. See
+     `scripts/verification/README.md`.
+   - Storefront baseline reconfirmed alongside the run: 171 tests across 20
+     files passing, `eslint` clean, no storefront code touched.
+
+   **Follow-up, 2026-07-31 (after the run above, same branch): the redaction
+   gap and three assertion gaps were closed. The entry above is left as
+   written — it is an accurate record of what that run's harness did.**
+
+   Everything recorded above happened. What changed afterwards, from a
+   whole-branch review before the PR opened:
+
+   - **Redaction is no longer partial, and no longer per-script.**
+     `TOKEN_PATTERN` and `redact()` moved out of `verify_widgets.py` into
+     `harness/redact.py`, the value class gained the Unicode ellipsis (plus
+     base64 `+ / =` and a `Bearer` prefix), and `commentary.py` and
+     `walkthrough.py` — which wrote the console verbatim — now call it too.
+     Replaying the real console lines captured by the run above through the new
+     redactor leaves **zero** residual high-entropy characters, against 49 that
+     survived at the time. The `[Signals Demo] Passed domain_sessionid` line is
+     explicitly left intact, because `Recorder.forwarded_id()` parses it.
+     The report JSON already sitting in `out/` from the 2026-07-31 run is a
+     pre-fix artifact and still carries that tail; it is not evidence about the
+     current code, and it should not be attached anywhere.
+   - **A new `ac0-turns` check**, plus `evaluate()` recording an empty result
+     list as a failure. A turn that times out produces no cards, so it is not a
+     widget turn, so the per-turn checks said nothing about it — a run with
+     timed-out turns could report all-green and exit 0. The run above had no
+     timeouts, so its verdict is unaffected; the harness simply could not have
+     told you if it had.
+   - **`ac4-mode` now reads the whole `modes` list**, not the last renderer
+     mark. Phase A kept only `modes[-1]`, so an `UNRENDERABLE` followed by a
+     successful second card was discarded before phase B could see it. All four
+     turns above logged a single `payload-mode` mark, so again the verdict is
+     unaffected.
+   - **The `ac2` / `ac7` fault hooks now flip `rawToken` only.** Emptying
+     `cards` as well meant the conjunction short-circuited and the raw-token
+     half — the issue #1 leak — was proven by neither `--selfcheck` nor
+     `VERIFY_FAULT`. Named per-term case lists in `selfcheck.py` cover the other
+     halves.
+
+   Counts move as a result: nine check ids rather than eight, and an equivalent
+   run renders 18 results rather than 17. `--selfcheck` reports `9/9 predicates
+   proven both ways`, exit 0. **The next production run of §11.5 will confirm
+   the redaction on live output**; everything above was verified offline against
+   the console lines the 2026-07-31 run already captured, with no browser and no
+   contact with production.
+
+   **Verification run, 2026-07-31 ~15:55 UTC (production, first run on the
+   rotated `AGENT_SHARED_SECRET`): PASS — 18/18 checks, `ac6-signals`
+   included.** Run as the acceptance gate for the §12 rotation of the shared
+   secret (Secret Manager `signals-agent-studio-agent-shared-secret`; new
+   canonical version 3, Vercel env replaced and redeployed, old versions 1–2
+   disabled and then destroyed after this run, Terraform state re-imported to
+   version 3 with a clean `plan` — "No changes").
+
+   - **A first post-rotation run failed 5/9, and the failure was real.** All
+     three zero-instance widget checks (`ac1`/`ac2`/`ac4`) fired plus
+     `ac3-spa-nav`: five turns of fluent prose with zero catalog data and
+     `wire: []` throughout, while the harness's own `/api/agent/context` poll
+     — and therefore `ac6-signals` — passed. That split is the signature of
+     the agent's tool calls failing auth while the direct path stays healthy.
+     The `ac0`/zero-instance guards added in the follow-up above are exactly
+     what surfaced it; the pre-fix harness would have printed a smaller
+     all-green run and exit 0.
+   - **Root cause: the new secret version was created with `print f '%s'`
+     (note the space) instead of `printf '%s'`.** zsh's `print` builtin
+     happily printed all three arguments, so the stored payload was
+     `f %s <value>\n` — 70 bytes against the deployed 64. Every CES tool call
+     fetched that payload via `versions/latest` (GCP audit logs show a fetch
+     pair per turn) and was 401'd by the storefront's strict-equality check.
+     Proven without printing either value: SHA-256 of the version payload vs
+     the deployed value, then hash-matching the reconstructed
+     `f %s <value>\n` form. Fixed by adding version 3 from the canonical
+     value; hash-verified byte-identical before re-running.
+   - **Pitfall (now standing rotation guidance):** load secret versions with
+     `printf '%s' "$VAR" | gcloud secrets versions add <id> --data-file=-`,
+     then verify before trusting: `gcloud secrets versions access N ... |
+     wc -c` must equal the expected length, and a piped SHA-256 must match
+     the source. Never `echo`, never zsh `print`, never paste into the
+     console form. Command substitution strips trailing newlines, so length
+     checks must be piped, not captured.
+   - **Terraform import form matters:** importing the new version by the
+     project-*number* resource name (`projects/112482720186/...`) left the
+     ForceNew `secret` attribute mismatched against the config's
+     project-*ID* form and planned a destroy-and-create. Re-importing as
+     `projects/engineering-sandbox/secrets/.../versions/3` yielded
+     "No changes."
+   - **The redaction confirmation promised above is closed:** this run's
+     report JSON carries zero residual high-entropy runs (one redaction
+     marker present), confirming `harness/redact.py` on live output.
+
 ### 11.6 Current state: renderer live in production (revert kept as fallback)
 
 Resolved 2026-07-30: **the renderer path won; no console revert.** The

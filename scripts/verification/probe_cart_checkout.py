@@ -1,5 +1,5 @@
 """Audit check for the same defect class: do cart_viewed and checkout_started
-survive a full page load? Reuses the Recorder from probe_issue7_fix.py.
+survive a full page load? Reuses the Recorder from harness/collector.py.
 """
 
 import json
@@ -9,7 +9,10 @@ import sys
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from probe_issue7_fix import BASE, Recorder  # noqa: E402
+from harness.collector import Recorder  # noqa: E402
+from harness.config import probe_base  # noqa: E402
+
+BASE = probe_base()
 
 
 def main():

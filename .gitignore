@@ -18,9 +18,13 @@ node_modules/
 *.tfvars.bak-*
 terraform/crash.log
 terraform/crash.*.log
+tfplan
+*.tfplan
+*.tfplan.*
 
 # Verification-script output: JSON reports and screenshots from
 # scripts/verification/. Reports capture the console, including the CES
 # token broker's chatToken, so they never belong in the repo.
 scripts/verification/out/
 scripts/verification/__pycache__/
+scripts/verification/harness/__pycache__/

@@ -6,203 +6,52 @@ Differences:
     text can never be mistaken for a conversational message;
   - every new assistant <li> in a turn is inspected, not just the last one
     (a turn may deliver prose and cards as separate bubbles);
-  - runSession response bodies are retained so the structured payload's own
-    fields can be recorded for issue #3 AC3;
+  - runSession response bodies were once retained (up to 60000 chars per
+    widget-turn response) so the structured payload's own fields could be
+    recorded for issue #3 AC3. Now that response capture lives once in
+    harness.chat.RendererLog, that retention is dropped: the AC3 question it
+    was evidence for is answered and recorded in runbook §11.5;
   - the script asserts and exits nonzero on failure.
 """
 
 import json
 import os
-import re
 import sys
 import time
 
 from playwright.sync_api import sync_playwright
 
-BASE = "https://signals-google-gecx-storefront.vercel.app"
-OUT = os.environ.get(
-    "VERIFY_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
-)
-os.makedirs(OUT, exist_ok=True)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from harness.chat import ChatPanel, RendererLog  # noqa: E402
+from harness.config import MIN_PROSE, ConfigError, out_dir, require_base  # noqa: E402
+from harness.redact import redact_console  # noqa: E402
+
+try:
+    BASE = require_base()
+except ConfigError as exc:
+    print(f"config error: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+OUT = out_dir()
 REPORT = f"{OUT}/commentary-report.json"
 
-# Minimum prose length (chars) that counts as a conversational message rather
-# than a stray label or timestamp.
-MIN_PROSE = 20
 
-STATE_JS = """
-() => {
-  const el = document.querySelector('ces-messenger');
-  const sr = el && el.shadowRoot;
-  if (!sr) return {ok: false};
-  const lis = [...sr.querySelectorAll('ul[aria-label="Chat messages"] > li')];
-  const readCard = (c) => ({
-    kind: c.getAttribute('data-widget-card'),
-    items: [...c.querySelectorAll('[data-uri], a[href]')].map((item) => ({
-      uri: item.getAttribute('data-uri') || item.getAttribute('href'),
-      img: (item.querySelector('img') || {}).src || null,
-      text: (item.innerText || '').trim().split('\\n').map(s => s.trim()).filter(Boolean),
-    })),
-  });
-  return {
-    ok: true,
-    count: lis.length,
-    messages: lis.map((li) => {
-      // Prose = the bubble's text with any rendered widget cards cut out.
-      const clone = li.cloneNode(true);
-      [...clone.querySelectorAll('[data-widget-card]')].forEach(n => n.remove());
-      return {
-        cls: li.className || '',
-        aria: li.getAttribute('aria-label') || '',
-        prose: (clone.innerText || '').trim(),
-        fullText: (li.innerText || '').trim().slice(0, 1200),
-        rawToken: (li.textContent || '').includes('{@Widget:'),
-        cards: [...li.querySelectorAll('[data-widget-card]')].map(readCard),
-      };
-    }),
-  };
-}
-"""
-
-
-class Run:
-    def __init__(self, page):
-        self.page = page
-        self.console = []
-        self.network = []
-        page.on("console", self._on_console)
-        page.on("response", self._on_response)
-
-    def _on_console(self, msg):
-        try:
-            self.console.append((time.time(), msg.type, msg.text[:400]))
-        except Exception:
-            pass
-
-    def _on_response(self, resp):
-        url = resp.url
-        if not any(k in url for k in (":runSession", "runSession", ":run",
-                                      "geminidataconnect", "cloud.google.com")):
-            return
-        entry = {"t": time.time(), "url": url[:160], "status": resp.status}
-        try:
-            body = resp.text()
-            entry["hasToken"] = "@Widget:" in body
-            entry["hasPayloadType"] = (("product_detail_carousel" in body)
-                                       or ("base_product_detail" in body))
-            entry["len"] = len(body)
-            if entry["hasPayloadType"] or entry["hasToken"]:
-                # Retained for issue #3 AC3: what fields does the structured
-                # payload actually carry (any agent-authored summary text?).
-                entry["body"] = body[:60000]
-        except Exception as exc:  # streaming bodies may be unavailable
-            entry["bodyError"] = str(exc)[:80]
-        self.network.append(entry)
-
-    def marks_since(self, since):
-        out = []
-        for t, _typ, text in self.console:
-            if t < since:
-                continue
-            if "Rendered rich-response widget token" in text:
-                out.append("token-mode")
-            elif "Rewrote widget payload to rich-message template" in text:
-                out.append("payload-mode")
-            elif "unrenderable" in text:
-                out.append("UNRENDERABLE")
-        return out
-
-    def net_since(self, since):
-        return [n for n in self.network if n["t"] >= since]
-
-
-def open_chat(page):
-    collapsed = page.locator("ces-messenger div.assistant-collapsed")
-    if collapsed.count() and collapsed.is_visible():
-        collapsed.click()
-        page.wait_for_timeout(3000)
-
-
-def send(page, text):
-    box = page.locator('ces-messenger textarea[aria-label="Type your message"]')
-    box.click()
-    box.fill(text)
-    page.locator("ces-messenger button.send").click()
-
-
-def norm(s):
-    return re.sub(r"\s+", " ", (s or "")).strip().lower()
-
-
-def agent_bubbles(state, before_count, prompt):
-    """New bubbles for this turn, minus the user's own echoed message."""
-    new = state.get("messages", [])[before_count:]
-    return [m for m in new if norm(m["prose"]) != norm(prompt)]
-
-
-def has_content(bubbles):
-    """True once a bubble carries real prose or a rendered card.
-
-    ces-messenger inserts an EMPTY placeholder <li> the moment you send, so
-    'a new bubble exists' is not evidence a reply arrived. Waiting on that
-    placeholder attributes each reply to the following turn.
-    """
-    return any(len(m["prose"].strip()) >= MIN_PROSE or m["cards"] for m in bubbles)
-
-
-def quiesce(page, quiet_s=3.0, timeout_s=45):
-    """Wait for the transcript to stop changing before sending the next turn."""
-    deadline = time.time() + timeout_s
-    last_sig, stable_since = None, None
-    while time.time() < deadline:
-        sig = json.dumps(page.evaluate(STATE_JS))
-        if sig == last_sig:
-            if stable_since and time.time() - stable_since > quiet_s:
-                return
-        else:
-            last_sig, stable_since = sig, time.time()
-        page.wait_for_timeout(1000)
-
-
-def wait_for_reply(page, before_count, prompt, timeout_s=180, settle_s=8.0):
-    """Wait for real reply content, then for it to stop changing.
-
-    A turn can deliver prose and cards as separate bubbles arriving seconds
-    apart, so the settle window is deliberately generous.
-    """
-    deadline = time.time() + timeout_s
-    stable_since = None
-    last_sig = None
-    while time.time() < deadline:
-        state = page.evaluate(STATE_JS)
-        if state.get("ok"):
-            bubbles = agent_bubbles(state, before_count, prompt)
-            sig = json.dumps(bubbles)
-            if sig != last_sig:
-                last_sig, stable_since = sig, time.time()
-            if (has_content(bubbles) and stable_since
-                    and time.time() - stable_since > settle_s):
-                return state, False
-        page.wait_for_timeout(1000)
-    return page.evaluate(STATE_JS), True
-
-
-def turn(run, page, label, prompt, expect_cards, shot=None):
-    quiesce(page)
-    state0 = page.evaluate(STATE_JS)
+def turn(chat, log, page, label, prompt, expect_cards, shot=None):
+    chat.quiesce()
+    state0 = chat.read_state()
     before = state0["count"] if state0.get("ok") else 0
     since = time.time()
     print(f"\n=== TURN {label}: {prompt}")
-    send(page, prompt)
-    state, timed_out = wait_for_reply(page, before, prompt)
+    chat.send(prompt)
+    state, timed_out = chat.wait_for_reply(before, prompt)
 
-    agent = agent_bubbles(state, before, prompt)
+    agent = chat.agent_bubbles(state, before, prompt)
 
     cards = [c for m in agent for c in m["cards"]]
     prose_bits = [m["prose"].strip() for m in agent
                   if len(m["prose"].strip()) >= MIN_PROSE]
-    modes = run.marks_since(since)
-    net = run.net_since(since)
+    modes = log.marks_since(since)
+    net = log.net_since(since)
     wire = set()
     for n in net:
         if n.get("hasToken"):
@@ -246,7 +95,8 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, channel="chrome")
         page = browser.new_page(viewport={"width": 1500, "height": 1080})
-        run = Run(page)
+        log = RendererLog(page)
+        chat = ChatPanel(page)
 
         # Build behavioural context in Signals before opening chat.
         page.goto(BASE, wait_until="domcontentloaded", timeout=60000)
@@ -264,7 +114,7 @@ def main():
         # an empty profile ("No events buffered"), exercising the degraded path.
         page.wait_for_timeout(25000)
 
-        open_chat(page)
+        chat.open()
         page.wait_for_timeout(2000)
         page.screenshot(path=f"{OUT}/c3-00-chat-open.png")
 
@@ -278,24 +128,15 @@ def main():
             ("7-zero-match", "Do you have any neon orange swimwear under $15?", False, "c3-07.png"),
         ]
         for label, prompt, expect, shot in turns:
-            results.append(turn(run, page, label, prompt, expect, shot))
+            results.append(turn(chat, log, page, label, prompt, expect, shot))
 
         # Issue #1 regression guard: a card click must still SPA-navigate.
         page.evaluate("() => { window.__spaProbe = 'alive'; }")
         click_result = {}
-        clicked = page.evaluate("""
-          () => {
-            const sr = document.querySelector('ces-messenger').shadowRoot;
-            const cards = [...sr.querySelectorAll('[data-widget-card] [data-uri], [data-widget-card] a[href]')];
-            const el = cards[cards.length - 1];
-            if (!el) return null;
-            el.click();
-            return el.getAttribute('data-uri') || el.getAttribute('href');
-          }
-        """)
+        clicked = chat.click_last_card_item()
         if clicked:
             page.wait_for_timeout(4000)
-            after = page.evaluate(STATE_JS)
+            after = chat.read_state()
             click_result = {
                 "clickedUri": clicked,
                 "afterUrl": page.url,
@@ -315,15 +156,19 @@ def main():
             "noCards": [r["label"] for r in results if r["verdict"].startswith("NO-CARDS")],
             "modesSeen": sorted({m for r in results for m in r["modes"]}),
             "wireSeen": sorted({w for r in results for w in r["wire"]}),
-            "consoleErrors": [c for c in run.console if c[1] in ("error", "warning")],
+            "consoleErrors": redact_console(
+                c for c in log.console if c[1] in ("error", "warning")),
         }
         print("\n=== SUMMARY ===")
         print(json.dumps(summary, indent=2)[:2000])
 
         with open(REPORT, "w") as fh:
             json.dump({"summary": summary, "turns": results,
-                       "click": click_result, "network": run.network,
-                       "console": [[t, ty, tx] for t, ty, tx in run.console]},
+                       "click": click_result, "network": log.network,
+                       # The CES chatToken shows up in a console debug line on
+                       # every run that opens the chat; it does not belong in a
+                       # file anyone might attach to an issue.
+                       "console": redact_console(log.console)},
                       fh, indent=2)
         browser.close()
 
