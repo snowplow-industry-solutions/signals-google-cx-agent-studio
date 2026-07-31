@@ -24,6 +24,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from harness.chat import ChatPanel, RendererLog  # noqa: E402
 from harness.config import MIN_PROSE, ConfigError, out_dir, require_base  # noqa: E402
+from harness.redact import redact_console  # noqa: E402
 
 try:
     BASE = require_base()
@@ -155,7 +156,8 @@ def main():
             "noCards": [r["label"] for r in results if r["verdict"].startswith("NO-CARDS")],
             "modesSeen": sorted({m for r in results for m in r["modes"]}),
             "wireSeen": sorted({w for r in results for w in r["wire"]}),
-            "consoleErrors": [c for c in log.console if c[1] in ("error", "warning")],
+            "consoleErrors": redact_console(
+                c for c in log.console if c[1] in ("error", "warning")),
         }
         print("\n=== SUMMARY ===")
         print(json.dumps(summary, indent=2)[:2000])
@@ -163,7 +165,10 @@ def main():
         with open(REPORT, "w") as fh:
             json.dump({"summary": summary, "turns": results,
                        "click": click_result, "network": log.network,
-                       "console": [[t, ty, tx] for t, ty, tx in log.console]},
+                       # The CES chatToken shows up in a console debug line on
+                       # every run that opens the chat; it does not belong in a
+                       # file anyone might attach to an issue.
+                       "console": redact_console(log.console)},
                       fh, indent=2)
         browser.close()
 
