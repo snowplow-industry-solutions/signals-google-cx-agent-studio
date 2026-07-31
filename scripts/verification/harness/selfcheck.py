@@ -202,6 +202,48 @@ def run_evaluate_cases():
     return failures
 
 
+def run_unlabelled_turn_cases():
+    """A turn with no `label` must yield a red check with a readable id.
+
+    The per-turn predicates once indexed t['label'] directly, so one malformed
+    turn raised KeyError out of evaluate() instead of returning a failing
+    CheckResult -- the wrong failure mode for a harness whose whole job is to
+    report rather than crash.
+    """
+    failures = 0
+    for check_id, obs_obj in UNLABELLED_TURN_CASES:
+        try:
+            results = list(checks.PREDICATES[check_id](obs_obj))
+            crash = None
+        except Exception as exc:  # a predicate must never raise on bad input
+            results, crash = [], f"{type(exc).__name__}: {exc}"
+        spoke = bool(results)
+        red = spoke and any(not r.passed for r in results)
+        readable = spoke and all("<unlabelled>" in r.id for r in results)
+        ok = crash is None and red and readable
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  unlabelled {mark} {check_id:<44} -> "
+              + (crash if crash else f"red={red} readable-id={readable}"))
+    return failures
+
+
+def run_signals_detail_cases():
+    """The recent_activity state named in check_signals_profile's detail must
+    match the observation. Empty string, empty-buffer marker and recorded
+    activity are three different debugging leads; naming the wrong one sends
+    the reader the wrong way at exactly the wrong moment."""
+    failures = 0
+    for label, ctx, want in AC6_DETAIL_CASES:
+        [result] = checks.PREDICATES["ac6-signals"](obs(signalsContext=ctx))
+        ok = f"recent_activity={want}:" in result.detail
+        failures += 0 if ok else 1
+        mark = checks.PASS_MARK if ok else checks.FAIL_MARK
+        print(f"  ac6-detail {mark} {label:<44}"
+              + ("" if ok else f"  detail: {result.detail!r}"))
+    return failures
+
+
 def run_redact_cases():
     """The redactor is a security control, so it gets the same treatment as a
     predicate: cases that must be redacted and cases that must not."""
@@ -457,6 +499,13 @@ def _drop(observation, key):
     return observation
 
 
+def _unlabelled(t):
+    """A phase-A turn that lost its `label` -- the malformed shape the per-turn
+    result ids must survive."""
+    del t["label"]
+    return t
+
+
 AC3_URL_CASES = [
     ("exact path match", obs(click=click_result(
         clickedUri="/products/chunky-mohair-pullover",
@@ -605,6 +654,38 @@ AC6_SIGNALS_CASES = [
                          "recent_activity": "- product_viewed: p1",
                          "error": "HTTPError: 401 Unauthorized",
                          "agent_instructions": ""}), False),
+]
+
+# The per-turn predicates format the turn's label into their result id. A turn
+# dict that lost its `label` must come back as a red CheckResult with a readable
+# id, never as a KeyError out of evaluate() -- reporting, not crashing, is the
+# whole job. Content is broken alongside the missing label so the expected
+# verdict is red on its own terms, not green-with-a-placeholder. ac7-zero-match
+# has no case here: it selects control turns BY label, so an unlabelled turn
+# never reaches its id formatting.
+UNLABELLED_TURN_CASES = [
+    ("ac1-commentary", obs(turns=[_unlabelled(turn(prose=""))])),
+    ("ac2-cards", obs(turns=[_unlabelled(turn(cards=[]))])),
+    ("ac4-mode", obs(turns=[_unlabelled(turn(mode=None, modes=[]))])),
+]
+
+# check_signals_profile's detail string names the state of recent_activity --
+# it is what someone reads while debugging a failed ac6-signals. An empty
+# string once read as 'populated', exactly the wrong hint mid-debug. Pass/fail
+# is AC6_SIGNALS_CASES' job; these pin the wording only.
+# (case label, signalsContext, the state the detail must name)
+AC6_DETAIL_CASES = [
+    ("empty recent_activity reads as empty",
+     {"profile": {"total_product_views": 2}, "recent_activity": "",
+      "agent_instructions": ""}, "empty"),
+    ("no-events marker reads as empty-marker",
+     {"profile": {"total_product_views": 2},
+      "recent_activity": "No events buffered.",
+      "agent_instructions": ""}, "empty-marker"),
+    ("recorded activity reads as populated",
+     {"profile": {"total_product_views": 2},
+      "recent_activity": "- product_viewed: p1",
+      "agent_instructions": ""}, "populated"),
 ]
 
 # AC7: `not cards and not raw`, same short-circuit as AC2.
@@ -800,6 +881,8 @@ def run():
     failures += run_predicate_cases("ac6-coll", "ac6-collector", AC6_COLLECTOR_CASES)
     failures += run_predicate_cases("ac6-sig", "ac6-signals", AC6_SIGNALS_CASES)
     failures += run_predicate_cases("ac7-token", "ac7-zero-match", AC7_TOKEN_CASES)
+    failures += run_unlabelled_turn_cases()
+    failures += run_signals_detail_cases()
     failures += run_evaluate_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
     predicate_failures = 0
