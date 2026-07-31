@@ -8,7 +8,7 @@ here, and run() fails if one is missing.
 
 import copy
 
-from harness import checks, collector
+from harness import checks, collector, context
 
 # Minimal observation skeleton. Fixtures deep-copy this and corrupt one area,
 # so a predicate reading the wrong key gets an empty default rather than a
@@ -55,6 +55,76 @@ def run_event_name_cases():
         mark = checks.PASS_MARK if ok else checks.FAIL_MARK
         print(f"  event_name {mark} {label:<20} -> {actual!r}"
               + ("" if ok else f"  expected {expected!r}"))
+    return failures
+
+
+def _canned_opener(*responses):
+    """An opener that returns each canned payload in turn, then repeats the last."""
+    box = {"i": 0}
+
+    def opener(url, headers):
+        i = min(box["i"], len(responses) - 1)
+        box["i"] += 1
+        result = responses[i]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    return opener
+
+
+def run_context_cases():
+    empty = {"profile": {}, "recent_activity": "No events buffered.",
+             "agent_instructions": ""}
+    full = {"profile": {"total_product_views": 2}, "recent_activity": "- pv",
+            "agent_instructions": "Be helpful."}
+    ticks = {"t": 0.0}
+
+    def clock():
+        return ticks["t"]
+
+    def sleep(seconds):
+        ticks["t"] += seconds
+
+    cases = []
+
+    got = context.poll_context("http://x", "s", "sid",
+                               opener=_canned_opener(full),
+                               clock=clock, sleep=sleep)
+    cases.append(("populated on first attempt",
+                  got["attempts"] == 1 and got["profile"] == full["profile"]))
+
+    ticks["t"] = 0.0
+    got = context.poll_context("http://x", "s", "sid",
+                               opener=_canned_opener(empty, empty, full),
+                               clock=clock, sleep=sleep)
+    cases.append(("retries until populated",
+                  got["attempts"] == 3 and got["profile"] == full["profile"]
+                  and got["polledAfterSeconds"] > 0))
+
+    ticks["t"] = 0.0
+    got = context.poll_context("http://x", "s", "sid", timeout_s=30,
+                               opener=_canned_opener(empty),
+                               clock=clock, sleep=sleep)
+    cases.append(("gives up and returns the last empty payload",
+                  got["profile"] == {} and "error" not in got
+                  and got["attempts"] > 1))
+
+    ticks["t"] = 0.0
+    got = context.poll_context("http://x", "s", "sid", timeout_s=30,
+                               opener=_canned_opener(RuntimeError("401 Unauthorized")),
+                               clock=clock, sleep=sleep)
+    cases.append(("reports a transport error", "error" in got))
+
+    cases.append(("is_populated rejects the empty-buffer marker",
+                  not context.is_populated(empty)))
+    cases.append(("is_populated accepts a real profile",
+                  context.is_populated(full)))
+
+    failures = 0
+    for label, ok in cases:
+        failures += 0 if ok else 1
+        print(f"  context    {checks.PASS_MARK if ok else checks.FAIL_MARK} {label}")
     return failures
 
 
@@ -306,7 +376,7 @@ def run():
         print(f"  {checks.FAIL_MARK} fixture with no predicate: {', '.join(unimplemented)}")
         return 1
 
-    failures = run_event_name_cases()
+    failures = run_event_name_cases() + run_context_cases()
     failures += test_fixture_aliasing()
     failures += run_ac3_url_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])
