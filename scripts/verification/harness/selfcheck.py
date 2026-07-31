@@ -153,6 +153,11 @@ def run_predicate_cases(prefix, check_id, cases):
     that *each term* of a conjunction can fail: a bad fixture that breaks two
     terms only ever exercises whichever short-circuits first. These lists cover
     the terms the fixture pair and the fault hook cannot isolate on their own.
+
+    Every case must produce at least one result. Silence is not a failure, it is
+    a predicate that asserted nothing -- the rule checks.evaluate() enforces at
+    run level, applied here too so that deleting a guard which turns an explicit
+    "no zero-match control turn was recorded" into an empty list is caught.
     """
     fn = checks.PREDICATES.get(check_id)
     if fn is None:
@@ -161,12 +166,13 @@ def run_predicate_cases(prefix, check_id, cases):
     failures = 0
     for label, obs_obj, expected_pass in cases:
         results = fn(obs_obj)
-        # An empty result list is not a pass -- see checks.evaluate().
-        actual_pass = bool(results) and all(r.passed for r in results)
-        ok = actual_pass == expected_pass
+        spoke = bool(results)
+        actual_pass = spoke and all(r.passed for r in results)
+        ok = spoke and actual_pass == expected_pass
         failures += 0 if ok else 1
         mark = checks.PASS_MARK if ok else checks.FAIL_MARK
-        print(f"  {prefix:<9} {mark} {label:<44} -> {actual_pass!r}"
+        print(f"  {prefix:<9} {mark} {label:<44} -> "
+              + ("no results" if not spoke else repr(actual_pass))
               + ("" if ok else f"  expected {expected_pass!r}"))
     return failures
 
@@ -388,6 +394,22 @@ def click_result(clickedUri="/products/chunky-mohair-pullover",
     }
 
 
+def browse(productPages=2, productViewed=2, sids=("a1b2",), events=None):
+    """One browse phase as phase A records it.
+
+    A factory, not a constant, for the same reason as invented_card(): two
+    fixtures sharing one nested list is the aliasing bug this file already has a
+    regression test for. `sids` is taken as a tuple and copied into a list so a
+    default argument can never be mutated by a caller.
+    """
+    return {"paths": ["/products/a", "/products/b"],
+            "productPages": productPages,
+            "productViewed": productViewed,
+            "sids": list(sids),
+            "events": dict(events) if events is not None
+                      else {"product_viewed": productViewed, "pv": 5}}
+
+
 def complete_obs(**overrides):
     """A whole run in which every check id produces at least one PASSING result.
 
@@ -398,9 +420,7 @@ def complete_obs(**overrides):
         turns=[turn(), turn(label="3-details"), zero_match_turn()],
         expectedTurns=3,
         click=click_result(),
-        browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
-                "productViewed": 2, "sids": ["a1b2"],
-                "events": {"product_viewed": 2, "pv": 5}},
+        browse=browse(),
         signalsContext={"profile": {"total_product_views": 2},
                         "recent_activity": "- product_viewed: p1",
                         "agent_instructions": ""},
@@ -460,6 +480,27 @@ AC3_URL_CASES = [
     )), False),
 ]
 
+# AC3: `landed and survived and preserved`, where preserved is itself
+# `chatMessagesAfter > 0 and cardsAfter > 0`. AC3_URL_CASES only ever drives
+# `landed`, and the fixture/fault pair covers `survived` and the cardsAfter half
+# of `preserved` -- so the transcript half needs a case of its own. Every case
+# here keeps clickedUri set, or the predicate takes its "no card was clickable"
+# branch and proves nothing about the three terms.
+AC3_PRESERVE_CASES = [
+    ("chat and prior cards both survived the click",
+     obs(click=click_result()), True),
+    ("full page load wiped the SPA probe",
+     obs(click=click_result(spaProbeSurvived=False)), False),
+    ("transcript wiped, prior cards intact",
+     obs(click=click_result(chatMessagesAfter=0)), False),
+    ("prior cards wiped, transcript intact",
+     obs(click=click_result(cardsAfter=0)), False),
+    ("widget remounted empty", obs(click=click_result(
+        spaProbeSurvived=False, chatMessagesAfter=0, cardsAfter=0)), False),
+    ("no card item carried a uri to click",
+     obs(click=click_result(clickedUri=None)), False),
+]
+
 # AC0: the count term and the timeout term, each on its own. The fixture pair
 # drives the timeout term and the fault hook drives the count term, but neither
 # covers a missing expectedTurns, which is what a phase A that forgot to write
@@ -502,6 +543,68 @@ AC4_MODE_CASES = [
      obs(turns=[turn(mode="UNRENDERABLE", modes=["UNRENDERABLE"])]), False),
     ("no renderer mark at all",
      obs(turns=[turn(mode=None, modes=[])]), False),
+]
+
+# AC5: `errors == 0 and warnings == 0`. A run with warnings but no errors is the
+# shape the errors-only fixture could never reach.
+AC5_CONSOLE_CASES = [
+    ("console clean",
+     obs(console={"errors": 0, "warnings": 0, "lines": []}), True),
+    ("errors only",
+     obs(console={"errors": 1, "warnings": 0, "lines": []}), False),
+    ("warnings only",
+     obs(console={"errors": 0, "warnings": 3, "lines": []}), False),
+    ("both errors and warnings",
+     obs(console={"errors": 2, "warnings": 1, "lines": []}), False),
+]
+
+# AC6a: `expected > 0 and actual == expected and len(sids) == 1`. The count term
+# is the only one the fixture pair reaches; a browse plan with no product pages
+# would otherwise pass vacuously, and a session id that rotated mid-run -- the
+# theory probe_rotation.py and probe_session.py were written to chase -- would
+# go unreported.
+AC6_COLLECTOR_CASES = [
+    ("one product_viewed per product page, one sid", obs(browse=browse()), True),
+    ("no product pages in the browse plan",
+     obs(browse=browse(productPages=0, productViewed=0, events={"pv": 5})), False),
+    ("fewer product_viewed than product pages",
+     obs(browse=browse(productViewed=1)), False),
+    ("more product_viewed than product pages (double-track)",
+     obs(browse=browse(productViewed=4)), False),
+    ("two session ids on the wire",
+     obs(browse=browse(sids=("a1b2", "c3d4"))), False),
+    ("no session id on the wire at all",
+     obs(browse=browse(sids=())), False),
+]
+
+# AC6b: `bool(profile) and not unbuffered`, behind an errored-poll guard. The
+# marker term is the "No events buffered" assertion whose absence let a broken
+# run report PASS for a day, so it gets a case with a POPULATED profile -- the
+# only shape that reaches it.
+AC6_SIGNALS_CASES = [
+    ("populated profile with recorded activity",
+     obs(signalsContext={"profile": {"total_product_views": 2},
+                         "recent_activity": "- product_viewed: p1",
+                         "agent_instructions": ""}), True),
+    ("empty profile despite recorded activity",
+     obs(signalsContext={"profile": {},
+                         "recent_activity": "- product_viewed: p1",
+                         "agent_instructions": ""}), False),
+    ("profile populated but no events buffered",
+     obs(signalsContext={"profile": {"total_product_views": 2},
+                         "recent_activity": "No events buffered. Based on last "
+                                            "100 recorded events for the last "
+                                            "3600 seconds.",
+                         "agent_instructions": ""}), False),
+    ("neither a profile nor a buffered event",
+     obs(signalsContext={"profile": {},
+                         "recent_activity": "No events buffered.",
+                         "agent_instructions": ""}), False),
+    ("the poll itself failed, whatever came back with it",
+     obs(signalsContext={"profile": {"total_product_views": 2},
+                         "recent_activity": "- product_viewed: p1",
+                         "error": "HTTPError: 401 Unauthorized",
+                         "agent_instructions": ""}), False),
 ]
 
 # AC7: `not cards and not raw`, same short-circuit as AC2.
@@ -563,9 +666,11 @@ def _looks_like_token(text):
     return bool(_TOKEN_RESIDUE.search(text))
 
 
-# Each `bad` fixture breaks exactly ONE term of its predicate, and the matching
-# fault hook in checks.py breaks a different one. A fixture that breaks two
-# terms of a conjunction proves only the first.
+# Each `bad` fixture breaks exactly ONE term of its predicate, and wherever the
+# predicate is a conjunction the matching fault hook in checks.py breaks a
+# different one. (ac1-commentary has a single term, so its fixture and its fault
+# necessarily drive the same thing.) A fixture that breaks two terms of a
+# conjunction proves only the first.
 FIXTURES = {
     "ac0-turns": (
         obs(turns=[turn(), zero_match_turn()], expectedTurns=2),
@@ -583,34 +688,41 @@ FIXTURES = {
     ),
     "ac3-spa-nav": (
         obs(click=click_result()),
-        obs(click=click_result(spaProbeSurvived=False, cardsAfter=0)),
+        # survived term. clickedUri and cardsAfter stay valid on purpose: zero
+        # them too and the predicate takes its "no card was clickable" branch or
+        # short-circuits before `preserved`, which is the fault hook's job.
+        obs(click=click_result(spaProbeSurvived=False, cardsAfter=4)),
     ),
     "ac4-mode": (
         obs(turns=[turn()]),
-        # last-mark term; the masked-UNRENDERABLE term is the fault hook's job
-        obs(turns=[turn(mode="UNRENDERABLE", modes=["UNRENDERABLE"])]),
+        # mode term; the masked-UNRENDERABLE modes-list term is the fault hook's
+        # job. A fixture recording mode="UNRENDERABLE" breaks BOTH terms and
+        # short-circuits on the modes list, leaving the mode term unproven here.
+        obs(turns=[turn(mode=None, modes=[])]),
     ),
     "ac5-console": (
         obs(console={"errors": 0, "warnings": 0, "lines": []}),
-        obs(console={"errors": 2, "warnings": 1, "lines": []}),
+        # warnings term; the errors term is the fault hook's job
+        obs(console={"errors": 0, "warnings": 1, "lines": []}),
     ),
     "ac6-collector": (
-        obs(browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
-                    "productViewed": 2, "sids": ["a1b2"],
-                    "events": {"product_viewed": 2, "pv": 5}}),
-        obs(browse={"paths": ["/products/a", "/products/b"], "productPages": 2,
-                    "productViewed": 0, "sids": ["a1b2"],
-                    "events": {"pv": 5}}),
+        obs(browse=browse()),
+        # count term; the session-id term is the fault hook's job and the
+        # were-there-any-product-pages term is AC6_COLLECTOR_CASES'
+        obs(browse=browse(productViewed=0, events={"pv": 5})),
     ),
     "ac6-signals": (
         obs(signalsContext={"profile": {"total_product_views": 2,
                                         "recently_viewed_product_ids": "p1, p2"},
                             "recent_activity": "- product_viewed: p1",
                             "agent_instructions": ""}),
+        # empty-profile term. recent_activity is POPULATED: pair an empty
+        # profile with the no-events marker and the conjunction short-circuits
+        # on the profile, leaving the marker term -- the "No events buffered"
+        # assertion whose absence let a broken run report PASS for a day --
+        # unproven. The marker term is the fault hook's job.
         obs(signalsContext={"profile": {},
-                            "recent_activity": "No events buffered. Based on last "
-                                               "100 recorded events for the last "
-                                               "3600 seconds.",
+                            "recent_activity": "- product_viewed: p1",
                             "agent_instructions": ""}),
     ),
     "ac7-zero-match": (
@@ -642,6 +754,29 @@ def run_fault_cases():
     return failures
 
 
+def run_fault_isolation_cases():
+    """Each fault must fire against a WHOLE run, and take nothing else with it.
+
+    run_fault_cases() applies a fault to that check's own minimal fixture, where
+    every other area of the observation is the empty BASE_OBS default. That
+    cannot tell a fault that works from one that only works on a skeleton, and
+    it cannot see collateral: a fault which also trips a neighbouring check
+    makes a live VERIFY_FAULT run ambiguous about what it just proved.
+    """
+    failures = 0
+    for check_id in checks.CHECK_ORDER:
+        corrupted = complete_obs()
+        checks.apply_fault(corrupted, check_id)
+        run = checks.evaluate(corrupted)
+        failed = sorted({r.id.split("[")[0] for r in run.failed})
+        ok = failed == [check_id]
+        failures += 0 if ok else 1
+        print(f"  isolation  {checks.PASS_MARK if ok else checks.FAIL_MARK} "
+              f"{check_id + ' alone fails a whole run':<44}"
+              + ("" if ok else f"  failed: {failed or 'nothing'}"))
+    return failures
+
+
 def run():
     missing = sorted(set(checks.PREDICATES) - set(FIXTURES))
     if missing:
@@ -653,12 +788,17 @@ def run():
         return 1
 
     failures = run_event_name_cases() + run_context_cases() + run_fault_cases()
+    failures += run_fault_isolation_cases()
     failures += test_fixture_aliasing()
     failures += run_redact_cases()
     failures += run_predicate_cases("ac0-turns", "ac0-turns", AC0_TURN_CASES)
     failures += run_predicate_cases("ac2-token", "ac2-cards", AC2_TOKEN_CASES)
     failures += run_predicate_cases("ac3-url", "ac3-spa-nav", AC3_URL_CASES)
+    failures += run_predicate_cases("ac3-keep", "ac3-spa-nav", AC3_PRESERVE_CASES)
     failures += run_predicate_cases("ac4-mode", "ac4-mode", AC4_MODE_CASES)
+    failures += run_predicate_cases("ac5-cons", "ac5-console", AC5_CONSOLE_CASES)
+    failures += run_predicate_cases("ac6-coll", "ac6-collector", AC6_COLLECTOR_CASES)
+    failures += run_predicate_cases("ac6-sig", "ac6-signals", AC6_SIGNALS_CASES)
     failures += run_predicate_cases("ac7-token", "ac7-zero-match", AC7_TOKEN_CASES)
     failures += run_evaluate_cases()
     total = len([c for c in checks.CHECK_ORDER if c in checks.PREDICATES])

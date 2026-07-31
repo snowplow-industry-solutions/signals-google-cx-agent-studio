@@ -169,6 +169,14 @@ def check_spa_navigation(obs):
 
     spaProbeSurvived is an in-page variable set before the click; a full page
     load would remount the widget and wipe it, along with the transcript.
+
+    Three clauses below are diagnostics, not assertions: the no-clickable-card
+    early return, the `not after or not clicked_uri` fallback, and the truthiness
+    half of `clicked_last and clicked_last == after_last`. Deleting any of them
+    leaves --selfcheck green, which normally means an unfailable term -- here it
+    means the verdict is unchanged and only the message would get worse. Every
+    shape they catch already fails on `landed`, verified by enumerating the
+    clickedUri x afterUrl x survived x messagesAfter x cardsAfter space.
     """
     click = obs.get("click") or {}
     if not click.get("clickedUri"):
@@ -321,12 +329,18 @@ def check_signals_profile(obs):
 # These faults corrupt a REAL observation between phases, so a predicate wired
 # to the wrong key passes its selfcheck and still fails here.
 #
-# Each fault corrupts ONE term of its predicate, and the matching `bad` fixture
-# in selfcheck.py corrupts a different one. A fault that breaks two terms of a
-# conjunction proves only whichever short-circuits first: the original
-# _fault_cards emptied `cards` as well as flipping `rawToken`, so
+# Each fault corrupts ONE term of its predicate, and wherever that predicate's
+# verdict is a conjunction the matching `bad` fixture in selfcheck.py corrupts a
+# DIFFERENT one. (ac1-commentary is the one single-term predicate, so its
+# fixture and its fault necessarily drive the same thing.) A fault that breaks
+# two terms of a conjunction proves only whichever short-circuits first: the
+# original _fault_cards emptied `cards` as well as flipping `rawToken`, so
 # `bool(cards) and not raw` never reached the token term -- and deleting that
 # term outright still passed both mechanisms.
+#
+# The pairing is verified by gutting: delete any one term and --selfcheck must
+# go red. Terms that neither mechanism can isolate get a named case list in
+# selfcheck.py instead.
 
 def _fault_turns(obs):
     # Drop a recorded turn, so the expectedTurns half of ac0 fires. The
@@ -366,26 +380,40 @@ def _fault_zero_match(obs):
 
 
 def _fault_console(obs):
+    # errors ONLY -- the warnings count stays as observed. `errors == 0 and
+    # warnings == 0` short-circuits on errors, so the warnings term is the
+    # `bad` fixture's job.
     obs.setdefault("console", {})["errors"] = 1
 
 
 def _fault_collector(obs):
-    obs.setdefault("browse", {})["productViewed"] = 0
+    # A second session id ONLY -- the counts stay correct. `expected > 0 and
+    # actual == expected and len(sids) == 1` short-circuits left to right, so a
+    # fault that zeroes productViewed (as this one used to) can never reach the
+    # session-id term; that is the rotating-session theory probe_rotation.py and
+    # probe_session.py chased, and it must not be deletable. The count term is
+    # the `bad` fixture's job.
+    browse = obs.setdefault("browse", {})
+    browse["sids"] = list(browse.get("sids") or []) + ["f00dcafe"]
 
 
 def _fault_signals(obs):
-    obs["signalsContext"] = {
-        "profile": {},
-        "recent_activity": "No events buffered. Based on last 100 recorded "
-                           "events for the last 3600 seconds.",
-        "agent_instructions": "",
-    }
+    # The no-events marker ONLY, leaving the observed profile in place. This is
+    # the assertion whose absence cost a day, and `bool(profile) and not
+    # unbuffered` short-circuits: the old fault emptied the profile as well, so
+    # the marker term was never reached and could have been deleted outright.
+    # The empty-profile term is the `bad` fixture's job.
+    obs.setdefault("signalsContext", {})["recent_activity"] = (
+        "No events buffered. Based on last 100 recorded "
+        "events for the last 3600 seconds.")
 
 
 def _fault_spa_nav(obs):
-    click = obs.setdefault("click", {})
-    click["spaProbeSurvived"] = False
-    click["cardsAfter"] = 0
+    # cardsAfter ONLY, leaving spaProbeSurvived and clickedUri as recorded:
+    # `landed and survived and preserved` short-circuits, so a fault that also
+    # flips spaProbeSurvived stops at the survived term and leaves `preserved`
+    # unproven. The survived term is the `bad` fixture's job.
+    obs.setdefault("click", {})["cardsAfter"] = 0
 
 
 FAULTS = {
