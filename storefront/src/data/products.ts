@@ -271,7 +271,7 @@ export const products: Product[] = [
       "https://images.unsplash.com/photo-1598552105309-9243044d2002?auto=format&fit=crop&w=1200&q=80",
     thumbnail:
       "https://images.unsplash.com/photo-1598552105309-9243044d2002?auto=format&fit=crop&w=800&q=80",
-    collections: ["city-after-dark", "ceremony-edit"],
+    collections: ["city-after-dark", "ceremony-edit", "accessory-atelier"],
     complementaryCategories: ["Dresses", "Accessories", "Shoes"],
     stylingNotes: ["A final touch for evening edits.", "Echoes burgundy accessories elegantly."],
     tags: ["bag", "evening", "satin", "accessories"],
@@ -673,7 +673,7 @@ export const products: Product[] = [
       "https://images.unsplash.com/photo-1776267287979-d5adb2e78e76?auto=format&fit=crop&w=800&q=80",
     collections: ["resort-light", "ceremony-edit"],
     complementaryCategories: ["Shoes", "Accessories", "Bags"],
-    stylingNotes: ["Pairs with the Leather Slide Sandal for daylight ease.", "Crystal drops carry it into ceremony evenings."],
+    stylingNotes: ["Pairs with the Leather Crossover Sandal for daylight ease.", "Crystal drops carry it into ceremony evenings."],
     tags: ["dress", "silk", "resort", "halter", "fluid"],
   },
   {
@@ -1023,7 +1023,7 @@ export const products: Product[] = [
       "https://images.unsplash.com/photo-1780679192494-930c40e60529?auto=format&fit=crop&w=800&q=80",
     collections: ["ceremony-edit", "accessory-atelier"],
     complementaryCategories: ["Dresses", "Tailoring", "Accessories"],
-    stylingNotes: ["Quiet enough for the Midnight Silk Slip Dress.", "Pairs with the Hammered Gold Cuff for contrast."],
+    stylingNotes: ["Quiet enough for the Midnight Silk Slip Dress.", "Pairs with the Hammered Gold Cuff Bracelet for contrast."],
     tags: ["watch", "dress-watch", "evening", "accessories"],
   },
   {
