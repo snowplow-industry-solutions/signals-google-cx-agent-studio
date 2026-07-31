@@ -1075,6 +1075,80 @@ properties. Checked on production: no clashing default styling, no
      that placeholder attributes each reply to the following turn). Not
      committed; a committed harness is proposed as follow-up work.
 
+   **Verification run, 2026-07-31 10:57–11:00 UTC (`verify_widgets.py`, the
+   committed asserting harness from issue #9, against production
+   `https://signals-google-gecx-storefront.vercel.app`): PASS, 17/17 check
+   results green across all eight check ids.**
+
+   First run of the §11.5 walkthrough by a harness that fails rather than
+   footnotes. The count is 17 rather than 8 because the per-turn checks report
+   one result per turn — eight ids over four widget turns and one zero-match
+   control. Command:
+
+   ```sh
+   VERIFY_BASE=https://signals-google-gecx-storefront.vercel.app \
+     AGENT_SHARED_SECRET=... \
+     python3 scripts/verification/verify_widgets.py
+   ```
+
+   - `ac1-commentary` 4/4 widget turns carried a text bubble — 196, 156, 156
+     and 136 characters of prose, measured with the `[data-widget-card]`
+     subtrees removed so card text cannot be counted as commentary.
+   - `ac2-cards` 4/4 rendered cards with no raw `{@Widget:` token: two
+     `productCarousel` cards of three items each, two single-item
+     `productDetails` cards. The 2026-07-30 composition quirk — a *"couple of
+     accessories"* phrasing answered with a single details card — did **not**
+     recur; that turn produced a three-item carousel.
+   - `ac3-spa-nav` a carousel item click landed on
+     `/products/noir-double-breasted-blazer`; the in-page probe variable
+     survived the navigation (so no full page load), and the chat panel still
+     held 14 messages and 4 rendered cards afterwards.
+   - `ac4-mode` all 4 widget turns arrived as `payload-mode` — console mark
+     *"Rewrote widget payload to rich-message template"*, each with a
+     `product_detail_carousel` / `base_product_detail` discriminator visible in
+     the response body.
+   - `ac5-console` zero errors, zero warnings across 44 captured console lines.
+   - `ac6-collector` `product_viewed` 2/2 for the two product pages in the
+     browse plan, all under one session id
+     `8f3c11e6-921f-4889-924d-3c5e26c92838`. Full wire counts: `pv` 6,
+     `product_list_viewed` 6, `product_list_clicked` 2, `product_viewed` 2.
+   - `ac6-signals` `/api/agent/context` returned **10 profile attributes after
+     1s (1 attempt)**: `favorite_category`, `favorite_color_family`,
+     `favorite_designer`, `favorite_occasion`, `total_product_views`,
+     `recently_viewed_product_ids`, and the four interest-count maps
+     (`category_`, `color_family_`, `designer_`, `occasion_`). Its
+     `recent_activity` read *"Last activity 13 seconds ago. Session started 38
+     seconds ago."* rather than the `No events buffered` marker. This is the
+     check whose absence footnoted issue #7 for a day.
+   - `ac7-zero-match` plain-text degradation on *"Do you have any neon orange
+     swimwear under $15?"* — 243 characters of prose, zero cards, no token, no
+     invented product.
+   - **The assertions were proven able to fire, not just to pass.**
+     `--selfcheck` exercises all eight predicates against synthetic passing and
+     failing observations plus the fixture-aliasing and URL-matching regression
+     tests, and reported `8/8 predicates proven both ways` (exit 0).
+     `VERIFY_FAULT=ac6-signals` against this same target at 11:01–11:04 UTC
+     produced `✗ ac6-signals` with `0 profile attribute(s),
+     recent_activity=empty-marker` and exit 1, while the other 16 results
+     stayed green. Phase A of that same fault run had observed a genuinely
+     populated profile (10 attributes, session
+     `b811fbd7-c7b7-4064-8e91-225149cb3d73`) before the corruption was applied,
+     so the red line is the injected fault and not a live regression.
+   - **Coverage limit, stated rather than implied:** all 4 widget turns arrived
+     as structured `outputs[].payload`. The in-band `{@Widget:` token mode did
+     not occur, so `ac4-mode` accepted that path but did not exercise it;
+     `followup.py` retains the synthetic token-mode probe for it, and the
+     live-agent token mode remains unobserved in production since the renderer
+     shipped.
+   - Evidence: `scripts/verification/out/` (gitignored) — report JSON plus a
+     screenshot per turn. The harness redacts the CES `chatToken` from the
+     console lines it stores; the redaction is partial (the storefront logs the
+     token pre-truncated with an ellipsis and only the leading portion is
+     replaced), which is why `out/` stays gitignored regardless. See
+     `scripts/verification/README.md`.
+   - Storefront baseline reconfirmed alongside the run: 171 tests across 20
+     files passing, `eslint` clean, no storefront code touched.
+
 ### 11.6 Current state: renderer live in production (revert kept as fallback)
 
 Resolved 2026-07-30: **the renderer path won; no console revert.** The
