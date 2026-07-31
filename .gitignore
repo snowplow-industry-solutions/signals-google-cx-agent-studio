@@ -18,6 +18,9 @@ node_modules/
 *.tfvars.bak-*
 terraform/crash.log
 terraform/crash.*.log
+tfplan
+*.tfplan
+*.tfplan.*
 
 # Verification-script output: JSON reports and screenshots from
 # scripts/verification/. Reports capture the console, including the CES
