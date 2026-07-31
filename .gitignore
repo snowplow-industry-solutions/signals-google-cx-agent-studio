@@ -24,3 +24,4 @@ terraform/crash.*.log
 # token broker's chatToken, so they never belong in the repo.
 scripts/verification/out/
 scripts/verification/__pycache__/
+scripts/verification/harness/__pycache__/
