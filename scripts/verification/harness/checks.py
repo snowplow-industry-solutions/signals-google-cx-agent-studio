@@ -269,3 +269,77 @@ def check_signals_profile(obs):
                 f"recent_activity={'empty-marker' if unbuffered else 'populated'}: "
                 f"{activity[:100]!r}"),
     )]
+
+
+# --- Fault injection -------------------------------------------------------
+#
+# --selfcheck proves a predicate can fail when handed a bad observation.
+# It cannot prove the predicate is reading the field phase A actually writes.
+# These faults corrupt a REAL observation between phases, so a predicate wired
+# to the wrong key passes its selfcheck and still fails here.
+
+def _fault_commentary(obs):
+    for t in obs.get("turns", []):
+        if t.get("isWidgetTurn"):
+            t["prose"] = ""
+
+
+def _fault_cards(obs):
+    for t in obs.get("turns", []):
+        if t.get("isWidgetTurn"):
+            t["cards"] = []
+            t["rawToken"] = True
+
+
+def _fault_mode(obs):
+    for t in obs.get("turns", []):
+        if t.get("isWidgetTurn"):
+            t["mode"] = "UNRENDERABLE"
+
+
+def _fault_zero_match(obs):
+    for t in obs.get("turns", []):
+        if t.get("label", "").endswith("zero-match"):
+            t["cards"] = [{"kind": "base_product_detail",
+                           "items": [{"uri": "/products/invented", "img": None,
+                                      "text": ["Invented Product"]}]}]
+
+
+def _fault_console(obs):
+    obs.setdefault("console", {})["errors"] = 1
+
+
+def _fault_collector(obs):
+    obs.setdefault("browse", {})["productViewed"] = 0
+
+
+def _fault_signals(obs):
+    obs["signalsContext"] = {
+        "profile": {},
+        "recent_activity": "No events buffered. Based on last 100 recorded "
+                           "events for the last 3600 seconds.",
+        "agent_instructions": "",
+    }
+
+
+def _fault_spa_nav(obs):
+    click = obs.setdefault("click", {})
+    click["spaProbeSurvived"] = False
+    click["cardsAfter"] = 0
+
+
+FAULTS = {
+    "ac1-commentary": _fault_commentary,
+    "ac2-cards": _fault_cards,
+    "ac3-spa-nav": _fault_spa_nav,
+    "ac4-mode": _fault_mode,
+    "ac5-console": _fault_console,
+    "ac6-collector": _fault_collector,
+    "ac6-signals": _fault_signals,
+    "ac7-zero-match": _fault_zero_match,
+}
+
+
+def apply_fault(obs, check_id):
+    """Corrupt the observation so check_id must fail. Raises KeyError if unknown."""
+    FAULTS[check_id](obs)
