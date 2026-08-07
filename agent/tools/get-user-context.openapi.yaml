@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: Atelier Signals - Get User Context
+  description: >
+    Returns a single merged, real-time context payload for a shopper's
+    current browsing session: aggregate taste-profile attributes from the
+    Snowplow Signals Profile Store, plus a plain-language narrative of the
+    session's recent activity from the Agentic Context event log
+    (`fashion_session_activity`). One round trip per conversation turn.
+  version: "1.0.0"
+servers:
+  - url: https://your-storefront.example.com
+    description: Production (Vercel deploy of storefront/)
+security:
+  - ApiKeyAuth: []
+paths:
+  /api/agent/context:
+    get:
+      operationId: getUserContext
+      summary: Fetch merged Signals context for a shopper session
+      description: >
+        Always returns 200 with a well-formed payload, even when the
+        session id is missing, unknown, or Signals is unreachable -- the
+        empty/degraded payload lets the agent fall back to generic
+        concierge behaviour instead of surfacing an error.
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          description: >
+            The shopper's Snowplow session identifier (`domain_sessionid`).
+            Injected from the `snowplow_session_id` agent variable via the
+            `x-ces-session-context` extension below (not model-produced).
+            NOT the built-in `$context.session_id`, which is CX Agent
+            Studio's own conversation session id, not the Snowplow one.
+            The variable must be declared on the agent (type Text) and is
+            populated by the widget (issue 07); in the simulator, set it
+            manually. See `docs/setup-cx-agent-studio.md`.
+          schema:
+            type: string
+          x-ces-session-context: $context.variables.snowplow_session_id
+      responses:
+        "200":
+          description: Context payload (degraded/empty on unknown session).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextPayload"
+        "401":
+          description: Missing or incorrect `x-agent-api-key` header.
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-agent-api-key
+  schemas:
+    ContextPayload:
+      type: object
+      required: [profile, recent_activity, agent_instructions]
+      properties:
+        profile:
+          type: object
+          description: >
+            Flattened Profile Store attributes for the session (arrays and
+            dicts rendered as strings for LLM consumption). Typical keys:
+            favorite_category, favorite_designer, favorite_occasion,
+            favorite_color_family, recently_viewed_product_ids,
+            high_intent_product_ids, total_product_views,
+            total_add_to_cart, checkout_stage, cart_value_band,
+            active_cart_line_count. Empty object on unknown session or
+            upstream failure.
+          additionalProperties: true
+        recent_activity:
+          type: string
+          description: >
+            Plain-language narrative of the shopper's most recent
+            browsing/cart/checkout events, generated from the
+            fashion_session_activity Agentic Context. Empty string on
+            unknown session or upstream failure.
+        agent_instructions:
+          type: string
+          description: >
+            Interpretation prompt published alongside the Agentic Context
+            definition -- ground the narrative using these instructions
+            in addition to the agent's own persona instructions. Empty
+            string on unknown session or upstream failure.

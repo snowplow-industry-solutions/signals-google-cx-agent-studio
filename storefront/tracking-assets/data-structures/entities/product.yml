@@ -1,0 +1,64 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Rich product context attached to fashion browsing, cart, and checkout events.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: product
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    product_id:
+      type: string
+      maxLength: 128
+      description: Stable product identifier for the storefront.
+    sku:
+      type: string
+      maxLength: 128
+      description: Sellable stock keeping unit.
+    product_name:
+      type: string
+      maxLength: 256
+      description: Human-readable product name.
+    designer:
+      type: string
+      maxLength: 128
+      description: Designer or house associated with the product.
+    category:
+      type: string
+      maxLength: 64
+      description: Primary merchandising category.
+    color_family:
+      type: string
+      maxLength: 64
+      description: Color family used for styling logic.
+    occasion:
+      type: string
+      maxLength: 64
+      description: Occasion classification used in personalization.
+    price:
+      type: number
+      minimum: 0
+      maximum: 100000
+      description: Unit price of the product.
+    currency:
+      type: string
+      maxLength: 3
+      description: ISO currency code.
+  required:
+    - product_id
+    - sku
+    - product_name
+    - designer
+    - category
+    - color_family
+    - occasion
+    - price
+    - currency
+  additionalProperties: false

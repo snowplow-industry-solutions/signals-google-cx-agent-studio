@@ -1,0 +1,18 @@
+apiVersion: v1
+resourceType: source-application
+resourceName: 20413a18-b1d4-597d-aa6d-1af69872b906
+data:
+  name: Atelier Signals Storefront
+  domain: Product
+  description: High-end fashion retail demo storefront built to showcase Snowplow Signals personalization.
+  owner: signals-demo@snowplowanalytics.com
+  appIds:
+    - signals-workshop-fashion-demo
+    - signals-workshop-fashion-demo-dev
+  entities:
+    tracked:
+      - source: iglu:org.schema/WebPage/jsonschema/1-0-0
+        minCardinality: 1
+      - source: iglu:com.snowplow_demo.fashion/user/jsonschema/1-0-0
+        minCardinality: 1
+    enriched: []

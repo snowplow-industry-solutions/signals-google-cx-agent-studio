@@ -1,0 +1,15 @@
+[project]
+name = "atelier-signals-config"
+version = "0.1.0"
+description = "Snowplow Signals configuration for the Atelier Signals ecommerce demo."
+requires-python = ">=3.11"
+dependencies = [
+  "snowplow-signals>=0.4.3,<0.5",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["signals", "signals.config"]

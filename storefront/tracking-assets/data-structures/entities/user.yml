@@ -1,0 +1,49 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Global shopper context attached to every storefront event.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: user
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    shopper_profile_id:
+      type: string
+      maxLength: 128
+      description: Stable app-owned identifier for the storefront shopper profile.
+    favorite_category:
+      type:
+        - string
+        - "null"
+      maxLength: 64
+      description: Most prominent category affinity inferred for the current shopper.
+    price_affinity:
+      type:
+        - string
+        - "null"
+      enum:
+        - refined
+        - premium
+        - collector
+        - null
+      description: Current pricing affinity bucket derived from shopper behavior.
+    cart_value_band:
+      type:
+        - string
+        - "null"
+      enum:
+        - entry
+        - considered
+        - luxury
+        - null
+      description: Current cart value tier for the shopper session.
+  required:
+    - shopper_profile_id
+  additionalProperties: false

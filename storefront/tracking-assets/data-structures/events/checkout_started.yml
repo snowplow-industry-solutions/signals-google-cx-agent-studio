@@ -1,0 +1,29 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: event
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Marker event for entering the checkout journey.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: checkout_started
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    checkout_step:
+      type: string
+      maxLength: 32
+      description: Name of the first checkout step shown to the shopper.
+    cart_line_count:
+      type: integer
+      minimum: 0
+      maximum: 1000
+      description: Number of line items present when checkout starts.
+  required:
+    - checkout_step
+    - cart_line_count
+  additionalProperties: false
