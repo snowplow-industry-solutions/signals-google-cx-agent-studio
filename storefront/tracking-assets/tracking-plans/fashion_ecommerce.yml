@@ -86,7 +86,7 @@ data:
           appIds:
             - signals-workshop-fashion-demo
       event:
-        source: iglu:com.snowplow_demo.fashion/cart_updated/jsonschema/1-0-1
+        source: iglu:com.snowplow_demo.fashion/cart_updated/jsonschema/1-0-0
       entities:
         tracked:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
