@@ -15,6 +15,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { useSignals } from "@/components/Signals/SignalsProvider";
 import type { Intervention } from "@/types/signals";
+import { normalizeCollectorUrl } from "@/utils/collectorUrl";
 import { logSignalsDemo } from "@/utils/demo";
 import { getSessionId } from "@/utils/getSessionId";
 import { createUserContext } from "@/utils/userTracking";
@@ -81,13 +82,20 @@ export function SnowplowProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    const collectorUrl = process.env.NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL;
+    const rawCollectorUrl = process.env.NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL;
+    const collectorUrl = normalizeCollectorUrl(rawCollectorUrl);
     const appId = process.env.NEXT_PUBLIC_SNOWPLOW_APP_ID;
     if (!collectorUrl || !appId) {
       logSignalsDemo(
         "NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL or NEXT_PUBLIC_SNOWPLOW_APP_ID is not set; Snowplow tracking disabled"
       );
       return;
+    }
+
+    if (rawCollectorUrl !== collectorUrl) {
+      logSignalsDemo(
+        `Normalized collector URL "${rawCollectorUrl}" to "${collectorUrl}" — a scheme-less or http collector is blocked by CORS`
+      );
     }
 
     newTracker(TRACKER_NAME, collectorUrl, {
