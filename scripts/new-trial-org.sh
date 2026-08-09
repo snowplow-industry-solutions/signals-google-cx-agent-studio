@@ -201,6 +201,21 @@ cd "$REPO_ROOT"
 ENV_FILE="storefront/.env.local"
 BACKUP_DIR="$HOME/.signals-trial-backups"
 
+usage() {
+  printf 'Usage: %s [--from N]\n\n' "$(basename "$0")"
+  printf '  --from N   resume at stage N, skipping the ones before it. Values you\n'
+  printf '             already saved to %s are reused.\n' "$ENV_FILE"
+  exit 0
+}
+
+START_STAGE=1
+case "${1:-}" in
+  --from) START_STAGE="${2:?--from needs a stage number}" ;;
+  --help|-h) usage ;;
+  "") ;;
+  *) printf 'Unknown argument: %s\n' "$1"; usage ;;
+esac
+
 # Values that belong to one specific Snowplow org. A new trial invalidates
 # every one of them; AGENT_SHARED_SECRET, NEXT_PUBLIC_SNOWPLOW_APP_ID and
 # NEXT_PUBLIC_CES_DEPLOYMENT_ID belong to the storefront/agent and survive.
@@ -212,6 +227,44 @@ ORG_SCOPED_KEYS=(
   NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT
   SIGNALS_DEPLOYED_URL
 )
+
+# begin "Name" <minutes> — stage(), but returns non-zero when --from skips it.
+# Wrap each stage body in `if begin ...; then ... fi`.
+begin() {
+  stage "$1" "$2"
+  if (( _STAGE_INDEX < START_STAGE )); then
+    note "skipped (resuming from stage $START_STAGE)"
+    return 1
+  fi
+  return 0
+}
+
+# normalise_url URL — force https and drop any trailing slash.
+#
+# Console displays the collector as a bare hostname. Pasted in as-is, the tracker
+# resolves it against the page protocol: on http://localhost the request goes out
+# over http, the collector answers 308 to https with no Access-Control-Allow-Origin
+# header, and since browsers never follow redirects on a CORS preflight, every
+# event is blocked and shows up only as a console CORS error.
+normalise_url() {
+  local url="${1#"${1%%[![:space:]]*}"}"   # ltrim
+  url="${url%"${url##*[![:space:]]}"}"     # rtrim
+  url="${url%/}"
+  [[ -z "$url" ]] && { printf ''; return; }
+  case "$url" in
+    https://*) printf '%s' "$url" ;;
+    http://*)  printf 'https://%s' "${url#http://}" ;;
+    *)         printf 'https://%s' "$url" ;;
+  esac
+}
+
+# mask SECRET — show enough to spot a paste error, not enough to leak.
+mask() {
+  local s="$1" n=${#1}
+  (( n == 0 )) && { printf '(empty)'; return; }
+  (( n <= 8 )) && { printf '(%s chars)' "$n"; return; }
+  printf '%s…%s (%s chars)' "${s:0:4}" "${s: -4}" "$n"
+}
 
 # _env_value KEY — value of KEY in ENV_FILE with any surrounding quotes stripped
 # (values written by hand may be quoted; write_env never quotes).
@@ -242,9 +295,12 @@ run() {
 }
 
 banner "New Snowplow trial org → seeded pipeline → live storefront"
+note "Mistyped something? Every capture stage shows what you entered and lets you"
+note "redo it before moving on. To restart later, ./scripts/new-trial-org.sh --from N"
+pause
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
-stage "Preflight — local tooling" 1
+if begin "Preflight — local tooling" 1; then
 say "Checking the CLIs the later stages shell out to."
 MISSING=()
 for cmd in node npm python3 snowplow-cli; do
@@ -268,9 +324,10 @@ fi
 [[ -f storefront/package.json ]] || { warn "storefront/package.json missing — wrong directory?"; exit 1; }
 note "repo root: $REPO_ROOT"
 pause
+fi
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
-stage "Create the new Snowplow trial org" 10
+if begin "Create the new Snowplow trial org" 10; then
 say "A trial gives you a full pipeline (collector + enrich) plus Signals."
 open_url "https://snowplow.io/get-started/snowplow-free-trial"
 step "Sign up — use your work email. No card, no sales call."
@@ -278,9 +335,10 @@ step "Wait for the provisioning email / for the console to show a live pipeline.
 step "In BDP Console, confirm Signals is enabled for the org (left nav → Signals)."
 warn "Note the trial expiry date now — the pipeline stops computing when it lapses."
 pause "Pipeline is live and Signals is enabled — press Enter."
+fi
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
-stage "Back up and clear the expired org's values" 1
+if begin "Back up and clear the expired org's values" 1; then
 say "$ENV_FILE currently points at the expired org. We keep a copy outside the"
 say "repo, then blank the org-scoped keys so nothing stale can be kept by Enter."
 if [[ -f "$ENV_FILE" ]]; then
@@ -293,50 +351,77 @@ if [[ -f "$ENV_FILE" ]]; then
     for key in "${ORG_SCOPED_KEYS[@]}"; do _drop_env "$key"; done
     printf '  %s✓%s cleared: %s\n' "$GREEN" "$RESET" "${ORG_SCOPED_KEYS[*]}"
   else
-    note "left in place — Enter will keep the OLD value at each prompt, so paste explicitly"
+    note "left in place — each prompt offers the current value; Enter keeps it"
   fi
 else
   note "$ENV_FILE doesn't exist yet — creating it from the template"
   cp storefront/.env.example "$ENV_FILE"
 fi
 pause
+fi
 
 # ── 4 ─────────────────────────────────────────────────────────────────────
-stage "Capture the Console API credentials" 4
+if begin "Capture the Console API credentials" 4; then
 open_url "https://console.snowplowanalytics.com"
-step "The organization ID is the UUID in the console URL, right after the host."
-ask SNOWPLOW_CONSOLE_ORG_ID "Organization ID (UUID):"
-step "Go to Settings → API keys, and create a new key for this demo."
-step "The key value is shown once — copy it before closing the dialog."
-ask SNOWPLOW_CONSOLE_API_KEY_ID "API key ID (the visible identifier):"
-ask_secret SNOWPLOW_CONSOLE_API_KEY "API key (hidden input):"
-write_env SNOWPLOW_CONSOLE_ORG_ID "$SNOWPLOW_CONSOLE_ORG_ID"
-write_env SNOWPLOW_CONSOLE_API_KEY_ID "$SNOWPLOW_CONSOLE_API_KEY_ID"
-write_env SNOWPLOW_CONSOLE_API_KEY "$SNOWPLOW_CONSOLE_API_KEY"
+while true; do
+  step "The organization ID is the UUID in the console URL, right after the host."
+  ask SNOWPLOW_CONSOLE_ORG_ID "Organization ID (UUID):"
+  step "Settings → API keys → create a new key. The value shows once; copy it now."
+  ask SNOWPLOW_CONSOLE_API_KEY_ID "API key ID (the visible identifier):"
+  ask_secret SNOWPLOW_CONSOLE_API_KEY "API key (hidden input):"
+
+  # Written before the confirm so a redo offers these as the Enter-default —
+  # you retype only the one you got wrong.
+  write_env SNOWPLOW_CONSOLE_ORG_ID "$SNOWPLOW_CONSOLE_ORG_ID"
+  write_env SNOWPLOW_CONSOLE_API_KEY_ID "$SNOWPLOW_CONSOLE_API_KEY_ID"
+  write_env SNOWPLOW_CONSOLE_API_KEY "$SNOWPLOW_CONSOLE_API_KEY"
+
+  printf '\n'
+  note "organization ID : $SNOWPLOW_CONSOLE_ORG_ID"
+  note "API key ID      : $SNOWPLOW_CONSOLE_API_KEY_ID"
+  note "API key         : $(mask "$SNOWPLOW_CONSOLE_API_KEY")"
+  confirm "All three correct?" && break
+  warn "re-entering — press Enter at any prompt to keep the value shown"
+done
 pause
+fi
 
 # ── 5 ─────────────────────────────────────────────────────────────────────
-stage "Capture the collector and Signals endpoints" 3
-say "Two URLs the browser tracker and the Signals SDK talk to."
+if begin "Capture the collector and Signals endpoints" 3; then
+say "Two URLs: where the browser tracker sends events, and where Signals lives."
 open_url "https://console.snowplowanalytics.com"
-step "Collector: your pipeline's collector endpoint — a trial looks like"
-note "  https://trial-xxxxx-yyyyy.collector.snplow.net"
-ask NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "Collector URL:"
-step "Signals → API access: the Signals API base URL — looks like"
-note "  https://<hash>.signals.snowplowanalytics.com"
-ask SIGNALS_DEPLOYED_URL "Signals API base URL:"
-ask NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "Interventions endpoint (Enter = same as the Signals API URL):"
-[[ -z "$NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT" ]] && \
-  NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT="$SIGNALS_DEPLOYED_URL"
-write_env NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
-write_env SIGNALS_DEPLOYED_URL "$SIGNALS_DEPLOYED_URL"
-write_env NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "$NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT"
+while true; do
+  step "Collector: your pipeline's collector endpoint. Console shows it as a bare"
+  step "hostname — paste it as shown, https:// is added for you."
+  note "  e.g. trial-xxxxx-yyyyy.collector.snplow.net"
+  ask NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "Collector URL:"
+  NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=$(normalise_url "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL")
+
+  step "Signals → API access: the Signals API base URL."
+  note "  e.g. https://<hash>.signals.snowplowanalytics.com"
+  ask SIGNALS_DEPLOYED_URL "Signals API base URL:"
+  SIGNALS_DEPLOYED_URL=$(normalise_url "$SIGNALS_DEPLOYED_URL")
+
+  write_env NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
+  write_env SIGNALS_DEPLOYED_URL "$SIGNALS_DEPLOYED_URL"
+
+  printf '\n'
+  note "collector : $NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
+  note "Signals   : $SIGNALS_DEPLOYED_URL"
+  confirm "Both correct?" && break
+  warn "re-entering — press Enter at any prompt to keep the value shown"
+done
+
+# The interventions endpoint is the same host as the Signals API — the browser
+# plugin just needs it under a NEXT_PUBLIC_ name to reach the client bundle.
+write_env NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "$SIGNALS_DEPLOYED_URL"
 write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "signals-workshop-fashion-demo-dev"
 note "local app ID = ...-demo-dev; Vercel production uses signals-workshop-fashion-demo"
 pause
+fi
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
-stage "Seed the new org with the tracking plan" 5
+if begin "Seed the new org with the tracking plan" 5; then
 say "A fresh org has none of the demo's schemas, and the Signals publish in"
 say "stage 8 hard-fails without them. Resource IDs are derived from the org ID,"
 say "so seeding a new org can't collide with the expired org's IDs."
@@ -347,16 +432,19 @@ warn "snowplow-cli also reads ~/.config/snowplow/snowplow.yml. The env vars from
 warn "$ENV_FILE should win, but check the output below names the NEW org."
 if confirm "Publish data structures (dev + prod) and the tracking plan to the new org?"; then
   run "seed tracking plans" npm --prefix storefront run seed:tracking-plans || {
-    warn "seeding failed — fix the error above, then re-run this wizard"
+    warn "seeding failed. A version error means a schema's first version isn't"
+    warn "1-0-0 — a fresh org has nothing to supersede. Fix the yml, then:"
+    note "  ./scripts/new-trial-org.sh --from 6"
     confirm "Continue to the next stage anyway?" || exit 1
   }
 else
   SKIPPED+=("tracking-plan seed: npm --prefix storefront run seed:tracking-plans")
 fi
 pause
+fi
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
-stage "Regenerate the Snowtype helpers for the new org" 3
+if begin "Regenerate the Snowtype helpers for the new org" 3; then
 say "snowtype.config.json and snowtype/ are per-org and gitignored: the config"
 say "names the org and its data product, and the generated helpers embed the"
 say "event-spec IDs read back from it. Both rebuild from the org ID in $ENV_FILE."
@@ -373,9 +461,10 @@ else
   SKIPPED+=("snowtype regenerate: npm --prefix storefront run snowtype:generate")
 fi
 pause
+fi
 
 # ── 8 ─────────────────────────────────────────────────────────────────────
-stage "Publish the Signals config" 5
+if begin "Publish the Signals config" 5; then
 say "Attribute group, service, intervention and event log, via the Python SDK."
 if [[ ! -x storefront/.venv/bin/python ]]; then
   run "create venv" python3 -m venv storefront/.venv || true
@@ -390,21 +479,25 @@ step "and service fashion_ecommerce_demo."
 if confirm "Publish the Signals config to the new org?"; then
   run "signals publish" npm --prefix storefront run signals:publish || {
     warn "publish failed. A 404 'schema ... not in production' means stage 6"
-    warn "didn't complete its prod promotion — re-run stage 6 first."
+    warn "didn't complete its prod promotion — re-run with --from 6."
     confirm "Continue anyway?" || exit 1
   }
 else
   SKIPPED+=("Signals publish: npm --prefix storefront run signals:publish")
 fi
 pause
+fi
 
 # ── 9 ─────────────────────────────────────────────────────────────────────
-stage "Verify the new pipeline locally" 8
+if begin "Verify the new pipeline locally" 8; then
 say "Browse the local storefront, then read the session's attributes back out"
 say "of the new org's Profile Store."
 note "In a second terminal: npm --prefix storefront install && npm --prefix storefront run dev"
+note "collector in use: $(_env_value NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL)"
 open_url "http://localhost:3000"
 step "Browse several products in at least one category, then add one to cart."
+step "Open the browser console. Events should POST to the collector with no errors."
+warn "A CORS error there means the collector URL lost its https:// — check $ENV_FILE."
 step "Read the session ID from the on-page Signals debug panel (or the _sp_id"
 step "cookie's second field)."
 ask _SESSION_ID "Paste the domain_sessionid:"
@@ -424,9 +517,10 @@ else
   SKIPPED+=("local end-to-end verification (skipped — no session ID)")
 fi
 pause
+fi
 
 # ── 10 ────────────────────────────────────────────────────────────────────
-stage "Point the live Vercel deployment at the new org" 6
+if begin "Point the live Vercel deployment at the new org" 6; then
 say "Six production env vars change. AGENT_SHARED_SECRET,"
 say "NEXT_PUBLIC_SNOWPLOW_APP_ID and NEXT_PUBLIC_CES_DEPLOYMENT_ID do not —"
 say "leave them alone so the CX Agent Studio tool auth and widget keep working."
@@ -440,7 +534,7 @@ if command -v vercel >/dev/null 2>&1; then
     warn "the wrong Vercel account (storefront/.vercel/project.json points at a"
     warn "team the current login can't see)."
     step "Run 'vercel login' with the account that owns the deployment, then"
-    step "re-run this wizard, or paste the values into the dashboard instead."
+    step "re-run with --from 10, or paste the values into the dashboard instead."
     if confirm "Have you fixed the login and want to retry the check?"; then
       vercel env ls production --cwd storefront >/dev/null 2>&1 && VERCEL_OK=1
     fi
@@ -483,11 +577,13 @@ else
   pause "Done in the dashboard — press Enter."
 fi
 pause
+fi
 
 # ── 11 ────────────────────────────────────────────────────────────────────
-stage "Redeploy and verify the live site" 6
+if begin "Redeploy and verify the live site" 6; then
 say "This repo has no Vercel↔GitHub link, so production deploys come from the CLI."
-if (( VERCEL_OK )) && confirm "Deploy to production now (vercel --prod)?"; then
+warn "Vercel env changes only apply to the NEXT deploy — stage 10 must be done."
+if command -v vercel >/dev/null 2>&1 && confirm "Deploy to production now (vercel --prod)?"; then
   run "vercel --prod" vercel --prod --cwd storefront || \
     SKIPPED+=("production deploy: vercel --prod --cwd storefront")
 else
@@ -510,6 +606,7 @@ if [[ -n "$_STOREFRONT_URL" ]]; then
   open_url "$_STOREFRONT_URL"
 fi
 pause
+fi
 
 note "Nothing on the CX Agent Studio side changes — the agent's tools address the"
 note "storefront URL with AGENT_SHARED_SECRET, neither of which the new org touches."
