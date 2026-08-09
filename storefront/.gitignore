@@ -38,6 +38,16 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env.local
 
+# Snowtype config and generated helpers are per-org: the config names an
+# organization ID and a data product ID, and snowtype/ embeds the event
+# specification IDs derived from them. Regenerate with `npm run
+# snowtype:generate` (see snowtype.config.example.json) rather than committing
+# one org's IDs. Vercel CLI deploys upload these from the working tree — it
+# doesn't consult .gitignore — but a Git-integration deploy would need a
+# prebuild step that generates them.
+snowtype.config.json
+/snowtype/
+
 # vercel
 .vercel
 

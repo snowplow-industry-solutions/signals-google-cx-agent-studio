@@ -49,7 +49,9 @@
   - `signals/config/publish.py`
 
 - Snowtype config:
-  - `snowtype.config.json`
+  - `snowtype.config.example.json` — the committed template; edit this one
+  - `snowtype.config.json` and `snowtype/` — generated per-org and gitignored,
+    written by `npm run snowtype:generate`. Never edit by hand.
 
 ## Verification Commands
 

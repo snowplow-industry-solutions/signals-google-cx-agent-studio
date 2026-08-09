@@ -83,6 +83,17 @@ From `storefront/`, with `.env.local` populated:
    schemas that are **in production**), then publishes the tracking plan from a
    derived-ID build tree, stopping on first failure.
 
+3. Generate the Snowtype tracking helpers against the org you just seeded:
+   ```
+   npm run snowtype:generate
+   ```
+   `snowtype.config.json` and `snowtype/` are gitignored because both name
+   org-specific IDs; this command writes the config from
+   `snowtype.config.example.json` (org ID from `.env.local`, data product ID
+   derived the same way the seed script derives it) and then generates the
+   helpers. `storefront/src` imports them, so `npm test`, `npm run lint` and
+   `npm run build` all fail until this has run once.
+
 > Tracking-plan IDs are derived per-org (a stable UUIDv5 from the org ID), so a
 > fresh org never collides with a previous org's IDs, and re-running against the
 > same org updates the same resources rather than duplicating them.

@@ -38,8 +38,10 @@ npm --prefix storefront run lint
 npm --prefix storefront run build
 ```
 
-`snowtype/` holds generated tracking helpers — regenerate with
-`npm run snowtype:generate`, never edit by hand.
+`snowtype/` holds generated tracking helpers and `snowtype.config.json` is
+generated from `snowtype.config.example.json`. Both are per-org and gitignored,
+so a fresh clone must run `npm run snowtype:generate` before `test`, `lint` or
+`build` will pass. Never edit either by hand — regenerate.
 
 ## Secrets & identifiers
 
