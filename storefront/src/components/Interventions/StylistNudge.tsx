@@ -115,7 +115,7 @@ export function StylistNudge() {
 
   return (
     <aside
-      className={`fixed bottom-4 left-4 z-50 w-[22rem] rounded-[1.5rem] border p-5 shadow-2xl backdrop-blur-xl transition-all duration-300 ${
+      className={`fixed bottom-4 left-1/2 z-[60] w-[22rem] -translate-x-1/2 rounded-[1.5rem] border p-5 shadow-2xl backdrop-blur-xl transition-all duration-300 ${
         visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
       } ${
         highlightPersonalization
