@@ -6,7 +6,7 @@
 # a placeholder -- pass it at apply time instead:
 #   TF_VAR_agent_shared_secret_value=<value> terraform apply
 
-project_id = "<PLACEHOLDER: Snowplow-managed sandbox GCP project ID>"
+project_id = "<PLACEHOLDER: your GCP project ID>"
 location   = "<PLACEHOLDER: e.g. us -- confirm, don't assume>"
 
 app_id             = "<PLACEHOLDER: existing console-built app ID>"

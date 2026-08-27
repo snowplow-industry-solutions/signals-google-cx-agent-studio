@@ -18,10 +18,13 @@ run against the real project, by a human. The full command sequence is in
 app version, deployment) plus the console-chosen app display name as
 required inputs with no default; everything else (widget copy, labels)
 has a demo-appropriate default.
-- `locals.tf` -- the baseline tagging-policy labels and a shared
-`deletion_policy = "PREVENT"` applied to every `google_ces_*` resource.
+- `locals.tf` -- the shared `deletion_policy = "PREVENT"` applied to every
+`google_ces_*` resource.
+- `variables.tf` also declares `labels`, the map stamped on the Secret
+Manager secret (the only labellable resource here).
 - `secrets.tf` -- the Secret Manager secret backing both toolsets' API-key
-auth, labelled per policy, plus the CES service-agent IAM grant to read it.
+auth, labelled with `var.labels`, plus the CES service-agent IAM grant to
+read it.
 - `app.tf`, `agent.tf`, `toolsets.tf`, `deployment.tf` -- the app, root
 agent + app/root-agent association, the two OpenAPI toolsets (sourced from
 `agent/tools/*.openapi.yaml`), the app version, and the web-widget
@@ -65,17 +68,16 @@ a live conversation.
 **The `ces_app` label gap:** neither `google_ces_app` nor `google_ces_agent`
 exposes a `labels` field (confirmed against the provider doc sources). The
 only Terraform-managed resource this config introduces that supports labels
-is the Secret Manager secret in `secrets.tf`, which carries the full
-baseline set. Project-level labelling is out-of-band -- see [step
+is the Secret Manager secret in `secrets.tf`, which carries `var.labels`.
+Project-level labelling is out-of-band -- see [step
 5](#5-project-level-tagging).
 
 ## Known risk to check before relying on `apply`
 
 Provider issue [#26231](https://github.com/hashicorp/terraform-provider-google/issues/26231)
-(open as of 2026-07-28): `google_ces_app` 400s when configuring
-`gemini-3-flash` + `temperature` in the `us` location. The live console
-build stores model settings at the **app** level (the agent inherits
-them), so after the 2026-07-29 reconciliation this config sets
+tracks `google_ces_app` 400ing when configuring `gemini-3-flash` +
+`temperature` in the `us` location. The live console build stores model
+settings at the **app** level (the agent inherits them), so this config sets
 `model_settings` on `google_ces_app` with `gemini-3.0-flash-001` +
 `temperature = 1` in `us` -- **the exact shape the issue reports**.
 Import and `plan` are unaffected (verified live); the risk is confined to
@@ -86,8 +88,9 @@ matching live state or set `model_temperature = null`.
 
 ## Known plan diffs after import (accepted)
 
-Observed on the 2026-07-29 verification runs (`Plan: 0 to add, 11 to change, 0 to destroy` after the widget tools were adopted; 9 before)
--- all provider/import artifacts, none of them config↔live drift:
+Verified against a live import (`Plan: 0 to add, 11 to change, 0 to destroy`
+after the widget tools were adopted; 9 before) -- all provider/import
+artifacts, none of them config↔live drift:
 
 - `**deletion_policy = "DELETE" -> "PREVENT"` on every `google_ces_*`
 resource.** Provider-side virtual field with no API call behind it;
@@ -100,7 +103,7 @@ guarded with `ignore_changes` because the re-publish flow (README
 below) relies on Terraform owning this pointer.
 - `**labels`/`terraform_labels` backfill on the Secret Manager secret.**
 Import records live labels only in `effective_labels`; the live values
-already match `local.baseline_labels`, so the "change" is a no-op.
+already match `var.labels`, so the "change" is a no-op.
 - **A zero-field "update" on the secret *version*.** Plan-JSON comparison
 showed `secret_data` before == after, which doubles as verification
 that the console secret's payload equals the deployed
@@ -299,11 +302,9 @@ tagging policy has to be applied to the project directly, out-of-band:
 gcloud projects update "${PROJECT_ID}" --update-labels=<key>=<value>,...
 ```
 
-> Only do this on a **dedicated** project. On a shared sandbox that already
-> carries org-managed labels and other teams' workloads, stamping this demo's
-> labels on the whole project would mislabel everyone's resources — skip it, and
-> rely on the one labellable resource this config manages (the Secret Manager
-> secret in `secrets.tf`).
+> Only do this on a **dedicated** project. On a project shared with other
+> workloads, stamping this demo's labels on the whole project would mislabel
+> everyone's resources — skip it and rely on the secret's `labels` instead.
 
 ### 6. Re-apply after trial expiry / re-publish a change
 

@@ -1,8 +1,6 @@
-# Live resource identifiers below have no defaults on purpose -- this
-# sandbox has no live GCP credentials, so no value here can be verified
-# against reality. Fill them in from the console (or `apps.exportApp`, see
-# README.md) before running plan/import; do not invent placeholders and
-# treat them as real.
+# Live resource identifiers below have no defaults on purpose: they identify
+# resources the console already created in *your* project. Fill them in from
+# the console (or `apps.exportApp`, see README.md) before running plan/import.
 
 variable "project_id" {
   type        = string
@@ -23,7 +21,7 @@ variable "location" {
 
 variable "app_id" {
   type        = string
-  description = "ID of the existing console-built CES app (issue 06) to import as google_ces_app.this."
+  description = "ID of the existing console-built CES app to import as google_ces_app.this."
 }
 
 variable "app_display_name" {
@@ -38,17 +36,17 @@ variable "app_display_name" {
 
 variable "agent_id" {
   type        = string
-  description = "ID of the existing console-built root agent (issue 06) to import as google_ces_agent.root."
+  description = "ID of the existing console-built root agent to import as google_ces_agent.root."
 }
 
 variable "context_toolset_id" {
   type        = string
-  description = "ID of the existing console-built toolset wrapping the getUserContext tool (issue 06) to import as google_ces_toolset.context."
+  description = "ID of the existing console-built toolset wrapping the getUserContext tool to import as google_ces_toolset.context."
 }
 
 variable "catalog_toolset_id" {
   type        = string
-  description = "ID of the existing console-built toolset wrapping the searchCatalog tool (issue 06) to import as google_ces_toolset.catalog."
+  description = "ID of the existing console-built toolset wrapping the searchCatalog tool to import as google_ces_toolset.catalog."
 }
 
 variable "app_version_id" {
@@ -69,7 +67,7 @@ variable "app_version_display_name" {
 
 variable "deployment_display_name" {
   type        = string
-  description = "Display name of the existing console-built web-widget deployment (issue 07) to import as google_ces_deployment.web_widget."
+  description = "Display name of the existing console-built web-widget deployment to import as google_ces_deployment.web_widget."
 }
 
 variable "storefront_url" {
@@ -106,12 +104,12 @@ variable "model_name" {
   type        = string
   description = <<-EOT
     LLM model for the app's model_settings. The console sets model
-    settings at the *app* level, not on the root agent (confirmed live
-    2026-07-29: the agent resource carries no modelSettings and inherits
-    the app's). Must match whatever the live console app currently uses
-    -- discover it from the console or `apps.exportApp` rather than
-    guessing. See README.md re: provider bug #26231 before pairing this
-    with a non-null model_temperature in the "us" location.
+    settings at the *app* level, not on the root agent (the agent resource
+    carries no modelSettings and inherits the app's). Must match whatever
+    the live console app currently uses -- discover it from the console or
+    `apps.exportApp` rather than guessing. See README.md re: provider bug
+    #26231 before pairing this with a non-null model_temperature in the
+    "us" location.
   EOT
 }
 
@@ -124,7 +122,7 @@ variable "model_temperature" {
 variable "product_carousel_tool_id" {
   type        = string
   description = <<-EOT
-    ID of the productCarousel widget tool (issue 09) to import as
+    ID of the productCarousel widget tool to import as
     google_ces_tool.product_carousel. The console-built tool's ID is a
     UUID -- read it from the agent's `tools` list via the CES REST API or
     console. The default only applies to a greenfield re-create.
@@ -135,7 +133,7 @@ variable "product_carousel_tool_id" {
 variable "product_details_tool_id" {
   type        = string
   description = <<-EOT
-    ID of the productDetails widget tool (issue 09) to import as
+    ID of the productDetails widget tool to import as
     google_ces_tool.product_details. Same discovery route as
     product_carousel_tool_id; the default only applies to a greenfield
     re-create.
@@ -160,4 +158,18 @@ variable "agent_shared_secret_value" {
   description = "The AGENT_SHARED_SECRET value (docs/setup-snowplow-trial.md §7) to store in Secret Manager. Never set via a committed .tfvars file -- pass with TF_VAR_agent_shared_secret_value or -var at apply time."
   sensitive   = true
   default     = null
+}
+
+variable "labels" {
+  type        = map(string)
+  description = <<-EOT
+    Labels applied to every labellable resource this config creates (today:
+    only the Secret Manager secret in secrets.tf -- google_ces_app and
+    google_ces_agent expose no labels field). Add your organisation's
+    ownership/cost-centre keys here.
+  EOT
+  default = {
+    system      = "signals-cx-agent-demo"
+    environment = "dev"
+  }
 }

@@ -12,7 +12,7 @@ data "google_project" "sandbox" {
 resource "google_secret_manager_secret" "agent_shared_secret" {
   project   = var.project_id
   secret_id = var.agent_shared_secret_id
-  labels    = local.baseline_labels
+  labels    = var.labels
 
   replication {
     auto {}
