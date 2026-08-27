@@ -45,8 +45,8 @@ NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=<PLACEHOLDER, e.g. https://collector.<org>.sn
 
 1. `cp storefront/.env.example storefront/.env.local`
 2. Fill in the credentials from step 2, plus:
-   - `NEXT_PUBLIC_SNOWPLOW_APP_ID` — use `signals-workshop-fashion-demo-dev`
-     for local runs, `signals-workshop-fashion-demo` for anything the pipeline
+   - `NEXT_PUBLIC_SNOWPLOW_APP_ID` — use `atelier-storefront-dev`
+     for local runs, `atelier-storefront` for anything the pipeline
      should treat as the "live" demo app (both are pre-registered in
      `storefront/tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`).
    - `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` — Signals interventions
@@ -162,7 +162,7 @@ HTTPS, which the CX Agent Studio OpenAPI tools require.
    | `SIGNALS_DEPLOYED_URL` | No — mark Sensitive | from step 2 |
    | `AGENT_SHARED_SECRET` | No — mark Sensitive | mint a fresh long random value for the deployed environment (don't reuse a local one); you mirror this exact value into the CX Agent Studio OpenAPI tool's API-key auth ([`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md) §3) |
    | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` | Yes, by design | from step 2 |
-   | `NEXT_PUBLIC_SNOWPLOW_APP_ID` | Yes, by design | use `signals-workshop-fashion-demo` (not `-dev`) so the deployed site is the "live" demo app |
+   | `NEXT_PUBLIC_SNOWPLOW_APP_ID` | Yes, by design | use `atelier-storefront` (not `-dev`) so the deployed site is the "live" demo app |
    | `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` | Yes, by design | from step 2, if set |
 
    Only `NEXT_PUBLIC_*`-prefixed vars reach the browser bundle (Next.js's own

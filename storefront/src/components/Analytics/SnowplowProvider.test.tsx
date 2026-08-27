@@ -102,7 +102,7 @@ describe("SnowplowProvider", () => {
       "NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL",
       "https://collector.example.test"
     );
-    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_APP_ID", "signals-workshop-fashion-demo-dev");
+    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_APP_ID", "atelier-storefront-dev");
     container = document.createElement("div");
     document.body.appendChild(container);
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -143,7 +143,7 @@ describe("SnowplowProvider", () => {
     expect(newTrackerMock).toHaveBeenCalledWith(
       "fashion_demo",
       "https://collector.example.test",
-      expect.objectContaining({ appId: "signals-workshop-fashion-demo-dev" })
+      expect.objectContaining({ appId: "atelier-storefront-dev" })
     );
     expect(trackDemoPageViewMock).toHaveBeenCalledTimes(1);
     expect(trackDemoPageViewMock).toHaveBeenCalledWith("/");

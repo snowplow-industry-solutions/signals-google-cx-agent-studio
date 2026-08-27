@@ -19,7 +19,7 @@ data:
         - id: 8c01f009-5e14-43db-8922-9c391ebba9bc
           description: Trigger on homepage featured rails and collection grids after products are rendered.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/product_list_viewed/jsonschema/1-0-0
       entities:
@@ -34,7 +34,7 @@ data:
         - id: 714295e9-9307-4303-b261-bf184d5ddddc
           description: Trigger when a product card link is clicked from any tracked list.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/product_list_clicked/jsonschema/1-0-0
       entities:
@@ -50,7 +50,7 @@ data:
         - id: 48cc8b20-2d7e-46dd-95d4-7780dbf5de30
           description: Trigger when a product detail page becomes visible to the shopper.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/product_viewed/jsonschema/1-0-0
       entities:
@@ -66,7 +66,7 @@ data:
         - id: d463f23c-7f6f-451e-9268-5bdcc8185080
           description: Trigger on cart page view to support cart-state Signals attributes.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/cart_viewed/jsonschema/1-0-0
       entities:
@@ -84,7 +84,7 @@ data:
         - id: 727418fa-a85a-4bea-b9b9-94872f83a80e
           description: Trigger from add-to-cart and quantity update interactions.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/cart_updated/jsonschema/1-0-0
       entities:
@@ -103,7 +103,7 @@ data:
         - id: 9e40807f-c1c6-4f51-8ac0-0719143c8260
           description: Trigger when the checkout route is first entered.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/checkout_started/jsonschema/1-0-0
       entities:
@@ -121,7 +121,7 @@ data:
         - id: 2ffb26a2-95df-42b1-8ed3-d276a1d56e71
           description: Trigger whenever the active checkout stage changes.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/checkout_step_viewed/jsonschema/1-0-0
       entities:
@@ -139,7 +139,7 @@ data:
         - id: 5248861a-6da3-421c-9c16-b5eaca9abeb2
           description: Trigger when the presenter places the demo order.
           appIds:
-            - signals-workshop-fashion-demo
+            - atelier-storefront
       event:
         source: iglu:com.snowplow_demo.fashion/checkout_completed/jsonschema/1-0-0
       entities:

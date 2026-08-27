@@ -415,8 +415,8 @@ done
 # The interventions endpoint is the same host as the Signals API — the browser
 # plugin just needs it under a NEXT_PUBLIC_ name to reach the client bundle.
 write_env NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "$SIGNALS_DEPLOYED_URL"
-write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "signals-workshop-fashion-demo-dev"
-note "local app ID = ...-demo-dev; Vercel production uses signals-workshop-fashion-demo"
+write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "atelier-storefront-dev"
+note "local app ID = atelier-storefront-dev; Vercel production uses atelier-storefront"
 pause
 fi
 
@@ -560,7 +560,7 @@ if (( VERCEL_OK )); then
         SKIPPED+=("Vercel production env $key")
       fi
     done
-    note "production keeps NEXT_PUBLIC_SNOWPLOW_APP_ID=signals-workshop-fashion-demo (no -dev)"
+    note "production keeps NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront (no -dev)"
   else
     SKIPPED+=("Vercel production env vars (6) — not updated")
   fi

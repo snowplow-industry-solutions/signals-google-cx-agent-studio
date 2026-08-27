@@ -7,8 +7,8 @@ data:
   description: High-end fashion retail demo storefront built to showcase Snowplow Signals personalization.
   owner: demo-owner@example.com
   appIds:
-    - signals-workshop-fashion-demo
-    - signals-workshop-fashion-demo-dev
+    - atelier-storefront
+    - atelier-storefront-dev
   entities:
     tracked:
       - source: iglu:org.schema/WebPage/jsonschema/1-0-0
