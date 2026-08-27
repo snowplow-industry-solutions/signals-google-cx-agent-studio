@@ -55,7 +55,7 @@ describe("readTemplateDataProductId", () => {
 
 describe("deriveDataProductId", () => {
   const TEMPLATE = "12361c29-df6c-5a64-b024-68557f6504ed";
-  const ORG = "00a9e122-8865-4e3b-ac1d-648b50ad9483";
+  const ORG = "11111111-2222-4333-8444-555555555555";
 
   // The whole point of deriving here rather than copying an ID out of Console:
   // snowtype must name the same data product the seeder publishes. If these two
@@ -70,13 +70,13 @@ describe("deriveDataProductId", () => {
   });
 
   it("derives a different id for a different org", () => {
-    const other = "b12539df-a711-42bd-bdfa-175308c55fd5";
+    const other = "99999999-8888-4777-8666-555555555555";
     expect(deriveDataProductId(ORG, TEMPLATE)).not.toBe(deriveDataProductId(other, TEMPLATE));
   });
 });
 
 describe("buildSnowtypeConfig", () => {
-  const ORG = "00a9e122-8865-4e3b-ac1d-648b50ad9483";
+  const ORG = "11111111-2222-4333-8444-555555555555";
   const DATA_PRODUCT = "c8d4245b-bdb2-52d4-ac11-64b5d131d6c1";
 
   it("replaces both org-scoped placeholders", () => {
