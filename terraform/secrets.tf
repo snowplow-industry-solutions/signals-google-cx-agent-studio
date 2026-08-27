@@ -5,7 +5,7 @@
 # hand it a raw string, unlike the console's API-key auth form (see
 # README.md for what that implies at import time).
 
-data "google_project" "sandbox" {
+data "google_project" "this" {
   project_id = var.project_id
 }
 
@@ -48,5 +48,5 @@ resource "google_secret_manager_secret_iam_member" "ces_service_agent_accessor" 
   project   = google_secret_manager_secret.agent_shared_secret.project
   secret_id = google_secret_manager_secret.agent_shared_secret.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:service-${data.google_project.sandbox.number}@gcp-sa-ces.iam.gserviceaccount.com"
+  member    = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-ces.iam.gserviceaccount.com"
 }

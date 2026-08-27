@@ -16,7 +16,7 @@ import { logSignalsDemo } from "@/utils/demo";
 const TEMPLATE_ID = "atelier_product_cards";
 
 /**
- * Issue 09's client-side rich-response renderer. The CES agent's widget
+ * The client-side rich-response renderer. The CES agent's widget
  * invocations reach the browser in two shapes (see agent/instructions.md
  * 'Rich response widgets'), and
  * the stock open-source ces-messenger renders neither:
@@ -34,12 +34,12 @@ const TEMPLATE_ID = "atelier_product_cards";
  *    component drops as a *blank* reply. Handled via the component's own
  *    rich-message system: a payload-received hook rewrites the payload to
  *    our registered template. Click routing is decided once, at
- *    registration time (issue 09 review, Finding A): a build exposing
+ *    registration time: a build exposing
  *    registerRichMessageHandler gets the div+data-uri template with clicks
  *    routed through it; a build that lacks that method gets the anchor
  *    template instead, so links stay live (native navigation) rather than
  *    silently dead. A registration-time payload that fails
- *    normalizeWidgetPayload (Finding B) is not silently dropped — it's
+ *    normalizeWidgetPayload is not silently dropped — it's
  *    logged via logSignalsDemo so the presenter can see why a reply came
  *    back blank.
  *
@@ -111,9 +111,9 @@ export function useWidgetTokenRenderer(
       // re-checked per render. A build that exposes
       // registerRichMessageHandler gets the current div+data-uri cards with
       // clicks routed through it; otherwise cards render as native anchors
-      // (task 1's safeCardUrl-gated href) so links stay live via plain
+      // (the safeCardUrl-gated href) so links stay live via plain
       // browser navigation instead of shipping dead div+data-uri cards no
-      // click handler will ever route (issue 09 review, Finding A). Never
+      // click handler will ever route. Never
       // register both mechanisms for one build.
       const richMessageHandler = element.registerRichMessageHandler;
       element.registerTemplate(
@@ -129,8 +129,8 @@ export function useWidgetTokenRenderer(
           context?: unknown;
         };
         // Leave payloads that already target a template alone; only claim
-        // the widget-tool shapes. Observed live type discriminators
-        // (2026-07-29): "product_detail_carousel" (PRODUCT_CAROUSEL) and
+        // the widget-tool shapes. Observed live type discriminators:
+        // "product_detail_carousel" (PRODUCT_CAROUSEL) and
         // "base_product_detail" (PRODUCT_DETAILS).
         if (p.template_id !== undefined) return true;
         const isWidgetShape =
@@ -141,9 +141,9 @@ export function useWidgetTokenRenderer(
         if (!context) {
           // Claimed the payload but couldn't normalise it (e.g. missing
           // title) — the hook still returns true, so the stock component
-          // falls through to its own (blank) handling of this reply
-          // (issue 09 review, Finding B). No invented fallback content in
-          // chat; at minimum, make the failure observable to the presenter.
+          // falls through to its own (blank) handling of this reply. No
+          // invented fallback content in chat; at minimum, make the
+          // failure observable to the presenter.
           logSignalsDemo("Widget payload unrenderable — reply will be blank", {
             type: p.type,
           });

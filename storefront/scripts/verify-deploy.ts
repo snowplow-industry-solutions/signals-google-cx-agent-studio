@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * Post-deploy smoke test for the agent-facing tool endpoints (issue 05) and
- * the ces-messenger widget embed (issue 07).
+ * Post-deploy smoke test for the agent-facing tool endpoints and the
+ * ces-messenger widget embed.
  *
  * A human runs this after triggering the Vercel deploy, against the public
  * HTTPS URL Vercel assigns, to confirm the site is reachable, that

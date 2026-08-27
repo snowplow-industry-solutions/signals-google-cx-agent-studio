@@ -1,11 +1,10 @@
 # `agent/` — CX Agent Studio agent + tools
 
 Repo-side artifacts for the customer-facing concierge agent built in Google
-Gemini Enterprise for CX (CX Agent Studio). Everything here is prep: config
-this sandbox can author, but not apply -- the live agent, tool wiring, and
-simulator verification happen in the console, by a human. See
-`docs/setup-cx-agent-studio.md` for the console steps and the acceptance
-criteria.
+Gemini Enterprise for CX (CX Agent Studio). These files are the source of
+truth you paste or import into the console; the live agent, tool wiring, and
+simulator checks happen there. See `docs/setup-cx-agent-studio.md` for the
+console steps.
 
 - `instructions.console.txt` -- the **live console copy**: the persona and
   tool-use contract in CX Agent Studio's structured format, with
@@ -35,9 +34,8 @@ directly into each tool's API-key auth config in the console.
 - `tools/product-carousel.widget.json` / `tools/product-details.widget.json`
   -- **captured copies of Google's fixed Parameters schemas** for the two
   rich response widget tools (`productCarousel`, Widget Type
-  `PRODUCT_CAROUSEL`; `productDetails`, Widget Type `PRODUCT_DETAILS`)
-  covering issue `11-rich-response-widgets.md`, read verbatim from the
-  live tools via the CES REST API on 2026-07-29. Nothing in them is
+  `PRODUCT_CAROUSEL`; `productDetails`, Widget Type `PRODUCT_DETAILS`),
+  read verbatim from the live tools via the CES REST API. Nothing in them is
   entered into the console: creating a typed widget tool from its console
   template auto-fills this schema and the editor is read-only (only the
   `CUSTOM` widget type takes an author-defined schema). The files exist so
@@ -48,5 +46,5 @@ directly into each tool's API-key auth config in the console.
   corrected schema finding and for the open question on whether the
   pinned `ces-messenger` component (as opposed to the hosted
   `chat-messenger` build) actually renders
-  these -- unresolved without a live check, hence this issue's
-  `human-test-required` checkpoint.
+  these -- unresolved without a live check, so it needs manual testing
+  against the console before it can be relied on.

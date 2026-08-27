@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { findPartialTokenStart, findWidgetTokens } from "./widgetTokens";
 
-// Captured verbatim from the live agent's runSession output on 2026-07-29:
+// Captured verbatim from the live agent's runSession output:
 // JS-object-literal keys, double-quoted strings,
 // and a `summary:` argument that is not part of the fixed widget schema.
 const LIVE_CAROUSEL_TOKEN =

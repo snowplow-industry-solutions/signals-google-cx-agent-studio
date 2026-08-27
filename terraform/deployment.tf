@@ -32,7 +32,7 @@ resource "google_ces_app_version" "current" {
   deletion_policy = local.ces_deletion_policy
 }
 
-# Widget channel + public-access/token-broker settings (issue 07's
+# Widget channel + public-access/token-broker settings (the
 # ces-messenger wiring, docs/setup-cx-agent-studio.md §6). Recaptcha stays off: the
 # ces-messenger component has no reCAPTCHA support, and turning the
 # deployment's recaptcha check on makes the broker reject every session

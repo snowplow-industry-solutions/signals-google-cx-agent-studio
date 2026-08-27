@@ -5,7 +5,7 @@
  * `{@Widget: name(payload: {…}, summary: "…")}`.
  * The pinned open-source ces-messenger has no renderer for these tokens, so
  * the storefront extracts them from rendered chat text and draws its own
- * cards (issue 09). The argument list is written in JS-object-literal style
+ * cards. The argument list is written in JS-object-literal style
  * (bare keys, double-quoted strings), NOT strict JSON, and the model
  * appends arguments that aren't in the widget schema (e.g. `summary:`) —
  * the parser must tolerate both.

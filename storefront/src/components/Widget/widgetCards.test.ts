@@ -162,7 +162,7 @@ describe("safeCardUrl", () => {
 
 describe("normalizeWidgetPayload", () => {
   it("normalises the structured carousel payload (runSession outputs[].payload)", () => {
-    // Captured live 2026-07-29: the structured delivery mode adds a `type`
+    // Captured from a live session: the structured delivery mode adds a `type`
     // discriminator and wraps products in productDetails.
     const context = normalizeWidgetPayload({
       type: "product_detail_carousel",

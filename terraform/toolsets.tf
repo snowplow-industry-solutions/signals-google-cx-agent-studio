@@ -19,7 +19,7 @@ resource "google_ces_toolset" "context" {
     api_authentication {
       api_key_config {
         # The console wires tools to the mutable "latest" alias, not a
-        # pinned version number (confirmed live 2026-07-29), and the
+        # pinned version number (confirmed against the live API), and the
         # version-resource reference can only ever render "versions/N" --
         # so build the live form, keeping the dependency via secret_id.
         api_key_secret_version = "projects/${var.project_id}/secrets/${google_secret_manager_secret.agent_shared_secret.secret_id}/versions/latest"
@@ -47,7 +47,7 @@ resource "google_ces_toolset" "catalog" {
     api_authentication {
       api_key_config {
         # The console wires tools to the mutable "latest" alias, not a
-        # pinned version number (confirmed live 2026-07-29), and the
+        # pinned version number (confirmed against the live API), and the
         # version-resource reference can only ever render "versions/N" --
         # so build the live form, keeping the dependency via secret_id.
         api_key_secret_version = "projects/${var.project_id}/secrets/${google_secret_manager_secret.agent_shared_secret.secret_id}/versions/latest"

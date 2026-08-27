@@ -10,8 +10,8 @@ resource "google_ces_app" "this" {
   # when creating an app").
 
   # Model settings live at the app level, not on the root agent -- the
-  # console configures them here and the agent inherits (confirmed live
-  # 2026-07-29; the live agent resource has no modelSettings). See
+  # console configures them here and the agent inherits (confirmed
+  # against the live agent resource, which has no modelSettings). See
   # README.md re: provider bug #26231 before applying a gemini-3-* model
   # with a non-null temperature in the "us" location.
   model_settings {

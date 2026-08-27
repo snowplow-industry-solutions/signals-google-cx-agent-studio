@@ -71,13 +71,13 @@ it suits this shopper. This applies to `productCarousel` exactly as much as to
 `productDetails`; presenting several pieces at once is not a reason to go
 quiet. A turn carrying only a widget and no message is incomplete.
 
-That is spelled out bluntly in the console copy for a measured reason (issue
-#3, verified live 2026-07-30). Under a general "include commentary"
-instruction, `productDetails` turns emitted an `outputs[].text` output on 3/3
-attempts while `productCarousel` turns emitted **no text chunk at all** on
-3/3 -- the model treated the carousel as the entire reply. Naming the carousel
-explicitly, requiring the text first, and telling the model that the widget
-call's `summary` argument is never shown to the shopper took it to 6/6. That
+That is spelled out bluntly in the console copy for a measured reason. Under a
+general "include commentary" instruction, `productDetails` turns emitted an
+`outputs[].text` output on 3/3 attempts while `productCarousel` turns emitted
+**no text chunk at all** on 3/3 -- the model treated the carousel as the
+entire reply. Naming the carousel explicitly, requiring the text first, and
+telling the model that the widget call's `summary` argument is never shown to
+the shopper took it to 6/6. That
 `summary` argument is real and worth knowing about: the model authors one on
 most widget calls, but it is not in the widget schema and the platform strips
 it before delivery, so it reaches nothing the shopper can see and can never

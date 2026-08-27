@@ -1,11 +1,11 @@
-# Widget tools attached to the root agent (issue 09: rich response
+# Widget tools attached to the root agent (rich response
 # widgets -- productCarousel / productDetails, rendered by the storefront's
-# widget-token renderer). Built in the console on 2026-07-29, after the
+# widget-token renderer). Built in the console, after the
 # initial import reconcile; adopted here so a greenfield re-create
 # (see terraform/README.md re-apply steps) still produces a widget-capable agent.
 #
 # The parameter schemas mirror what the console generated for each typed
-# widget (read back from the live tools 2026-07-29); each `properties`
+# widget (read back from the live tools); each `properties`
 # JSON is the contract the agent instruction's grounding rules
 # (instructions.console.widgets.txt constraint 5) are written against.
 # display_name is computed by the API from widget_tool.name.

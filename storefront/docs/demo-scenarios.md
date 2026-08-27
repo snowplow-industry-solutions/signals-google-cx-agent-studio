@@ -5,11 +5,11 @@ This guide is for the person presenting the Atelier Signals storefront to an end
 ## Demo Setup
 
 1. Start the app with `npm run dev`.
-2. Open the default mode at `http://localhost:3001/`.
+2. Open the default mode at `http://localhost:3000/`.
 3. Keep browser DevTools open if you want to narrate the `[Signals Demo]` console output.
 4. Make sure the floating demo panel is visible.
 
-For a quieter before/after comparison, open `http://localhost:3001/?demo=plain` first, then turn highlighting on in the demo panel once you are ready to reveal the personalization layer.
+For a quieter before/after comparison, open `http://localhost:3000/?demo=plain` first, then turn highlighting on in the demo panel once you are ready to reveal the personalization layer.
 
 ## Best Scenario Order
 

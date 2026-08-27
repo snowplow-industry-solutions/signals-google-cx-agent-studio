@@ -1,6 +1,6 @@
 /**
  * DOM builders for the storefront's own rendering of CX Agent Studio
- * rich-response widgets (issue 09). ces-messenger prints `{@Widget: …}`
+ * rich-response widgets. ces-messenger prints `{@Widget: …}`
  * invocations as raw chat text (see agent/instructions.md 'Rich response
  * widgets'), so these cards are
  * injected into its shadow DOM in place of the token. Everything is styled
@@ -276,7 +276,7 @@ export function buildWidgetElement(
  * HTML string; listeners can't survive that string round-trip, so the two
  * `asAnchor` variants pick between the two click-routing strategies the
  * registration site (attachPayloadPath) chooses between at registration
- * time (issue 09 review, Finding A):
+ * time:
  *
  * - `asAnchor = false` (default shape): plain `div` + `data-uri` cards;
  *   clicks are routed by registerRichMessageHandler.

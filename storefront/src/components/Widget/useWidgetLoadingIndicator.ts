@@ -11,18 +11,18 @@ import {
 import type { CesMessengerElement } from "@/types/ces-messenger";
 
 /**
- * Issue 13's typing/loading indicator. Upstream `ces-messenger` ships no
- * built-in indicator and no config for one (checked against
- * GoogleCloudPlatform/ces-messenger docs 2026-07-29), so this builds one
+ * The typing/loading indicator. Upstream `ces-messenger` ships no
+ * built-in indicator and no config for one (checked against the
+ * GoogleCloudPlatform/ces-messenger docs), so this builds one
  * client-side from the component's send/receive/failure events, on the same
- * shadow-DOM injection surface issue 09's `useWidgetTokenRenderer` already
+ * shadow-DOM injection surface `useWidgetTokenRenderer` already
  * uses.
  *
  * Event names (`ces-user-input-entered`, `ces-text-sent`, `ces-message-sent`,
  * `ces-message-received`, `ces-text-received`, `ces-payload-received`,
  * `ces-messenger-disconnected`, `ces-authentication-error`) are doc-derived,
- * same unversioned-gstatic-script caveat as the renderer: unverifiable in
- * this sandbox (no browser, no live agent). Every listener is wired
+ * same unversioned-gstatic-script caveat as the renderer: unverifiable
+ * without a browser and a live agent to test against. Every listener is wired
  * defensively — attached to both `window` (the confirmed dispatch target for
  * `ces-messenger-loaded`, see CesMessengerWidget) and the element itself (in
  * case a given build dispatches there instead), and every handler tolerates
@@ -61,7 +61,7 @@ const STILL_WORKING_TIMEOUT_MS = 30000;
 /**
  * Finds the best insertion point for the indicator. The live message list is
  * a `<ul>` of `<li class="from-bot ...">` / `<li class="from-user ...">`
- * items (captured verbatim during issue 09's verification, see
+ * items (captured verbatim from the live widget markup, see
  * widgetCards.test.ts / widgetTokenVisibility.test.ts fixtures) — that's a
  * best-effort match, not a documented contract, so it falls back to any
  * `<ul>` and finally to the shadow root itself, which always exists.

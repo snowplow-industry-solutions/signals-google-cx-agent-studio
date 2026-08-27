@@ -8,9 +8,9 @@ resource "google_ces_agent" "root" {
   # The console-format instruction copy is what the live agent actually
   # runs (docs/setup-cx-agent-studio.md §2: paste it into the Root Agent node,
   # verbatim -- its {@TOOL: ...} references only resolve in that format).
-  # Since issue 09 the live agent runs the *widgets* variant
-  # (instructions.console.widgets.txt, verified byte-identical live
-  # 2026-07-29); instructions.console.txt is the pre-widget base copy.
+  # The live agent runs the *widgets* variant
+  # (instructions.console.widgets.txt, verified byte-identical against the
+  # live console); instructions.console.txt is the pre-widget base copy.
   # agent/instructions.md is the human-readable source for the same
   # contract; edit there first and mirror changes into the console copy.
   instruction = file("${path.module}/../agent/instructions.console.widgets.txt")
@@ -19,7 +19,7 @@ resource "google_ces_agent" "root" {
   # none and inherits the app's.
 
   # end_session is attached to every agent the console builds; the widget
-  # tools (tools.tf) were attached by the issue 09 console work. Order
+  # tools (tools.tf) were attached through the console. Order
   # matches the live list so the plan stays clean. `.id` is the full
   # resource name (`.name` on google_ces_tool is just the ID segment).
   tools = [

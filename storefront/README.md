@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-The dev server runs on [http://localhost:3001](http://localhost:3001).
+The dev server runs on [http://localhost:3000](http://localhost:3000).
 
 ## Verification Commands
 
@@ -62,8 +62,8 @@ Without valid server-side credentials, the storefront still renders, but `/api/s
 
 By default the site loads with personalization highlighting enabled.
 
-- Standard personalized mode: `http://localhost:3001/`
-- Quiet comparison mode: `http://localhost:3001/?demo=plain`
+- Standard personalized mode: `http://localhost:3000/`
+- Quiet comparison mode: `http://localhost:3000/?demo=plain`
 
 The floating Signals demo panel lets you:
 

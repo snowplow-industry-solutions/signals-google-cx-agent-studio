@@ -1,6 +1,6 @@
 /**
- * Streaming-suppression helper for `useWidgetTokenRenderer` (issue 09 review,
- * finding: `findPartialTokenStart` was a dead export — a mid-stream partial
+ * Streaming-suppression helper for `useWidgetTokenRenderer` (previously
+ * `findPartialTokenStart` was a dead export — a mid-stream partial
  * `{@Widget: productCa…` rendered as raw text until the token completed).
  *
  * `replaceWidgetTokensIn` only ever swaps *complete* tokens for cards, by
