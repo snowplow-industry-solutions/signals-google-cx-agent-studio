@@ -140,3 +140,16 @@ describe("replaceUuids", () => {
     expect(replaceUuids(text, mapping)).toBe(text);
   });
 });
+
+import { replaceOwner, OWNER_PLACEHOLDER } from "./seed-tracking-plans";
+
+describe("replaceOwner", () => {
+  it("swaps the placeholder owner for the configured one", () => {
+    const text = `data:\n  owner: ${OWNER_PLACEHOLDER}\n  name: x`;
+    expect(replaceOwner(text, "me@corp.example")).toBe("data:\n  owner: me@corp.example\n  name: x");
+  });
+
+  it("leaves text without the placeholder untouched", () => {
+    expect(replaceOwner("owner: someone@else.example", "me@corp.example")).toBe("owner: someone@else.example");
+  });
+});

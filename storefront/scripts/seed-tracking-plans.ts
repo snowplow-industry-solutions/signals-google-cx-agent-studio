@@ -33,6 +33,13 @@ export const FIXED_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 const DUMMY_ORG_ID = "00000000-dry-run-0000-000000000000";
 
+export const OWNER_PLACEHOLDER = "demo-owner@example.com";
+
+/** Replace the committed placeholder owner with the configured one. */
+export function replaceOwner(text: string, owner: string): string {
+  return text.split(OWNER_PLACEHOLDER).join(owner);
+}
+
 const RESOURCE_NAME_UUID =
   /resourceName:\s*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
 
@@ -140,6 +147,7 @@ function listYamlFiles(dir: string): string[] {
 function buildTrackingPlansTree(
   sourceDir: string,
   orgId: string,
+  owner: string,
 ): { dir: string; mapping: Map<string, string> } {
   const buildDir = mkdtempSync(path.join(tmpdir(), "seed-tracking-plans-"));
   cpSync(sourceDir, buildDir, { recursive: true });
@@ -160,7 +168,7 @@ function buildTrackingPlansTree(
 
   for (const file of files) {
     const text = readFileSync(file, "utf8");
-    const replaced = replaceUuids(text, mapping);
+    const replaced = replaceOwner(replaceUuids(text, mapping), owner);
     if (replaced !== text) {
       writeFileSync(file, replaced);
     }
@@ -220,7 +228,8 @@ function main(): void {
     orgId = env.SNOWPLOW_CONSOLE_ORG_ID as string;
   }
 
-  const { dir: buildDir, mapping } = buildTrackingPlansTree(TRACKING_PLANS_DIR, orgId);
+  const owner = env.SNOWPLOW_OWNER_EMAIL ?? OWNER_PLACEHOLDER;
+  const { dir: buildDir, mapping } = buildTrackingPlansTree(TRACKING_PLANS_DIR, orgId, owner);
 
   try {
     const commands = planCommands(buildDir);

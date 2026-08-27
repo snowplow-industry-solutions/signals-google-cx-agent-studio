@@ -11,8 +11,8 @@ from snowplow_signals import (
 )
 
 from signals.config.attribute_keys import DOMAIN_SESSION_ATTRIBUTE_KEY
+from signals.config.owner import OWNER
 
-OWNER = "signals-demo@snowplowanalytics.com"
 VENDOR = "com.snowplow_demo.fashion"
 
 product_viewed = Event(vendor=VENDOR, name="product_viewed", version="1-0-0")

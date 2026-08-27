@@ -31,6 +31,7 @@ From BDP Console (Settings → API Keys, and Signals → API access):
 | Organization ID | Console URL or org settings | `SNOWPLOW_CONSOLE_ORG_ID` |
 | Signals API base URL | Signals → API access | `SIGNALS_DEPLOYED_URL` |
 | Collector URL | Pipeline → collector endpoint | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` |
+| Owner email (optional) | your address | `SNOWPLOW_OWNER_EMAIL` |
 
 ```
 SNOWPLOW_CONSOLE_API_KEY=<PLACEHOLDER>

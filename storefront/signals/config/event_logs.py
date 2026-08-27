@@ -7,8 +7,8 @@ from snowplow_signals import (
 )
 
 from signals.config.attribute_keys import DOMAIN_SESSION_ATTRIBUTE_KEY
+from signals.config.owner import OWNER
 
-OWNER = "signals-demo@snowplowanalytics.com"
 VENDOR = "com.snowplow_demo.fashion"
 
 # Every event below always carries the `product` entity affected by the

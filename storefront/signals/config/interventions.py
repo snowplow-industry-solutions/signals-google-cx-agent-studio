@@ -5,7 +5,8 @@ from snowplow_signals import (
     RuleIntervention,
 )
 
-OWNER = "signals-demo@snowplowanalytics.com"
+from signals.config.owner import OWNER
+
 ATTRIBUTE_GROUP = "fashion_ecommerce_session_attributes"
 
 

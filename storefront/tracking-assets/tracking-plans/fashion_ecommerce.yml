@@ -8,7 +8,7 @@ data:
     Demonstration data product for a luxury fashion ecommerce storefront using Snowplow
     Signals to personalize editorial modules, product recommendations, cart styling,
     and checkout reassurance in-session.
-  owner: signals-demo@snowplowanalytics.com
+  owner: demo-owner@example.com
   sourceApplications:
     - $ref: ./source-applications/fashion_storefront.yml
   eventSpecifications:

@@ -1,6 +1,6 @@
 from snowplow_signals import Service
 
-OWNER = "signals-demo@snowplowanalytics.com"
+from signals.config.owner import OWNER
 
 
 def build_service(attribute_group):

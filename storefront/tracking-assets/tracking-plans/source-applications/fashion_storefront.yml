@@ -5,7 +5,7 @@ data:
   name: Atelier Signals Storefront
   domain: Product
   description: High-end fashion retail demo storefront built to showcase Snowplow Signals personalization.
-  owner: signals-demo@snowplowanalytics.com
+  owner: demo-owner@example.com
   appIds:
     - signals-workshop-fashion-demo
     - signals-workshop-fashion-demo-dev
