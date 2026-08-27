@@ -1,10 +1,16 @@
 # `scripts/verification/`
 
-`verify_widgets.py` is the asserting harness for the widget
-walkthrough (issue #9). Everything else here is a probe: a script written
-against a specific question during the 2026-07-30 issue #1 / #3 / #7 sessions.
-Five are live and share the `harness/` package; the rest are archaeology, kept
-because they record what was tried and disproved.
+End-to-end checks you run against a deployed storefront + agent. All need
+`pip install playwright` and a Chrome install.
+
+| Script | Purpose |
+| --- | --- |
+| `verify_widgets.py` | The asserting harness: browses to build a Signals profile, opens the chat, runs a scripted conversation, and asserts the nine checks below. Exit code is the verdict. |
+| `walkthrough.py` | Exploratory sibling of the above — same flow, prints what it sees, asserts nothing. |
+| `commentary.py` | Does every turn that renders product cards also carry a text reply? |
+| `probe_full_page_load.py` | Does `product_viewed` reach the collector on a full page load as well as on SPA navigation? `PROBE_BASE` selects the target (default `http://localhost:3000`). |
+| `probe_cart_checkout.py` | Do `cart_viewed` / `checkout_started` fire exactly once on full loads of `/cart` and `/checkout`? |
+| `probe_reset_chat.py` | After the debug panel's Reset Chat (a full reload), is the next product view still tracked? |
 
 ## The harness
 
@@ -29,12 +35,12 @@ Exit codes: `0` all checks passed, `1` one or more failed, `2` misconfigured.
 | id | asserts |
 | --- | --- |
 | `ac0-turns` | every planned turn ran and returned a reply — `len(turns) == expectedTurns` and no turn timed out |
-| `ac1-commentary` | every widget turn also carried a text bubble (issue #3) |
-| `ac2-cards` | cards rendered, and no raw `{@Widget:` token leaked (issue #1) |
+| `ac1-commentary` | every widget turn also carried a text bubble |
+| `ac2-cards` | cards rendered, and no raw `{@Widget:` token leaked |
 | `ac3-spa-nav` | a card click SPA-navigated with chat and prior cards preserved |
 | `ac4-mode` | each widget turn's delivery mode was payload-mode or token-mode, with no `UNRENDERABLE` anywhere in the turn's renderer marks |
 | `ac5-console` | zero console errors or warnings across the run |
-| `ac6-collector` | `product_viewed` reached the collector, once per product page, under one session id (issue #7) |
+| `ac6-collector` | `product_viewed` reached the collector, once per product page, under one session id |
 | `ac6-signals` | Signals returned a populated profile |
 | `ac7-zero-match` | the zero-match control turn degraded to plain text |
 
@@ -58,8 +64,8 @@ per-check verdicts under `checks`. Screenshots for every turn are alongside it.
 
 `ac6-collector` failing while `ac6-signals` passes is impossible; the reverse
 means tracking worked and the Signals side did not — an unpublished attribute
-group, stalled ingestion, or a session id that never linked. Both failing points
-at the issue #7 class of bug: the storefront logs tracking success whether or
+group, stalled ingestion, or a session id that never linked. Both failing
+points at a class of bug where the storefront logs tracking success whether or
 not the tracker fired.
 
 ### Proving the checks can fail
@@ -79,16 +85,17 @@ sound but reads a field phase A never writes.
 
 A single fixture pair is not enough for a predicate whose verdict is a
 conjunction: `bool(cards) and not raw` short-circuits, so a bad fixture that
-empties `cards` *and* sets `rawToken` never reaches the token term — the issue
-#1 leak assertion could have been deleted outright and both mechanisms would
-still have gone green. So for every predicate whose verdict is a conjunction,
-the `bad` fixture and its matching fault hook now break **different** terms.
-(`ac1-commentary` is the one single-term predicate, so its fixture and its fault
-necessarily drive the same thing.) On top of that, `selfcheck.py` carries named
-case lists driving one term at a time: `AC0_TURN_CASES`, `AC2_TOKEN_CASES`,
-`AC3_URL_CASES`, `AC3_PRESERVE_CASES`, `AC4_MODE_CASES`, `AC5_CONSOLE_CASES`,
-`AC6_COLLECTOR_CASES`, `AC6_SIGNALS_CASES`, `AC7_TOKEN_CASES`, plus
-`EVALUATE_CASES` and `REDACT_CASES`.
+empties `cards` *and* sets `rawToken` never reaches the token term — the
+raw-token leak assertion could have been deleted outright and both mechanisms
+would still have gone green. So for every predicate whose verdict is a
+conjunction, the `bad` fixture and its matching fault hook now break
+**different** terms. (`ac1-commentary` is the one single-term predicate, so its
+fixture and its fault necessarily drive the same thing.) On top of that,
+`selfcheck.py` carries named case lists driving one term at a time:
+`AC0_TURN_CASES`, `AC2_TOKEN_CASES`, `AC3_URL_CASES`, `AC3_PRESERVE_CASES`,
+`AC4_MODE_CASES`, `AC5_CONSOLE_CASES`, `AC6_COLLECTOR_CASES`,
+`AC6_SIGNALS_CASES`, `AC7_TOKEN_CASES`, plus `EVALUATE_CASES` and
+`REDACT_CASES`.
 
 **The standard is gutting.** Delete any one term of any predicate and
 `--selfcheck` must go red. Of the 28 clauses across the nine predicates, 25 meet
@@ -115,38 +122,9 @@ decoding rule is fixed in one place rather than five.
 | `redact.py` | `TOKEN_PATTERN` / `redact_line` / `redact` / `redact_console` — token-shaped values stripped from anything written to disk. Shared rather than per-script, because three of the live scripts serialise captured console output. |
 | `selfcheck.py` | Synthetic passing and failing observations per predicate, the per-term case lists, the fault-isolation sweep, and the fixture-aliasing, URL-matching, `evaluate()` and redaction regression tests. |
 
-## The scripts
-
-### Live, sharing `harness/`
-
-| Script | Purpose |
-| --- | --- |
-| `walkthrough.py` | Browses to build Signals context, opens chat, sends turns, extracts rendered cards from the shadow DOM, flags the delivery mode per turn, screenshots, writes a JSON report. The exploratory sibling of `verify_widgets.py` — it prints, it does not assert. |
-| `commentary.py` | Issue #3 check: does every widget turn also carry a text bubble? Extracts prose with `[data-widget-card]` subtrees removed so card text cannot be mistaken for commentary. |
-| `probe_issue7_fix.py` | **The issue #7 acceptance check.** Two variants, full-page-load vs SPA-click, decoding each collector payload to event level and counting `product_viewed` per variant, so it asserts a *specific event* reached the collector rather than counting requests. `PROBE_BASE` selects the target (defaults to `http://localhost:3000`), which is how a branch gets checked before deploy — the repo has no Vercel preview. Never opens the chat, so no CES token is captured. |
-| `probe_cart_checkout.py` | Audit companion to the above: adds an item, then full-loads `/cart` and `/checkout`, checking `cart_viewed` / `checkout_started` fire **exactly once** each. Catches the double-track that gating on tracker readiness alone introduced (the cart hydrates after mount). |
-| `probe_reset_chat.py` | Clicks the debug panel's Reset Chat (a full reload by design) and checks the post-reload product view is still tracked. |
-
-### Archaeology — frozen
-
-These keep their **own copies of the selectors and helpers on purpose**. They
-are a record of what was tried and disproved on 2026-07-30, and rewriting them
-onto `harness/` would silently restate their findings in today's terms. Do not
-migrate them; write a new script instead.
-
-| Script | Purpose |
-| --- | --- |
-| `followup.py` | Extra turns hunting in-band token mode, carousel-item click-through, and **the synthetic token-mode probe** — it injects a verbatim `{@Widget: …}` token into the widget's shadow DOM when the live agent will not emit one. That probe is the only exercise of the token delivery path, which no live run has produced since the renderer shipped. |
-| `probe_navmode.py` | **The issue #7 reproduction.** Two fresh sessions, full-page-load vs SPA-click browsing; records collector requests, response statuses, `requestfailed`, then asks the agent. |
-| `probe_entities.py` | Dumps context entities per event; shows `product_viewed` missing entirely on first load. Rules out validation/entity causes. |
-| `probe_latency.py` | Polls the agent on a timer; showed Signals answers 12–33s after an event, killing the "ingestion lag" theory. |
-| `probe_rotation.py`, `probe_stale.py`, `probe_session.py` | Disproved stale/rotating session-id theories. Kept for context. |
-| `recon2.py` | Dumps the widget's expanded shadow DOM. Use if selectors move. |
-| `state_js.txt` | Shared shadow-DOM extraction snippet that `followup.py` reads. |
-
 ## Gotchas baked into these scripts
 
-- Python Playwright's pinned browser build is missing on the dev machine: launch
+- Python Playwright's pinned browser build is missing: launch
   with `p.chromium.launch(headless=True, channel="chrome")`.
 - **`wait_until="networkidle"` never fires** on this site — the widget and the
   Signals subscription hold connections open. Use `domcontentloaded` plus
@@ -166,11 +144,6 @@ migrate them; write a new script instead.
 - Ground truth for "which session did an event go to" is the collector POST body
   (`data[].sid`), not cookies — the `_sp_id` cookie's last field is a visit
   counter, not the session id.
-- Browsing by full page load used to drop `product_viewed` (issue #7), so a
-  script that browsed that way saw an empty Signals profile. That cost a day of
-  chasing latency theories. **Fixed and verified in production 2026-07-30**, so
-  either browsing style is now safe — but any script written before that date
-  may still carry a click-only workaround.
 
 ## Not committed, deliberately
 
@@ -187,15 +160,6 @@ Two facts, and the second does not replace the first.
    closing brace) survives, which is the point; verified by replaying the real
    console lines from a production run through the redactor and confirming zero
    residual high-entropy characters.
-
-   The frozen probes do **not** redact, and they are not being changed. Four of
-   them — `probe_latency.py`, `probe_navmode.py`, `probe_rotation.py`,
-   `probe_stale.py` — filter their stored console to `[Signals Demo]`-prefixed
-   lines, so no token reaches their reports either way. Two do not:
-   `followup.py` and `probe_session.py` open the chat and dump the raw console
-   into `out/followup-report.json` and `out/probe-session-report.json`, so those
-   two files can hold the truncated `chatToken`. That is contained by point 1,
-   not by redaction: `out/` is gitignored. Do not paste from those two reports.
 
 Two things the redactor gets right that the first version did not, both worth
 knowing before trusting it:
@@ -216,4 +180,3 @@ negative case, alongside the token shapes that must be caught.
 
 Redaction is still a second line of defence, not a licence to commit a report:
 `out/` stays gitignored, and screenshots are not redacted at all.
-cted at all.

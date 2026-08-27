@@ -1,17 +1,16 @@
-"""Issue #7 acceptance check: does product_viewed reach the collector on a full
-page load?
+"""Does product_viewed reach the collector on a full page load (not just SPA
+navigation)?
 
-Adapted from scripts/verification/probe_navmode.py (PR #11). Differences:
   - BASE is configurable (PROBE_BASE), defaults to the local production build,
     because the repo is not linked to Vercel so there is no preview deploy.
   - Decodes each collector POST body down to the event level and counts
     product_viewed / product_list_viewed / pv per variant, instead of only
-    counting requests. Collector payloads are the ground truth; the console
-    logs success either way (that silence is issue #7).
+    counting requests, because collector payloads are the ground truth even
+    when the console logs success either way.
   - Does not open the chat widget, so no CES chatToken is ever captured.
 
-Variant A browses three products with full page loads (the #7 repro), variant B
-by SPA link clicks (the control that always worked).
+Variant A browses three products with full page loads, variant B by SPA link
+clicks (the control that always worked).
 """
 
 import json
@@ -26,7 +25,7 @@ from harness.config import out_dir, probe_base  # noqa: E402
 
 BASE = probe_base()
 OUT = out_dir()
-REPORT = f"{OUT}/probe-issue7-report.json"
+REPORT = f"{OUT}/probe-full-page-load-report.json"
 
 PATHS = ["/products/ivory-silk-column-dress",
          "/products/silk-twill-square-scarf",

@@ -1,10 +1,10 @@
 """Collector-payload decoding: what actually reached the Snowplow collector.
 
-Request counts hide a whole class of bug -- issue #7 was a silent zero
-product_viewed while the storefront console logged success either way. These
-helpers decode each POST body down to the event level so a check can assert a
-*named* event arrived. The session ground truth is data[].sid in the POST body,
-not the _sp_id cookie, whose last field is a visit counter.
+Request counts hide a whole class of bug -- a silent zero product_viewed while
+the storefront console logs success either way. These helpers decode each POST
+body down to the event level so a check can assert a *named* event arrived. The
+session ground truth is data[].sid in the POST body, not the _sp_id cookie,
+whose last field is a visit counter.
 """
 
 import base64

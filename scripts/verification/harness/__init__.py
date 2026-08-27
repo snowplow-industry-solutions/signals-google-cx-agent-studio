@@ -1,1 +1,1 @@
-"""Shared building blocks for the verification scripts (issue #9)."""
+"""Shared building blocks for the verification scripts."""

@@ -41,7 +41,7 @@ STATE_JS = """
     count: lis.length,
     messages: lis.map((li) => {
       // Prose = the bubble's text with any rendered widget cards cut out, so
-      // card text cannot be mistaken for agent commentary (issue #3).
+      // card text cannot be mistaken for agent commentary.
       const clone = li.cloneNode(true);
       [...clone.querySelectorAll('[data-widget-card]')].forEach(n => n.remove());
       return {

@@ -130,7 +130,7 @@ def check_turns_completed(obs):
 
 @predicate("ac1-commentary")
 def check_commentary(obs):
-    """AC1 (issue #3): every widget turn also carries a text bubble.
+    """AC1: every widget turn also carries a text bubble.
 
     Prose arrives already stripped of [data-widget-card] subtrees, so card text
     cannot be mistaken for commentary.
@@ -149,7 +149,7 @@ def check_commentary(obs):
 
 @predicate("ac2-cards")
 def check_cards(obs):
-    """AC2 (issue #1): cards rendered, and no raw {@Widget: token leaked."""
+    """AC2: cards rendered, and no raw {@Widget: token leaked."""
     results = []
     for t in _widget_turns(obs):
         cards = t.get("cards") or []
@@ -280,8 +280,8 @@ def check_console_clean(obs):
 def check_collector_events(obs):
     """AC6a: product_viewed reached the collector, once per product page.
 
-    This is the issue #7 class of bug -- the storefront logs success whether or
-    not the tracker actually fired, so only the collector POST body settles it.
+    Catches a class of bug where the storefront logs success whether or not
+    the tracker actually fired, so only the collector POST body settles it.
     """
     browse = obs.get("browse") or {}
     expected = browse.get("productPages", 0)
@@ -300,8 +300,8 @@ def check_collector_events(obs):
 def check_signals_profile(obs):
     """AC6b: getUserContext would return a populated profile.
 
-    The assertion whose absence cost a day: the 2026-07-30 issue #3 runs
-    footnoted an empty profile as a curiosity and passed anyway.
+    The assertion whose absence cost real debugging time: a run that footnoted
+    an empty profile as a curiosity and passed anyway.
     """
     ctx = obs.get("signalsContext") or {}
     if ctx.get("error"):
@@ -359,8 +359,8 @@ def _fault_commentary(obs):
 
 
 def _fault_cards(obs):
-    # rawToken ONLY -- leave the cards in place. This is the issue #1 leak, and
-    # it is the term a card-emptying fault could never reach.
+    # rawToken ONLY -- leave the cards in place. This is the raw-token leak,
+    # and it is the term a card-emptying fault could never reach.
     for t in obs.get("turns", []):
         if t.get("isWidgetTurn"):
             t["rawToken"] = True

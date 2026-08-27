@@ -1,9 +1,10 @@
 """Synthetic observations proving each predicate can both pass and fail.
 
-A predicate that cannot fail is worse than no predicate: the 2026-07-30 issue #3
-runs reported PASS while carrying the empty profile that turned out to be issue
-#7. Every predicate registered in checks.PREDICATES must have a fixture pair
-here, and run() fails if one is missing.
+A predicate that cannot fail is worse than no predicate: a run once reported
+PASS while carrying an empty Signals profile, because the check that should
+have caught it never had a failing case to prove it could. Every predicate
+registered in checks.PREDICATES must have a fixture pair here, and run() fails
+if one is missing.
 
 A fixture pair alone is not enough for a predicate whose verdict is a
 conjunction. `bool(cards) and not raw` short-circuits, so a bad fixture that
@@ -640,8 +641,8 @@ AC0_TURN_CASES = [
     ("expectedTurns is zero", obs(turns=[], expectedTurns=0), False),
 ]
 
-# AC2: `bool(cards) and not raw`. The raw-token term is the issue #1 leak and
-# the reason this harness exists; it needs a case where cards ARE present.
+# AC2: `bool(cards) and not raw`. The raw-token term is the leak this harness
+# exists to catch; it needs a case where cards ARE present.
 AC2_TOKEN_CASES = [
     ("cards rendered, no raw token", obs(turns=[turn()]), True),
     ("raw {@Widget: token alongside rendered cards",
@@ -788,7 +789,7 @@ _TAIL = "0123456789abcdef-EXAMPLE-TOKEN-TAIL"
 REDACT_CASES = [
     ("ellipsis-truncated value (the real captured shape)",
      "Token received from token broker: {chatToken: " + _HEAD + "…" + _TAIL
-     + ", expireTime: 2026-07-31T12:02:50.687240Z}", True),
+     + ", expireTime: 2024-01-15T12:02:50.687240Z}", True),
     ("single-quoted key and value",
      "config {'chatToken': '" + _HEAD + "'}", True),
     ("double-quoted JSON access_token",
@@ -847,7 +848,7 @@ FIXTURES = {
     "ac4-mode": (
         obs(turns=[turn()]),
         # mode term; the masked-UNRENDERABLE modes-list term is the fault hook's
-        # job. A fixture recording mode="UNRENDERABLE" breaks BOTH terms and
+        # job. A fixture with mode="UNRENDERABLE" breaks BOTH terms and
         # short-circuits on the modes list, leaving the mode term unproven here.
         obs(turns=[turn(mode=None, modes=[])]),
     ),

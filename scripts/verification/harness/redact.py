@@ -6,14 +6,14 @@ up in a console debug line on every run that opens the chat. `verify_widgets.py`
 owning the only copy of this meant `commentary.py` and `walkthrough.py` wrote
 the token verbatim.
 
-Reports go to a gitignored directory, but issue #9's acceptance criteria ask for
-one to be attached to a GitHub issue, so "gitignored" is not the control that
+Reports go to a gitignored directory, but a report can still end up shared or
+attached somewhere outside the repo, so "gitignored" is not the control that
 matters.
 
 Shape of the real captured line, which is what the value class has to cover:
 
     Token received from token broker: {chatToken: <~50 chars>…<~49 chars>,
-                                       expireTime: 2026-07-31T12:02:50.687240Z}
+                                       expireTime: 2024-01-15T12:02:50.687240Z}
 
 The storefront truncates the token with a **Unicode ellipsis** before logging
 it. A value class of `[\\w\\-\\.]` stops dead at that `…` and leaves the tail

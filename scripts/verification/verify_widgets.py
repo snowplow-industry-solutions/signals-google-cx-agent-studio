@@ -1,9 +1,10 @@
-"""Asserting E2E harness for the widget walkthrough (issue #9).
+"""Asserting E2E harness for the widget walkthrough.
 
 Phase A drives one browser session and records an Observation; phase B runs
 pure predicates over it. The scripts this replaces printed and let a human
-judge, which is how the 2026-07-30 issue #3 runs reported PASS while carrying
-the empty Signals profile that turned out to be issue #7.
+judge, which is how a run could report PASS while carrying an empty Signals
+profile: the human saw the commentary check pass and never noticed tracking
+had gone silent.
 
 Usage:
   VERIFY_BASE=https://... AGENT_SHARED_SECRET=... python3 scripts/verification/verify_widgets.py
@@ -30,7 +31,7 @@ from harness.context import poll_context  # noqa: E402
 from harness.redact import redact  # noqa: E402
 
 # Browse plan. SPA clicks where possible, mirroring the demo script;
-# probe_issue7_fix.py remains the dedicated full-load-vs-SPA regression check.
+# probe_full_page_load.py remains the dedicated full-load-vs-SPA regression check.
 BROWSE = [
     "/",
     "/collections/city-after-dark",

@@ -1,16 +1,15 @@
-"""Issue #3 verification: does every widget turn also carry agent commentary text?
+"""Does every widget turn also carry agent commentary text?
 
-Adapted from walkthrough.py (the widget walkthrough, issue #1 production run).
-Differences:
+Adapted from walkthrough.py (the widget walkthrough). Differences:
   - prose is extracted with the [data-widget-card] subtrees REMOVED, so card
     text can never be mistaken for a conversational message;
   - every new assistant <li> in a turn is inspected, not just the last one
     (a turn may deliver prose and cards as separate bubbles);
   - runSession response bodies were once retained (up to 60000 chars per
     widget-turn response) so the structured payload's own fields could be
-    recorded for issue #3 AC3. Now that response capture lives once in
-    harness.chat.RendererLog, that retention is dropped: the AC3 question it
-    was evidence for is answered and recorded;
+    recorded for the ac1-commentary check. Now that response capture lives
+    once in harness.chat.RendererLog, that retention is dropped: the question
+    it was evidence for is answered and recorded;
   - the script asserts and exits nonzero on failure.
 """
 

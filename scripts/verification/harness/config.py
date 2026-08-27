@@ -3,10 +3,10 @@
 The leaf module: everything else in harness/ may import this, and it imports
 nothing of ours.
 
-VERIFY_BASE has no default on purpose: issue #9 requires the harness target to
-come from config rather than a hardcoded storefront URL, and a default is just a
-hardcoded URL you can override. PROBE_BASE keeps its localhost default because
-the probes predate that rule and are run against local builds by habit.
+VERIFY_BASE has no default on purpose: the harness target must come from config
+rather than a hardcoded storefront URL, and a default is just a hardcoded URL
+you can override. PROBE_BASE keeps its localhost default because the probes are
+run against local builds by habit.
 """
 
 import os
@@ -39,7 +39,8 @@ def require_secret():
     if not secret:
         raise ConfigError(
             "AGENT_SHARED_SECRET is not set. AC6 polls /api/agent/context and will "
-            "not silently skip -- that is the failure mode issue #9 exists to prevent.\n"
+            "not silently skip -- an unset secret is an error, not a reason to skip "
+            "the check.\n"
             "  export AGENT_SHARED_SECRET=...   (value is in storefront/.env.local)"
         )
     return secret

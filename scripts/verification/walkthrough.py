@@ -1,4 +1,4 @@
-"""Widget walkthrough against production (issue #1 verification).
+"""Widget walkthrough against production.
 
 Drives the deployed storefront + live widget-enabled agent, records which
 wire-format mode each turn used (in-band {@Widget: …} token vs structured
