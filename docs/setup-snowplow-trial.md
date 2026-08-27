@@ -7,6 +7,10 @@ from here once you have a Snowplow account (a Free Trial is enough), then
 continue to [`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md) for the
 agent side.
 
+> **Fastest path:** `./scripts/setup-trial-org.sh` walks you through every
+> step below interactively and runs the commands for you. The sections that
+> follow explain what it does and how to do each step by hand.
+
 Real credentials never live in git — they go in `storefront/.env.local`
 (gitignored) or your deploy target's secret store. Every secret below is a
 `<PLACEHOLDER>` you fill in from your own org.

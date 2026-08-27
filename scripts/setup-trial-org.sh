@@ -186,13 +186,14 @@ finish() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# STAGES — one stage() per step the human takes. Re-points this repo from an
-# expired Snowplow trial org to a fresh one: new creds, reseeded tracking plan,
-# republished Signals config, and the live Vercel deployment updated.
+# STAGES — one stage() per step the human takes. Takes a fresh clone from
+# "I have a Snowplow trial org" to a seeded pipeline, published Signals config,
+# and (optionally) a live Vercel deployment. Re-runnable: re-pointing at a
+# new org after a trial expires is the same procedure.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=11
-TOTAL_MINUTES=55
+TOTAL_STAGES=12
+TOTAL_MINUTES=60
 
 # Everything runs from the repo root; the Next.js app lives in storefront/.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -294,9 +295,9 @@ run() {
   return 1
 }
 
-banner "New Snowplow trial org → seeded pipeline → live storefront"
+banner "Snowplow trial org → seeded pipeline → live storefront"
 note "Mistyped something? Every capture stage shows what you entered and lets you"
-note "redo it before moving on. To restart later, ./scripts/new-trial-org.sh --from N"
+note "redo it before moving on. To restart later, ./scripts/setup-trial-org.sh --from N"
 pause
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
@@ -313,7 +314,7 @@ done
 if command -v vercel >/dev/null 2>&1; then
   note "✓ vercel — $(command -v vercel)"
 else
-  warn "vercel not found — stages 10-11 fall back to the Vercel dashboard"
+  warn "vercel not found — stages 11-12 fall back to the Vercel dashboard"
   SKIPPED+=("Vercel CLI not installed: npm i -g vercel, or use the dashboard")
 fi
 if (( ${#MISSING[@]} )); then
@@ -327,10 +328,12 @@ pause
 fi
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
-if begin "Create the new Snowplow trial org" 10; then
+if begin "Create (or sign in to) your Snowplow trial org" 10; then
 say "A trial gives you a full pipeline (collector + enrich) plus Signals."
+say "Already have a live trial org? Sign in and skip ahead — this stage just"
+say "confirms the pipeline is live and Signals is enabled before you continue."
 open_url "https://snowplow.io/get-started/snowplow-free-trial"
-step "Sign up — use your work email. No card, no sales call."
+step "Sign up (or sign in) — use your work email. No card, no sales call."
 step "Wait for the provisioning email / for the console to show a live pipeline."
 step "In BDP Console, confirm Signals is enabled for the org (left nav → Signals)."
 warn "Note the trial expiry date now — the pipeline stops computing when it lapses."
@@ -338,10 +341,10 @@ pause "Pipeline is live and Signals is enabled — press Enter."
 fi
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
-if begin "Back up and clear the expired org's values" 1; then
-say "$ENV_FILE currently points at the expired org. We keep a copy outside the"
-say "repo, then blank the org-scoped keys so nothing stale can be kept by Enter."
+if begin "Prepare storefront/.env.local" 1; then
 if [[ -f "$ENV_FILE" ]]; then
+  say "$ENV_FILE already exists. If it points at an expired org, we back it up"
+  say "outside the repo and blank the org-scoped keys so nothing stale is kept."
   mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
   BACKUP_PATH="$BACKUP_DIR/env.local.$(date +%Y%m%d-%H%M%S)"
   cp "$ENV_FILE" "$BACKUP_PATH"; chmod 600 "$BACKUP_PATH"
@@ -354,7 +357,7 @@ if [[ -f "$ENV_FILE" ]]; then
     note "left in place — each prompt offers the current value; Enter keeps it"
   fi
 else
-  note "$ENV_FILE doesn't exist yet — creating it from the template"
+  say "Creating $ENV_FILE from storefront/.env.example."
   cp storefront/.env.example "$ENV_FILE"
 fi
 pause
@@ -415,26 +418,43 @@ done
 # The interventions endpoint is the same host as the Signals API — the browser
 # plugin just needs it under a NEXT_PUBLIC_ name to reach the client bundle.
 write_env NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "$SIGNALS_DEPLOYED_URL"
-write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "atelier-storefront-dev"
-note "local app ID = atelier-storefront-dev; Vercel production uses atelier-storefront"
 pause
 fi
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
-if begin "Seed the new org with the tracking plan" 5; then
+if begin "Storefront-side values (app ID, agent shared secret)" 2; then
+say "Two values belong to the storefront rather than the Snowplow org, so they"
+say "survive an org change. Only set here if missing."
+if [[ -z "$(_env_value NEXT_PUBLIC_SNOWPLOW_APP_ID)" ]]; then
+  write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "atelier-storefront-dev"
+  note "NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront-dev (local); production uses atelier-storefront"
+fi
+if [[ -z "$(_env_value AGENT_SHARED_SECRET)" ]]; then
+  write_env AGENT_SHARED_SECRET "$(openssl rand -hex 32)"
+  note "AGENT_SHARED_SECRET generated (64 hex chars). You'll mirror this into the"
+  note "CX Agent Studio tool auth later — see docs/setup-cx-agent-studio.md §3."
+else
+  note "AGENT_SHARED_SECRET already set — kept"
+fi
+pause
+fi
+
+# ── 7 ─────────────────────────────────────────────────────────────────────
+if begin "Seed the org with the tracking plan" 5; then
 say "A fresh org has none of the demo's schemas, and the Signals publish in"
-say "stage 8 hard-fails without them. Resource IDs are derived from the org ID,"
-say "so seeding a new org can't collide with the expired org's IDs."
+say "stage 9 hard-fails without them. Resource IDs are derived from the org ID,"
+say "so seeding this org can't collide with any other org's IDs — including a"
+say "previous trial's, if you're re-running this after an org change."
 say ""
 say "Dry run first — no credentials used, nothing written:"
 run "dry run" npm --prefix storefront run seed:tracking-plans -- --dry-run || true
 warn "snowplow-cli also reads ~/.config/snowplow/snowplow.yml. The env vars from"
-warn "$ENV_FILE should win, but check the output below names the NEW org."
-if confirm "Publish data structures (dev + prod) and the tracking plan to the new org?"; then
+warn "$ENV_FILE should win, but check the output below names the right org."
+if confirm "Publish data structures (dev + prod) and the tracking plan to this org?"; then
   run "seed tracking plans" npm --prefix storefront run seed:tracking-plans || {
     warn "seeding failed. A version error means a schema's first version isn't"
     warn "1-0-0 — a fresh org has nothing to supersede. Fix the yml, then:"
-    note "  ./scripts/new-trial-org.sh --from 6"
+    note "  ./scripts/setup-trial-org.sh --from 7"
     confirm "Continue to the next stage anyway?" || exit 1
   }
 else
@@ -443,27 +463,27 @@ fi
 pause
 fi
 
-# ── 7 ─────────────────────────────────────────────────────────────────────
-if begin "Regenerate the Snowtype helpers for the new org" 3; then
+# ── 8 ─────────────────────────────────────────────────────────────────────
+if begin "Regenerate the Snowtype helpers" 3; then
 say "snowtype.config.json and snowtype/ are per-org and gitignored: the config"
 say "names the org and its data product, and the generated helpers embed the"
 say "event-spec IDs read back from it. Both rebuild from the org ID in $ENV_FILE."
-note "the data product ID is derived, not pasted — same UUIDv5 rule stage 6 used"
+note "the data product ID is derived, not pasted — same UUIDv5 rule stage 7 used"
 if confirm "Regenerate snowtype.config.json and storefront/snowtype/?"; then
   run "snowtype generate" npm --prefix storefront run snowtype:generate || {
-    warn "generation failed. If it can't find the data product, stage 6 didn't"
+    warn "generation failed. If it can't find the data product, stage 7 didn't"
     warn "finish — the plan must be published before snowtype can read it."
     SKIPPED+=("snowtype regenerate: npm --prefix storefront run snowtype:generate")
   }
 else
   warn "storefront/src imports @/snowtype/snowplow — test, lint and build will"
-  warn "fail until this runs, and the deploy in stage 11 ships stale spec IDs."
+  warn "fail until this runs, and the deploy in stage 12 ships stale spec IDs."
   SKIPPED+=("snowtype regenerate: npm --prefix storefront run snowtype:generate")
 fi
 pause
 fi
 
-# ── 8 ─────────────────────────────────────────────────────────────────────
+# ── 9 ─────────────────────────────────────────────────────────────────────
 if begin "Publish the Signals config" 5; then
 say "Attribute group, service, intervention and event log, via the Python SDK."
 if [[ ! -x storefront/.venv/bin/python ]]; then
@@ -476,10 +496,10 @@ say "Dry run (local validation only, no API call):"
 run "signals dry run" npm --prefix storefront run signals:publish -- --dry-run || true
 step "Confirm the printed objects name attribute group fashion_ecommerce_session_attributes"
 step "and service fashion_ecommerce_demo."
-if confirm "Publish the Signals config to the new org?"; then
+if confirm "Publish the Signals config to this org?"; then
   run "signals publish" npm --prefix storefront run signals:publish || {
-    warn "publish failed. A 404 'schema ... not in production' means stage 6"
-    warn "didn't complete its prod promotion — re-run with --from 6."
+    warn "publish failed. A 404 'schema ... not in production' means stage 7"
+    warn "didn't complete its prod promotion — re-run with --from 7."
     confirm "Continue anyway?" || exit 1
   }
 else
@@ -488,10 +508,10 @@ fi
 pause
 fi
 
-# ── 9 ─────────────────────────────────────────────────────────────────────
-if begin "Verify the new pipeline locally" 8; then
+# ── 10 ────────────────────────────────────────────────────────────────────
+if begin "Verify the pipeline locally" 8; then
 say "Browse the local storefront, then read the session's attributes back out"
-say "of the new org's Profile Store."
+say "of the org's Profile Store."
 note "In a second terminal: npm --prefix storefront install && npm --prefix storefront run dev"
 note "collector in use: $(_env_value NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL)"
 open_url "http://localhost:3000"
@@ -519,11 +539,20 @@ fi
 pause
 fi
 
-# ── 10 ────────────────────────────────────────────────────────────────────
-if begin "Point the live Vercel deployment at the new org" 6; then
-say "Six production env vars change. AGENT_SHARED_SECRET,"
-say "NEXT_PUBLIC_SNOWPLOW_APP_ID and NEXT_PUBLIC_CES_DEPLOYMENT_ID do not —"
-say "leave them alone so the CX Agent Studio tool auth and widget keep working."
+# ── 11 ────────────────────────────────────────────────────────────────────
+if begin "Deploy the storefront to Vercel (optional)" 6; then
+if ! confirm "Deploy to Vercel now? (skip if you only want to run locally)"; then
+  SKIPPED+=("Vercel deployment — see docs/setup-snowplow-trial.md §7 when ready")
+  pause
+else
+say "Production needs every value from .env.local except the -dev app ID."
+say "NEXT_PUBLIC_CES_DEPLOYMENT_ID is set later, once the agent exists"
+say "(docs/setup-cx-agent-studio.md §6)."
+if [[ ! -f storefront/.vercel/project.json ]]; then
+  step "No Vercel project is linked yet. Running 'vercel link' — pick or create a"
+  step "project and set Root Directory to storefront when asked."
+  run "vercel link" vercel link --cwd storefront || true
+fi
 VERCEL_OK=0
 if command -v vercel >/dev/null 2>&1; then
   if vercel env ls production --cwd storefront >/dev/null 2>&1; then
@@ -534,17 +563,17 @@ if command -v vercel >/dev/null 2>&1; then
     warn "the wrong Vercel account (storefront/.vercel/project.json points at a"
     warn "team the current login can't see)."
     step "Run 'vercel login' with the account that owns the deployment, then"
-    step "re-run with --from 10, or paste the values into the dashboard instead."
+    step "re-run with --from 11, or paste the values into the dashboard instead."
     if confirm "Have you fixed the login and want to retry the check?"; then
       vercel env ls production --cwd storefront >/dev/null 2>&1 && VERCEL_OK=1
     fi
   fi
 fi
 if (( VERCEL_OK )); then
-  if confirm "Overwrite the six production env vars via the Vercel CLI?"; then
+  if confirm "Overwrite every production env var via the Vercel CLI?"; then
     for key in SNOWPLOW_CONSOLE_ORG_ID SNOWPLOW_CONSOLE_API_KEY_ID SNOWPLOW_CONSOLE_API_KEY \
                SIGNALS_DEPLOYED_URL NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL \
-               NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT; do
+               NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT AGENT_SHARED_SECRET; do
       value=$(_env_value "$key")
       if [[ -z "$value" ]]; then warn "$key is empty in $ENV_FILE — skipping"; continue; fi
       # NEXT_PUBLIC_* reach the browser bundle by design, so they aren't sensitive.
@@ -560,56 +589,64 @@ if (( VERCEL_OK )); then
         SKIPPED+=("Vercel production env $key")
       fi
     done
-    note "production keeps NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront (no -dev)"
+    printf '%s' "atelier-storefront" | vercel env add NEXT_PUBLIC_SNOWPLOW_APP_ID production --force --cwd storefront >/dev/null 2>&1 || warn "failed to set NEXT_PUBLIC_SNOWPLOW_APP_ID"
+    note "production NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront (no -dev)"
   else
-    SKIPPED+=("Vercel production env vars (6) — not updated")
+    SKIPPED+=("Vercel production env vars — not updated")
   fi
 else
   open_url "https://vercel.com/dashboard"
   step "Project → Settings → Environment Variables → Production. Replace:"
   for key in SNOWPLOW_CONSOLE_ORG_ID SNOWPLOW_CONSOLE_API_KEY_ID SNOWPLOW_CONSOLE_API_KEY \
              SIGNALS_DEPLOYED_URL NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL \
-             NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT; do
+             NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT AGENT_SHARED_SECRET; do
     note "  - $key   (value is in $ENV_FILE)"
   done
-  step "Mark the three SNOWPLOW_CONSOLE_* vars and SIGNALS_DEPLOYED_URL Sensitive."
-  SKIPPED+=("Vercel production env vars set by hand — confirm all six before deploying")
+  note "  - NEXT_PUBLIC_SNOWPLOW_APP_ID   (set to atelier-storefront, not the -dev value)"
+  step "Mark the three SNOWPLOW_CONSOLE_* vars, SIGNALS_DEPLOYED_URL and"
+  step "AGENT_SHARED_SECRET Sensitive."
+  SKIPPED+=("Vercel production env vars set by hand — confirm every production value before deploying")
   pause "Done in the dashboard — press Enter."
 fi
 pause
 fi
-
-# ── 11 ────────────────────────────────────────────────────────────────────
-if begin "Redeploy and verify the live site" 6; then
-say "This repo has no Vercel↔GitHub link, so production deploys come from the CLI."
-warn "Vercel env changes only apply to the NEXT deploy — stage 10 must be done."
-if command -v vercel >/dev/null 2>&1 && confirm "Deploy to production now (vercel --prod)?"; then
-  run "vercel --prod" vercel --prod --cwd storefront || \
-    SKIPPED+=("production deploy: vercel --prod --cwd storefront")
-else
-  SKIPPED+=("production deploy: vercel --prod --cwd storefront")
 fi
-ask _STOREFRONT_URL "Live storefront URL (https://...):"
-if [[ -n "$_STOREFRONT_URL" ]]; then
-  _SECRET=$(_env_value AGENT_SHARED_SECRET)
-  if [[ -z "$_SECRET" ]]; then
-    warn "AGENT_SHARED_SECRET missing from $ENV_FILE — can't run the smoke test"
-    SKIPPED+=("verify:deploy against $_STOREFRONT_URL")
+
+# ── 12 ────────────────────────────────────────────────────────────────────
+if begin "Deploy and verify the live site" 6; then
+if printf '%s\n' "${SKIPPED[@]}" | grep -q '^Vercel deployment'; then
+  note "skipped — no Vercel deployment this run"
+else
+  say "Deploy from the CLI (or via a Vercel Git integration if you set one up)."
+  warn "Vercel env changes only apply to the NEXT deploy — stage 11 must be done."
+  if command -v vercel >/dev/null 2>&1 && confirm "Deploy to production now (vercel --prod)?"; then
+    run "vercel --prod" vercel --prod --cwd storefront || \
+      SKIPPED+=("production deploy: vercel --prod --cwd storefront")
   else
-    AGENT_SHARED_SECRET="$_SECRET" npm --prefix storefront run verify:deploy -- "$_STOREFRONT_URL" || {
-      warn "one or more checks failed — see docs/setup-snowplow-trial.md troubleshooting"
-      SKIPPED+=("verify:deploy reported failures against $_STOREFRONT_URL")
-    }
+    SKIPPED+=("production deploy: vercel --prod --cwd storefront")
   fi
-  step "Then repeat the browser walkthrough on the live URL: browse, add to cart,"
-  step "grab the session ID, and confirm /api/agent/context reflects it."
-  open_url "$_STOREFRONT_URL"
+  ask _STOREFRONT_URL "Live storefront URL (https://...):"
+  if [[ -n "$_STOREFRONT_URL" ]]; then
+    _SECRET=$(_env_value AGENT_SHARED_SECRET)
+    if [[ -z "$_SECRET" ]]; then
+      warn "AGENT_SHARED_SECRET missing from $ENV_FILE — can't run the smoke test"
+      SKIPPED+=("verify:deploy against $_STOREFRONT_URL")
+    else
+      AGENT_SHARED_SECRET="$_SECRET" npm --prefix storefront run verify:deploy -- "$_STOREFRONT_URL" || {
+        warn "one or more checks failed — see docs/setup-snowplow-trial.md troubleshooting"
+        SKIPPED+=("verify:deploy reported failures against $_STOREFRONT_URL")
+      }
+    fi
+    step "Then repeat the browser walkthrough on the live URL: browse, add to cart,"
+    step "grab the session ID, and confirm /api/agent/context reflects it."
+    open_url "$_STOREFRONT_URL"
+  fi
 fi
 pause
 fi
 
-note "Nothing on the CX Agent Studio side changes — the agent's tools address the"
-note "storefront URL with AGENT_SHARED_SECRET, neither of which the new org touches."
+note "Next: build the agent — docs/setup-cx-agent-studio.md. It needs the storefront"
+note "URL and AGENT_SHARED_SECRET from $ENV_FILE."
 note "Expect no git diff from any of this: .env.local, snowtype.config.json and"
 note "snowtype/ are all gitignored. Check with: git status --short"
 finish
