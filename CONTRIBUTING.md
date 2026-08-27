@@ -28,3 +28,5 @@ secrets `SNOWPLOW_CONSOLE_ORG_ID`, `SNOWPLOW_CONSOLE_API_KEY_ID` and
 this repo's tracking plan). Forks skip those steps. If the org behind the
 secrets expires, CI reports a snowtype error — re-seed a fresh org with
 `./scripts/setup-trial-org.sh` and update the secrets.
+
+The `secrets-scan` job runs the same `gitleaks git` scan as the local pre-release check, using the repo's `.gitleaks.toml`.
