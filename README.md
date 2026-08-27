@@ -37,7 +37,23 @@ the agent session so the context lookup is keyed to the right person.
 | [`agent/`](./agent/) | Repo-side source of truth for the CX Agent Studio agent — persona instructions and the OpenAPI tool schemas you import into the console. See its [README](./agent/README.md). |
 | [`terraform/`](./terraform/) | Optional Terraform to codify the console-built agent/tools/deployment with the `google_ces_*` resources. See its [README](./terraform/README.md). |
 | [`docs/`](./docs/) | Setup guides (below). |
-| [`scripts/`](./scripts/) | Verification probes used to validate a live deployment. |
+| [`scripts/`](./scripts/) | `setup-trial-org.sh` (interactive setup) and `verification/` (end-to-end checks against a live deployment). |
+
+## Quick start
+
+1. Sign up for a [Snowplow free trial](https://snowplow.io/get-started/snowplow-free-trial)
+   and confirm Signals is enabled in Console.
+2. Clone this repo and run the interactive setup — it captures your credentials,
+   seeds the tracking plan, publishes the Signals config, and (optionally)
+   deploys the storefront:
+   ```
+   ./scripts/setup-trial-org.sh
+   ```
+3. Build the agent in CX Agent Studio by following
+   [docs/setup-cx-agent-studio.md](./docs/setup-cx-agent-studio.md).
+
+Prefer to do it by hand, or want to know what the script does? The two guides
+under **Setup** cover every step.
 
 ## Setup
 
@@ -75,3 +91,14 @@ Every credential or infra identifier in the docs appears as a `<PLACEHOLDER>`
   available.
 - Node.js and npm (storefront); Python 3.11+ (Signals publish script);
   optionally the Snowplow CLI, Vercel CLI, and Terraform.
+
+## What this is — and isn't
+
+A reference integration for demos and evaluation. It runs against demo data,
+keeps a deliberately simple auth model (one shared secret on the agent tool
+endpoints; an unauthenticated attributes proxy for the on-page debug panel),
+and is not hardened for production traffic. See [SECURITY.md](./SECURITY.md).
+
+## License
+
+[Apache-2.0](./LICENSE).
