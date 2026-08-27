@@ -40,6 +40,11 @@ export function replaceOwner(text: string, owner: string): string {
   return text.split(OWNER_PLACEHOLDER).join(owner);
 }
 
+/** Resolve the configured owner, falling back to the placeholder when unset or empty. */
+export function resolveOwner(value: string | undefined): string {
+  return value || OWNER_PLACEHOLDER;
+}
+
 const RESOURCE_NAME_UUID =
   /resourceName:\s*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
 
@@ -228,7 +233,7 @@ function main(): void {
     orgId = env.SNOWPLOW_CONSOLE_ORG_ID as string;
   }
 
-  const owner = env.SNOWPLOW_OWNER_EMAIL ?? OWNER_PLACEHOLDER;
+  const owner = resolveOwner(env.SNOWPLOW_OWNER_EMAIL);
   const { dir: buildDir, mapping } = buildTrackingPlansTree(TRACKING_PLANS_DIR, orgId, owner);
 
   try {

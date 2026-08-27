@@ -304,7 +304,7 @@ pause
 if begin "Preflight — local tooling" 1; then
 say "Checking the CLIs the later stages shell out to."
 MISSING=()
-for cmd in node npm python3 snowplow-cli; do
+for cmd in node npm python3 snowplow-cli openssl; do
   if command -v "$cmd" >/dev/null 2>&1; then
     note "✓ $cmd — $(command -v "$cmd")"
   else

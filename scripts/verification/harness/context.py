@@ -5,8 +5,8 @@ it. Polling the same endpoint with the session id taken from the collector POST
 bodies is the closest observable proxy, and it runs before the chat opens so an
 empty profile is caught before a turn is spent on it.
 
-Signals answers 12-33s after an event (probe_latency.py), and verification saw
-~60s, hence the retry loop rather than a single shot.
+Signals answers 12-33s after an event, and verification saw ~60s, hence the
+retry loop rather than a single shot.
 """
 
 import json

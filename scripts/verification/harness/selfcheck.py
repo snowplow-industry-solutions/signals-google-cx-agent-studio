@@ -681,8 +681,7 @@ AC5_CONSOLE_CASES = [
 # AC6a: `expected > 0 and actual == expected and len(sids) == 1`. The count term
 # is the only one the fixture pair reaches; a browse plan with no product pages
 # would otherwise pass vacuously, and a session id that rotated mid-run -- the
-# theory probe_rotation.py and probe_session.py were written to chase -- would
-# go unreported.
+# theory an earlier probe was written to chase -- would go unreported.
 AC6_COLLECTOR_CASES = [
     ("one product_viewed per product page, one sid", obs(browse=browse()), True),
     ("no product pages in the browse plan",

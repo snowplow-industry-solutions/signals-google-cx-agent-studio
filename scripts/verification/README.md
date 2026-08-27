@@ -109,7 +109,7 @@ future sweep does not re-file them as gaps.
 
 ## The `harness/` package
 
-Shared by `verify_widgets.py` and the five live probes, so a selector or a
+Shared by `verify_widgets.py` and the other five scripts, so a selector or a
 decoding rule is fixed in one place rather than five.
 
 | Module | Owns |

@@ -3,7 +3,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Synthetic values used only in tests"
 paths = [
   '''scripts/verification/harness/selfcheck\.py''',

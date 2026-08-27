@@ -394,9 +394,9 @@ def _fault_collector(obs):
     # A second session id ONLY -- the counts stay correct. `expected > 0 and
     # actual == expected and len(sids) == 1` short-circuits left to right, so a
     # fault that zeroes productViewed (as this one used to) can never reach the
-    # session-id term; that is the rotating-session theory probe_rotation.py and
-    # probe_session.py chased, and it must not be deletable. The count term is
-    # the `bad` fixture's job.
+    # session-id term; that is the rotating-session theory an earlier probe
+    # chased, and it must not be deletable. The count term is the `bad`
+    # fixture's job.
     browse = obs.setdefault("browse", {})
     browse["sids"] = list(browse.get("sids") or []) + ["f00dcafe"]
 

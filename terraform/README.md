@@ -295,7 +295,7 @@ curl -X POST \
 
 ### 5. Project-level tagging
 
-`google_ces_app`/`google_ces_agent` have no `labels` field, so any baseline
+`google_ces_app`/`google_ces_agent` have no `labels` field, so any organisation
 tagging policy has to be applied to the project directly, out-of-band:
 
 ```bash

@@ -2,7 +2,7 @@
 navigation)?
 
   - BASE is configurable (PROBE_BASE), defaults to the local production build,
-    because the repo is not linked to Vercel so there is no preview deploy.
+    so a branch can be checked without a hosted preview deploy.
   - Decodes each collector POST body down to the event level and counts
     product_viewed / product_list_viewed / pv per variant, instead of only
     counting requests, because collector payloads are the ground truth even

@@ -148,8 +148,7 @@ Makes the site and the `/api/agent/*` tool endpoints reachable over public
 HTTPS, which the CX Agent Studio OpenAPI tools require.
 
 1. **Import the repo into Vercel** (dashboard → Add New → Project, or `vercel
-   link` from `storefront/`). Set **Root Directory** to `storefront` — the repo
-   root's `package.json` is unrelated tooling, not the Next.js app. The
+   link` from `storefront/`). Set **Root Directory** to `storefront`. The
    framework preset auto-detects as Next.js once the root directory is set;
    `storefront/vercel.json` adds `Cache-Control: no-store` / `X-Robots-Tag:
    noindex` headers on `/api/agent/*` so tool responses are never cached or
@@ -212,9 +211,8 @@ Once the storefront is deployed and verified, continue to
   is unset (§2–§3).
 - **Trial expired mid-project** — re-run this whole guide against a fresh
   trial org; nothing here depends on the previous org's identifiers.
-- **Vercel build fails or serves the wrong app** — the repo root has its
-  own `package.json` (pipeline tooling, not the storefront); confirm the
-  Vercel project's Root Directory is set to `storefront` (§7).
+- **Vercel build fails or serves the wrong app** — confirm the Vercel
+  project's Root Directory is set to `storefront` (§7).
 - **`verify:deploy` reports FAIL on the authorized context/catalog checks
   only** (unauthorized checks still pass) — the `AGENT_SHARED_SECRET` value
   passed to the script doesn't match the one set in Vercel's environment
