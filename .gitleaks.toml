@@ -1,0 +1,11 @@
+# gitleaks configuration. Extends the default ruleset; the allowlist below
+# covers test fixtures that are deliberately token-shaped.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic values used only in tests"
+paths = [
+  '''scripts/verification/harness/selfcheck\.py''',
+  '''storefront/package-lock\.json''',
+]
