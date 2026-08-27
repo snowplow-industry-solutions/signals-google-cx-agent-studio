@@ -5,7 +5,7 @@ node_modules/
 .vercel/
 .DS_Store
 
-# Agent / AI tooling — kept on disk, not part of the published product
+# Local agent/editor tooling and private notes — never part of the published repo
 .claude/
 .maki/
 .superpowers/
@@ -14,10 +14,8 @@ node_modules/
 .scratch/
 docs/superpowers/
 docs/agents/
-# Root package.json/lock exist only to run the .sandcastle harness locally
 /package.json
 /package-lock.json
-# Agent memory/config that inlines private notes on a working clone
 CLAUDE.local.md
 AGENTS.local.md
 
