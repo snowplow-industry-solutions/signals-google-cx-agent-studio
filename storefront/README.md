@@ -128,11 +128,30 @@ npm run signals:publish
 
 The storefront uses generated Snowtype helpers from `snowtype/snowplow.ts` for its ecommerce self-describing events and event-specification wrappers.
 
-Do not edit generated files in `snowtype/` manually. Regenerate them whenever the BDP data product changes:
+Neither `snowtype/` nor `snowtype.config.json` is committed — both are specific to
+one Snowplow org. The config names an organization ID and a data product ID, and
+the generated helpers embed the event specification IDs derived from them, so
+committing either would mean re-pointing the repo at a different org produced a
+diff every time. `snowtype.config.example.json` is the committed template.
+
+**On a fresh clone, generate them before running `npm test`, `npm run lint` or
+`npm run build`** — `src/` imports `@/snowtype/snowplow`, so those all fail
+without it. Regenerate the same way whenever the BDP data product changes, or
+after pointing `.env.local` at a new org:
 
 ```bash
 npm run snowtype:generate
 ```
+
+That runs `npm run snowtype:config` first, which writes `snowtype.config.json`
+from the example: the organization ID comes from `.env.local`, and the data
+product ID is derived from it with the same UUIDv5 rule
+`scripts/seed-tracking-plans.ts` uses to publish the tracking plan. So the two
+always name the same data product. The org's tracking plan must already be
+seeded (see [`docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md)
+§4) or generation has no data product to read.
+
+Do not edit `snowtype/` or `snowtype.config.json` by hand — regenerate instead.
 
 ## Personalization Workflows
 

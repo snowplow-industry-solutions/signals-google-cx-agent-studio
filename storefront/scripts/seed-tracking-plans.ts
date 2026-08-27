@@ -27,7 +27,9 @@ export const REQUIRED_ENV_VARS = [
 ] as const;
 
 // Fixed forever: changing this would re-derive every resource ID for every org.
-const FIXED_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+// Exported so write-snowtype-config.ts derives the data product ID the same way
+// rather than keeping its own copy that could drift.
+export const FIXED_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 const DUMMY_ORG_ID = "00000000-dry-run-0000-000000000000";
 

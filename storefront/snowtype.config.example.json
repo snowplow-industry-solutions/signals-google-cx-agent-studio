@@ -6,9 +6,9 @@
   ],
   "eventSpecificationIds": [],
   "dataProductIds": [
-    "12361c29-df6c-5a64-b024-68557f6504ed"
+    "<derived-data-product-id>"
   ],
-  "organizationId": "00a9e122-8865-4e3b-ac1d-648b50ad9483",
+  "organizationId": "<your-snowplow-org-id>",
   "tracker": "@snowplow/browser-tracker",
   "language": "typescript",
   "outpath": "./snowtype"

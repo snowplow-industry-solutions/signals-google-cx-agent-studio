@@ -11,7 +11,7 @@ data:
     vendor: com.snowplow_demo.fashion
     name: cart_updated
     format: jsonschema
-    version: 1-0-1
+    version: 1-0-0
   type: object
   properties:
     action:
