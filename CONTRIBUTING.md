@@ -19,3 +19,12 @@ pull requests are welcome; response times are best-effort.
 
 See [AGENTS.md](./AGENTS.md) for the layout and the per-directory READMEs for
 details.
+
+## CI
+
+`.github/workflows/ci.yml` runs the storefront checks only when the repo
+secrets `SNOWPLOW_CONSOLE_ORG_ID`, `SNOWPLOW_CONSOLE_API_KEY_ID` and
+`SNOWPLOW_CONSOLE_API_KEY` are set (they point at a Snowplow org seeded with
+this repo's tracking plan). Forks skip those steps. If the org behind the
+secrets expires, CI reports a snowtype error — re-seed a fresh org with
+`./scripts/setup-trial-org.sh` and update the secrets.

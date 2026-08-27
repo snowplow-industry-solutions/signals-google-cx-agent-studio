@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  storefront:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: storefront
+    env:
+      SNOWPLOW_CONSOLE_ORG_ID: ${{ secrets.SNOWPLOW_CONSOLE_ORG_ID }}
+      SNOWPLOW_CONSOLE_API_KEY_ID: ${{ secrets.SNOWPLOW_CONSOLE_API_KEY_ID }}
+      SNOWPLOW_CONSOLE_API_KEY: ${{ secrets.SNOWPLOW_CONSOLE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+      - run: npm ci
+      - name: Generate snowtype helpers
+        if: env.SNOWPLOW_CONSOLE_ORG_ID != ''
+        run: npm run snowtype:generate
+      - name: Explain the skip on forks
+        if: env.SNOWPLOW_CONSOLE_ORG_ID == ''
+        run: echo "::notice::Snowplow credentials not available (fork or unset secrets); skipping test/lint/build, which need generated snowtype helpers."
+      - if: env.SNOWPLOW_CONSOLE_ORG_ID != ''
+        run: npm test
+      - if: env.SNOWPLOW_CONSOLE_ORG_ID != ''
+        run: npm run lint
+      - if: env.SNOWPLOW_CONSOLE_ORG_ID != ''
+        run: npm run build
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
