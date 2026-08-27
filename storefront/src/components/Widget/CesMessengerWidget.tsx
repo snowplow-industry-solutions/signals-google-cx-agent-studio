@@ -36,12 +36,12 @@ export function CesMessengerWidget() {
   const elementRef = useRef<CesMessengerElement | null>(null);
   const deploymentId = process.env.NEXT_PUBLIC_CES_DEPLOYMENT_ID;
 
-  // Issue 09: render {@Widget: …} tokens (which ces-messenger would print
+  // Render {@Widget: …} tokens (which ces-messenger would print
   // as raw text) as product cards. Idles harmlessly while the agent runs
   // the text-only instruction variant.
   useWidgetTokenRenderer(elementRef);
 
-  // Issue 13: typing/"still working" indicator — upstream ships none.
+  // Typing/"still working" indicator — upstream ships none.
   useWidgetLoadingIndicator(elementRef);
 
   const handleLoaded = useCallback(() => {

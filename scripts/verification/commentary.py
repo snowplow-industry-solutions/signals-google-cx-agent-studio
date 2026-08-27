@@ -129,7 +129,7 @@ def main():
         for label, prompt, expect, shot in turns:
             results.append(turn(chat, log, page, label, prompt, expect, shot))
 
-        # Issue #1 regression guard: a card click must still SPA-navigate.
+        # Regression guard: a card click must still SPA-navigate (no full reload).
         page.evaluate("() => { window.__spaProbe = 'alive'; }")
         click_result = {}
         clicked = chat.click_last_card_item()
