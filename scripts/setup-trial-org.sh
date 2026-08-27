@@ -614,7 +614,7 @@ fi
 
 # ── 12 ────────────────────────────────────────────────────────────────────
 if begin "Deploy and verify the live site" 6; then
-if printf '%s\n' "${SKIPPED[@]}" | grep -q '^Vercel deployment'; then
+if (( ${#SKIPPED[@]} )) && printf '%s\n' "${SKIPPED[@]}" | grep -q '^Vercel deployment'; then
   note "skipped — no Vercel deployment this run"
 else
   say "Deploy from the CLI (or via a Vercel Git integration if you set one up)."
