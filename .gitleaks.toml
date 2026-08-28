@@ -1,11 +1,13 @@
-# gitleaks configuration. Extends the default ruleset; the allowlist below
-# covers test fixtures that are deliberately token-shaped.
+# gitleaks configuration. Extends the default ruleset. The single allowlist
+# below scopes to one deliberately token-shaped fixture inside the redactor
+# self-check (a base64 literal exercising the high-entropy detector). It is
+# regex-only on purpose: allowlist criteria are ORed, so adding `paths`
+# would exempt the whole file and any other leak in it. With this form the
+# fixture is suppressed and anything else in the file — or anywhere else —
+# still fails the scan.
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "Synthetic values used only in tests"
-paths = [
-  '''scripts/verification/harness/selfcheck\.py''',
-  '''storefront/package-lock\.json''',
-]
+description = "Synthetic token fixture in the redactor self-check"
+regexes = ['''QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo\+/aGk=''']

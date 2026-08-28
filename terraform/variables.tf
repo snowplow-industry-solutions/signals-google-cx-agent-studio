@@ -70,12 +70,6 @@ variable "deployment_display_name" {
   description = "Display name of the existing console-built web-widget deployment to import as google_ces_deployment.web_widget."
 }
 
-variable "storefront_url" {
-  type        = string
-  description = "Public HTTPS origin of the deployed storefront (docs/setup-snowplow-trial.md §7); used as the widget deployment's allowed origin."
-  default     = "https://your-storefront.example.com"
-}
-
 variable "allowed_origins" {
   type        = list(string)
   description = "Origins allowed to embed the web widget (google_ces_deployment security_settings.allowed_origins)."
@@ -171,5 +165,13 @@ variable "labels" {
   default = {
     system      = "signals-cx-agent-demo"
     environment = "dev"
+  }
+  validation {
+    condition = alltrue([
+      for k, v in var.labels :
+      can(regex("^[a-z][a-z0-9_-]{0,62}$", k)) &&
+      can(regex("^[a-z0-9_-]{0,63}$", v))
+    ])
+    error_message = "labels must be valid GCP label keys/values: keys are lowercase letters, digits, dashes and underscores, starting with a letter; values are lowercase letters, digits, dashes and underscores (or empty); both max 63 chars."
   }
 }

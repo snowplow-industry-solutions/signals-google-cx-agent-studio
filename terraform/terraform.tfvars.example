@@ -1,6 +1,6 @@
 # Copy to terraform.tfvars (gitignored) and fill in with real values read
 # from the console / apps.exportApp / the CES REST API -- see README.md
-# "Finding the real resource IDs". Never commit terraform.tfvars.
+# "Import, plan, and re-apply". Never commit terraform.tfvars.
 #
 # agent_shared_secret_value is intentionally left out of this file even as
 # a placeholder -- pass it at apply time instead:
@@ -25,7 +25,11 @@ deployment_display_name = "<PLACEHOLDER: existing deployment's display name>"
 model_name        = "<PLACEHOLDER: model the live app currently uses, e.g. gemini-3.0-flash-001>"
 model_temperature = null
 
-# Import path (README.md "Secret reconciliation"): set to the secret
+# Import path (README.md "Reconciliation gotchas"): set to the secret
 # already backing the console tools' API-key auth. Leave unset only for a
 # greenfield re-create, where the ces-agent-shared-secret default applies.
 agent_shared_secret_id = "<PLACEHOLDER: live secret ID from the toolsets' apiKeySecretVersion>"
+
+# Origins allowed to embed the web widget -- your deployed storefront's
+# exact origin (docs/setup-cx-agent-studio.md §6).
+allowed_origins = ["https://<your-storefront-url>"]

@@ -14,9 +14,9 @@ set -euo pipefail
 
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
   BOLD=$(tput bold); DIM=$(tput dim); RESET=$(tput sgr0)
-  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1)
+  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3)
 else
-  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""; RED=""
+  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""
 fi
 
 # Author sets these two at the top of the stages section.
@@ -205,17 +205,37 @@ BACKUP_DIR="$HOME/.signals-trial-backups"
 usage() {
   printf 'Usage: %s [--from N]\n\n' "$(basename "$0")"
   printf '  --from N   resume at stage N, skipping the ones before it. Values you\n'
-  printf '             already saved to %s are reused.\n' "$ENV_FILE"
-  exit 0
+  printf '             already saved to %s are reused.\n\n' "$ENV_FILE"
+  printf 'Stages:\n'
+  grep -E '^if begin "' "${BASH_SOURCE[0]}" \
+    | sed -E 's/^if begin "([^"]+)".*/  \1/' | nl -w2 -s'  '
+  exit "${1:-0}"
 }
 
 START_STAGE=1
 case "${1:-}" in
-  --from) START_STAGE="${2:?--from needs a stage number}" ;;
+  --from)
+    if [[ ! "${2:-}" =~ ^[0-9]+$ ]]; then
+      printf 'Unknown argument: --from %s (expected a stage number)\n\n' "${2:-}" >&2
+      usage 2
+    fi
+    START_STAGE="$2"
+    if (( START_STAGE < 1 || START_STAGE > TOTAL_STAGES )); then
+      printf 'Stage %s is out of range — this wizard has %s stages.\n\n' \
+        "$START_STAGE" "$TOTAL_STAGES" >&2
+      usage 2
+    fi ;;
   --help|-h) usage ;;
   "") ;;
-  *) printf 'Unknown argument: %s\n' "$1"; usage ;;
+  *) printf 'Unknown argument: %s\n' "$1"; usage 2 ;;
 esac
+
+# Resuming past the stage that creates .env.local: start from the template so
+# later stages never write into a bare file missing the commented defaults.
+if (( START_STAGE > 3 )) && [[ ! -f "$ENV_FILE" ]]; then
+  cp storefront/.env.example "$ENV_FILE"
+  note "created $ENV_FILE from storefront/.env.example (resuming past stage 3)"
+fi
 
 # Values that belong to one specific Snowplow org. A new trial invalidates
 # every one of them; AGENT_SHARED_SECRET, NEXT_PUBLIC_SNOWPLOW_APP_ID and
@@ -272,6 +292,9 @@ mask() {
 _env_value() {
   local v; v=$(_existing "$1" || true)
   v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+  # A template placeholder (e.g. "<your-collector-url>") counts as unset so
+  # prompts don't offer it as a real value and skip-when-set logic skips it.
+  case "$v" in "<"*">") v="" ;; esac
   printf '%s' "$v"
 }
 
@@ -290,9 +313,11 @@ run() {
   if "$@"; then
     printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$desc"
     return 0
+  else
+    local rc=$?
+    warn "$desc failed (exit $rc)"
+    return 1
   fi
-  warn "$desc failed (exit $?)"
-  return 1
 }
 
 banner "Snowplow trial org → seeded pipeline → live storefront"
@@ -343,8 +368,9 @@ fi
 # ── 3 ─────────────────────────────────────────────────────────────────────
 if begin "Prepare storefront/.env.local" 1; then
 if [[ -f "$ENV_FILE" ]]; then
-  say "$ENV_FILE already exists. If it points at an expired org, we back it up"
-  say "outside the repo and blank the org-scoped keys so nothing stale is kept."
+  say "$ENV_FILE already exists. If it points at an org you are replacing, we"
+  say "back it up outside the repo and blank the org-scoped keys so nothing"
+  say "stale is kept."
   mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
   BACKUP_PATH="$BACKUP_DIR/env.local.$(date +%Y%m%d-%H%M%S)"
   cp "$ENV_FILE" "$BACKUP_PATH"; chmod 600 "$BACKUP_PATH"
@@ -548,20 +574,19 @@ else
 say "Production needs every value from .env.local except the -dev app ID."
 say "NEXT_PUBLIC_CES_DEPLOYMENT_ID is set later, once the agent exists"
 say "(docs/setup-cx-agent-studio.md §6)."
-if [[ ! -f storefront/.vercel/project.json ]]; then
-  step "No Vercel project is linked yet. Running 'vercel link' — pick or create a"
-  step "project and set Root Directory to storefront when asked."
-  run "vercel link" vercel link --cwd storefront || true
-fi
 VERCEL_OK=0
 if command -v vercel >/dev/null 2>&1; then
+  if [[ ! -f storefront/.vercel/project.json ]]; then
+    step "No Vercel project is linked yet. Running 'vercel link' — pick or create a"
+    step "project and set Root Directory to storefront when asked."
+    run "vercel link" vercel link --cwd storefront || true
+  fi
   if vercel env ls production --cwd storefront >/dev/null 2>&1; then
     VERCEL_OK=1
     note "CLI can reach the linked project"
   else
-    warn "the CLI can't read this project's settings — you're likely logged into"
-    warn "the wrong Vercel account (storefront/.vercel/project.json points at a"
-    warn "team the current login can't see)."
+    warn "the CLI can't read this project's settings — this Vercel login may"
+    warn "not have access to the team that owns the project."
     step "Run 'vercel login' with the account that owns the deployment, then"
     step "re-run with --from 11, or paste the values into the dashboard instead."
     if confirm "Have you fixed the login and want to retry the check?"; then

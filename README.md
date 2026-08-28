@@ -89,8 +89,12 @@ Every credential or infra identifier in the docs appears as a `<PLACEHOLDER>`
 - A Snowplow account with Signals enabled (a Free Trial suffices).
 - A Google Cloud project with Gemini Enterprise for CX (CX Agent Studio)
   available.
-- Node.js and npm (storefront); Python 3.11+ (Signals publish script);
-  optionally the Snowplow CLI, Vercel CLI, and Terraform.
+- Node.js ≥ 20.9 and npm (storefront; CI uses Node 22).
+- Python 3.11+ (Signals publish script).
+- `snowplow-cli` (required — the setup wizard and the tracking-plan seeder
+  both call it) and `openssl` (the wizard uses it to mint the agent shared
+  secret).
+- Optional: Vercel CLI, Terraform, and gitleaks (secret scanning).
 
 ## What this is — and isn't
 

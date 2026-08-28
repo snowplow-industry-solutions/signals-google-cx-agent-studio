@@ -90,13 +90,13 @@ def main():
         # Step 2 — multi-product recommendation (expect carousel)
         results.append(turn(chat, log, page, "2a-carousel",
                             "Can you recommend a couple of accessories to go with an evening look?",
-                            shot="widget-renderer-carousel-prod-20260730.png"))
+                            shot="widget-renderer-carousel-prod.png"))
 
         # Step 3 — one specific product by name (expect details card)
         product_name = catalog[0][0] if catalog else "Silk Twill Square Scarf"
         results.append(turn(chat, log, page, "3-details",
                             f"Tell me more about the {product_name}.",
-                            shot="widget-renderer-details-prod-20260730.png"))
+                            shot="widget-renderer-details-prod.png"))
 
         # Extra turns — the wire format is bimodal, so exercise several
         results.append(turn(chat, log, page, "2b-carousel",
@@ -136,7 +136,7 @@ def main():
                 "chatMessagesAfter": after.get("count"),
             })
             print("  ", json.dumps(click_result, indent=2))
-            page.screenshot(path=f"{OUT}/widget-renderer-cardclick-prod-20260730.png")
+            page.screenshot(path=f"{OUT}/widget-renderer-cardclick-prod.png")
 
         # Step 6 — styling capture at the end (chat + storefront in one frame)
         page.screenshot(path=f"{OUT}/prod-99-styling.png", full_page=False)

@@ -1,6 +1,6 @@
 # Atelier Signals
 
-Atelier Signals is a high-end fashion retail ecommerce demo built to showcase Snowplow Signals in a live storefront experience. The app mirrors the publishing demo's provider pattern while shifting the domain to luxury fashion merchandising, product discovery, cart styling, and checkout reassurance.
+Atelier Signals is a high-end fashion retail ecommerce demo built to showcase Snowplow Signals in a live storefront experience. The domain is luxury fashion merchandising, product discovery, cart styling, and checkout reassurance.
 
 ## What This Demo Shows
 
@@ -96,7 +96,8 @@ Local tracking assets live under `tracking-assets/`.
 - Source application: `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
 - Tracking plan: `tracking-assets/tracking-plans/fashion_ecommerce.yml`
 
-To validate them with the Snowplow MCP/CLI, use the configured validation workflow from the workspace tooling. The implementation in this repo was validated against:
+To validate them with the Snowplow MCP/CLI, see Snowplow's own docs for the
+validation workflow. The implementation in this repo was validated against:
 
 - `tracking-assets/data-structures`
 - `tracking-assets/tracking-plans/fashion_ecommerce.yml`
@@ -111,11 +112,13 @@ Signals configuration is stored in code under `signals/config/`.
 - `services.py`: service definition
 - `publish.py`: publish or dry-run entrypoint
 
-Install Python dependencies and dry-run the config:
+Install Python dependencies into the venv the npm scripts expect
+(`signals:publish` runs `.venv/bin/python`), then dry-run the config:
 
 ```bash
-python -m pip install -e .
-python -m signals.config.publish --dry-run
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/python -m signals.config.publish --dry-run
 ```
 
 To publish to a real Signals deployment:

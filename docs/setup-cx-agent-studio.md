@@ -31,21 +31,24 @@ own values.
 ## 2. Create the agent
 
 1. In CX Agent Studio, create a new customer-facing agent in your project.
-2. Paste the full contents of `agent/instructions.console.txt` into the **Root
-   Agent node's own instructions field** (on the canvas), verbatim — it defines
-   the concierge persona, the one-call-per-turn tool contract, and the
-   degraded-session fallback, in the console's structured format with
-   `{@TOOL: ...}` references. Do **not** use Settings → Advanced: that is the
-   app-wide `globalInstruction`, which would leak the persona into any
-   later-added agent.
+2. Paste the full contents of `agent/instructions.console.widgets.txt` into
+   the **Root Agent node's own instructions field** (on the canvas),
+   verbatim — it defines the concierge persona, the one-call-per-turn tool
+   contract, the rich-response widgets, and the degraded-session fallback,
+   in the console's structured format with `{@TOOL: ...}` and
+   `{@Widget: ...}` references. Do **not** use Settings → Advanced: that is
+   the app-wide `globalInstruction`, which would leak the persona into any
+   later-added agent. (`agent/instructions.console.txt` is the text-only
+   revert target if you skip the widget tools in §3.)
 
-   The `{@TOOL: ...}` references must resolve against the attached tools (do §3
-   first). If the editor flags "tool not found", delete the reference and
-   re-insert it with the editor's `@` picker — the resolvable names are
-   toolset-qualified (`getUserContext_getUserContext`,
-   `searchCatalog_searchCatalog`). `agent/instructions.md` is the
-   human-readable source for the same contract; edit there first and mirror
-   changes into the console copy.
+   The `{@TOOL: ...}` and `{@Widget: ...}` references must resolve against
+   the attached tools (do §3 first). If the editor flags "tool not found",
+   delete the reference and re-insert it with the editor's `@` picker — the
+   resolvable names are toolset-qualified (`getUserContext_getUserContext`,
+   `searchCatalog_searchCatalog`) or the widget names (`productCarousel`,
+   `productDetails`). `agent/instructions.md` is the human-readable source
+   for the same contract; edit there first and mirror changes into the
+   console copy.
 
 ## 3. Import the two OpenAPI tools
 
@@ -66,6 +69,16 @@ For each tool's authentication config, choose **API key** auth and set:
 - Header name: `x-agent-api-key`
 - Value: the exact `AGENT_SHARED_SECRET` value configured on the Vercel
   deployment (not a local value — they may differ).
+
+Then add the two **rich response widget tools** on the same agent: create a
+widget tool from the console's template, once with type `PRODUCT_CAROUSEL`
+named `productCarousel` and once with type `PRODUCT_DETAILS` named
+`productDetails`. The template auto-fills the (read-only) parameter schema,
+so there is nothing to import — `agent/tools/*.widget.json` are captured
+copies of those fixed schemas, checked in so
+`scripts/verification/verify_widgets.py` and `terraform/tools.tf` can verify
+the contract. Without these two tools the `{@Widget: ...}` references from §2
+won't resolve.
 
 Confirm each tool calls the deployed endpoint successfully (the console's
 try-it affordance, or a test turn in the simulator) before moving on.

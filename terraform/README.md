@@ -2,7 +2,7 @@
 
 Terraform config that codifies the console-built CES
 app/agent/toolsets/deployment (from
-`[../docs/setup-cx-agent-studio.md](../docs/setup-cx-agent-studio.md)`) using
+[../docs/setup-cx-agent-studio.md](../docs/setup-cx-agent-studio.md)) using
 the `google_ces_*` resource family (`hashicorp/google >= 7.31.0`). Terraform
 does **not** create these greenfield — it adopts what the console already built,
 via `terraform import`, so the demo survives console drift and can be re-created
@@ -164,7 +164,7 @@ replay the whole drift. Keep a copy off the machine that holds it.
 
 Everything here runs against the live project, by a human. It requires the
 console-built resources from
-`[../docs/setup-cx-agent-studio.md](../docs/setup-cx-agent-studio.md)` to
+[../docs/setup-cx-agent-studio.md](../docs/setup-cx-agent-studio.md) to
 already exist.
 
 ### 1. Fill in the resource IDs
@@ -183,6 +183,7 @@ running anything.
 | `context_toolset_id`      | Console → the `getUserContext` toolset's settings                                                                                                  |
 | `catalog_toolset_id`      | Console → the `searchCatalog` toolset's settings                                                                                                   |
 | `app_version_id`          | The version pinned to the live deployment's channel (console → deployment → pinned Agent Version)                                                  |
+| `app_version_display_name` | The same version's display name (console → deployment → the version's `deployment-version-…` name)                                                |
 | `deployment_display_name` | Console → the web-widget deployment's display name                                                                                                 |
 | `app_display_name`        | Console → the app's display name                                                                                                                   |
 | `model_name`              | Console → the **app's** model settings (the console sets model/temperature at the app level; the agent inherits). Read the live value, don't guess |

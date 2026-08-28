@@ -43,8 +43,7 @@ directly into each tool's API-key auth config in the console.
   `price`←dollar string, `productId`←`url` slug, `uri`←base URL + `url`,
   `imageUris`←`[image]`) has a checked-in contract to be verified
   against. See agent/instructions.md 'Rich response widgets' for the
-  corrected schema finding and for the open question on whether the
-  pinned `ces-messenger` component (as opposed to the hosted
-  `chat-messenger` build) actually renders
-  these -- unresolved without a live check, so it needs manual testing
-  against the console before it can be relied on.
+  field-mapping contract. The pinned `ces-messenger` component (as opposed
+  to the hosted `chat-messenger` build) renders these widgets; the console
+  copy of the instructions that invokes them is
+  `agent/instructions.console.widgets.txt`.
