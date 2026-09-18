@@ -48,6 +48,12 @@ yarn-error.log*
 snowtype.config.json
 /snowtype/
 
+# Embedded Iglu repo rendered from tracking-assets/data-structures by
+# `npm run micro:schemas` for Snowplow Micro. Generated, not hand-copied, so
+# Micro never drifts from the tracking assets -- regenerate rather than
+# editing or committing.
+/micro/iglu-client-embedded/
+
 # vercel
 .vercel
 

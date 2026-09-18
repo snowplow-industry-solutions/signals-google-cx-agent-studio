@@ -102,6 +102,44 @@ To validate them with the Snowplow MCP/CLI, use the configured validation workfl
 - `tracking-assets/tracking-plans/fashion_ecommerce.yml`
 - `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
 
+## Local Agent Tracking Verification (Snowplow Micro)
+
+[Snowplow Micro](https://docs.snowplow.io/docs/testing-debugging/snowplow-micro/) is a
+local pipeline that validates every tracked payload against its schema, so agent
+events can be checked before any traffic reaches a live org. `micro/` holds a pinned
+compose file and an Iglu resolver; the repo's own `com.snowplow_demo.fashion` schemas
+resolve from a generated local directory, and the `com.snowplow.agent.tracking` Iglu
+Central vendor still resolves over the network.
+
+```bash
+npm run micro:schemas   # render tracking-assets/data-structures into micro/iglu-client-embedded/ (gitignored)
+npm run micro:up        # start Micro on http://localhost:9090 (requires Docker)
+```
+
+Point the dev server at Micro (`.env.local`) and start it in another terminal:
+
+```bash
+NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=http://localhost:9090
+NEXT_PUBLIC_SNOWPLOW_APP_ID=signals-workshop-fashion-demo-dev
+AGENT_SHARED_SECRET=<any local value>
+```
+
+```bash
+npm run dev
+```
+
+Then, with both running, fire the agent tool endpoints and check Micro's good/bad
+counts in one command:
+
+```bash
+AGENT_SHARED_SECRET=<same value as .env.local> npm run verify:micro
+```
+
+`micro:schemas` must be re-run (and Micro restarted) whenever a data structure under
+`tracking-assets/data-structures` changes. `verify:micro`'s endpoint list
+(`scripts/verify-micro.ts`) is written to be extended as more agent endpoints are
+instrumented.
+
 ## Signals Configuration In Python
 
 Signals configuration is stored in code under `signals/config/`.
