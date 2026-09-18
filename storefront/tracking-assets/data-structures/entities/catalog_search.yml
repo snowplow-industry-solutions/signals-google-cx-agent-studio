@@ -1,0 +1,74 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: >
+    Filters and outcome of a searchCatalog tool call, so catalog gaps
+    (filter combinations that return nothing) can be found from the
+    warehouse.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: catalog_search
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    category:
+      type: [string, "null"]
+      maxLength: 64
+      description: Category filter received, or null when not supplied.
+    designer:
+      type: [string, "null"]
+      maxLength: 128
+      description: Designer filter received, or null when not supplied.
+    occasion:
+      type: [string, "null"]
+      maxLength: 64
+      description: Occasion filter received, or null when not supplied.
+    color:
+      type: [string, "null"]
+      maxLength: 64
+      description: Color family filter received, or null when not supplied.
+    max_price:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 100000
+      description: Maximum price filter received, or null when not supplied.
+    query:
+      type: [string, "null"]
+      maxLength: 200
+      description: >
+        Free-text query received, capped at 200 characters for analytics.
+        Null when not supplied.
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 25
+      description: Result limit applied to the search, after defaulting/capping.
+    result_count:
+      type: integer
+      minimum: 0
+      maximum: 25
+      description: Number of results returned.
+    product_ids:
+      type: array
+      maxItems: 25
+      items:
+        type: string
+        maxLength: 128
+      description: Stable identifiers of the returned products, in result order.
+  required:
+    - category
+    - designer
+    - occasion
+    - color
+    - max_price
+    - query
+    - limit
+    - result_count
+    - product_ids
+  additionalProperties: false
