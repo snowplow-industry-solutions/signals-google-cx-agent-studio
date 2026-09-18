@@ -286,10 +286,10 @@ async function main(): Promise<void> {
   }
 
   const identity: AgentIdentity = {
-    chatSessionId: `verify-micro-chat-${randomUUID()}`,
-    domainSessionId: `verify-micro-session-${randomUUID()}`,
-    domainUserId: `verify-micro-user-${randomUUID()}`,
-    turnId: `verify-micro-turn-${randomUUID()}`,
+    chatSessionId: randomUUID(),
+    domainSessionId: randomUUID(),
+    domainUserId: randomUUID(),
+    turnId: randomUUID(),
   };
 
   await resetMicro(microUrl);
