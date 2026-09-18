@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   capFreeTextQuery,
   clampTrackedMaxPrice,
+  isDryRunTrackingRequest,
   MAX_TRACKED_QUERY_LENGTH,
   resolveAgentIdentity,
   trackCatalogSearchToolExecution,
@@ -62,6 +63,18 @@ describe("resolveAgentIdentity", () => {
     const identity = resolveAgentIdentity(requestWithHeaders({}), null);
 
     expect(identity.domainSessionId).toBeNull();
+  });
+});
+
+describe("isDryRunTrackingRequest", () => {
+  it.each([
+    ["1", true],
+    ["true", false],
+    ["0", false],
+    [undefined, false],
+  ])("treats header value %j as dry-run=%s", (headerValue, expected) => {
+    const request = requestWithHeaders(headerValue === undefined ? {} : { "x-agent-tracking-dry-run": headerValue });
+    expect(isDryRunTrackingRequest(request)).toBe(expected);
   });
 });
 
