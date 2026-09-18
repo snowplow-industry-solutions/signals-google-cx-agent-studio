@@ -1,6 +1,15 @@
-# Copy to terraform.tfvars (gitignored) and fill in with real values read
-# from the console / apps.exportApp / the CES REST API -- see README.md
-# "Finding the real resource IDs". Never commit terraform.tfvars.
+# Copy to terraform.tfvars (gitignored) and fill in with real values --
+# never commit terraform.tfvars. Two paths use this same file:
+#
+# - Importing the original console-built app (README.md "Import, plan, and
+#   re-apply"): every ID below must be the *existing* live resource's ID,
+#   read from the console / apps.exportApp / the CES REST API.
+# - Greenfield-creating a duplicate app in its own workspace (README.md
+#   "Creating a duplicate app in a new workspace", issue 24): every ID
+#   below is instead a *new* ID of your own choosing (letters/digits/hyphens
+#   -- CES doesn't require it to mean anything), assigned to the resource
+#   on first apply. Never reuse the original app's IDs, secret, or tfvars
+#   file for this path -- see that README section for why.
 #
 # agent_shared_secret_value is intentionally left out of this file even as
 # a placeholder -- pass it at apply time instead:
@@ -9,23 +18,40 @@
 project_id = "<PLACEHOLDER: Snowplow-managed sandbox GCP project ID>"
 location   = "<PLACEHOLDER: e.g. us -- confirm, don't assume>"
 
-app_id             = "<PLACEHOLDER: existing console-built app ID>"
-app_display_name   = "<PLACEHOLDER: the app's display name as shown in the console>"
-agent_id           = "<PLACEHOLDER: existing console-built root agent ID>"
-context_toolset_id = "<PLACEHOLDER: existing getUserContext toolset ID>"
-catalog_toolset_id = "<PLACEHOLDER: existing searchCatalog toolset ID>"
+app_id             = "<PLACEHOLDER: existing app ID (import) or a new one you're assigning (greenfield)>"
+app_display_name   = "<PLACEHOLDER: the app's display name>"
+agent_id           = "<PLACEHOLDER: existing root agent ID (import) or a new one (greenfield)>"
+context_toolset_id = "<PLACEHOLDER: existing getUserContext toolset ID (import) or a new one (greenfield)>"
+catalog_toolset_id = "<PLACEHOLDER: existing searchCatalog toolset ID (import) or a new one (greenfield)>"
 
-app_version_id           = "<PLACEHOLDER: existing app version ID currently live on the deployment>"
-app_version_display_name = "<PLACEHOLDER: the version's display name, e.g. the console's deployment-version-... string>"
+# self_tracking_toolset_id has a working default (variables.tf) for a
+# greenfield create -- like product_carousel_tool_id/product_details_tool_id
+# (also defaulted, and also omitted from this file for the same reason),
+# only set it here if importing an existing toolset under a different ID.
+# self_tracking_toolset_id = "<PLACEHOLDER: existing self-tracking toolset ID>"
 
-deployment_display_name = "<PLACEHOLDER: existing deployment's display name>"
+app_version_id           = "<PLACEHOLDER: existing app version ID live on the deployment (import), or a new one for the first version (greenfield)>"
+app_version_display_name = "<PLACEHOLDER: the version's display name, e.g. the console's deployment-version-... string, or one of your choosing>"
+
+deployment_display_name = "<PLACEHOLDER: existing deployment's display name (import), or one of your choosing (greenfield)>"
+
+# The deployed storefront's public origin -- the web-widget deployment's
+# allowed_origins (deployment.tf) rejects the widget everywhere else. For
+# the duplicate-app workspace (issue 24/28) this must be the *second*
+# storefront deployment's origin, never the production one.
+storefront_url  = "<PLACEHOLDER: e.g. https://your-storefront.example.com>"
+allowed_origins = ["<PLACEHOLDER: e.g. https://your-storefront.example.com>"]
 
 # Model settings live at the *app* level in the console (the agent
-# inherits them) -- read them off the app, not the Root Agent node.
+# inherits them) -- for import, read them off the app, not the Root Agent
+# node. For greenfield, pick the model you want the new app to run; check
+# README.md's "Known risk to check before relying on apply" first if
+# pairing a gemini-3-* model with a non-null model_temperature in "us".
 model_name        = "<PLACEHOLDER: model the live app currently uses, e.g. gemini-3.0-flash-001>"
 model_temperature = null
 
 # Import path (README.md "Secret reconciliation"): set to the secret
-# already backing the console tools' API-key auth. Leave unset only for a
-# greenfield re-create, where the ces-agent-shared-secret default applies.
+# already backing the console tools' API-key auth. Leave unset for a
+# greenfield create, where the ces-agent-shared-secret default applies and
+# Terraform creates the secret itself.
 agent_shared_secret_id = "<PLACEHOLDER: live secret ID from the toolsets' apiKeySecretVersion>"

@@ -51,6 +51,19 @@ variable "catalog_toolset_id" {
   description = "ID of the existing console-built toolset wrapping the searchCatalog tool (issue 06) to import as google_ces_toolset.catalog."
 }
 
+variable "self_tracking_toolset_id" {
+  type        = string
+  description = <<-EOT
+    ID of the toolset wrapping the three self-tracking tools (issue 21) to
+    manage as google_ces_toolset.self_tracking. Unlike context_toolset_id
+    and catalog_toolset_id, this toolset has no console-built original to
+    adopt an ID from -- the default below is the ID this config assigns it
+    on a greenfield create (issue 24). Override it only if importing this
+    toolset onto an app where it was already created under a different ID.
+  EOT
+  default     = "self-tracking"
+}
+
 variable "app_version_id" {
   type        = string
   description = <<-EOT

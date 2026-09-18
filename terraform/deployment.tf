@@ -15,6 +15,7 @@ resource "google_ces_app_version" "current" {
     google_ces_app_root_agent_association.this,
     google_ces_toolset.context,
     google_ces_toolset.catalog,
+    google_ces_toolset.self_tracking,
   ]
 
   lifecycle {
