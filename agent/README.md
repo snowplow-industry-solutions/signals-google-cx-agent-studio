@@ -36,13 +36,6 @@ criteria.
   unsatisfiable constraints -- as Snowplow events; they never change the
   reply.
 
-All three schemas point at the deployed storefront
-(`https://your-storefront.example.com`) and declare an
-`apiKey` security scheme on the `x-agent-api-key` header. The key's actual
-value (`AGENT_SHARED_SECRET` from the Vercel deploy, see
-`docs/setup-snowplow-trial.md` §7) is never committed -- it's entered
-directly into each tool's API-key auth config in the console.
-
 - `tools/product-carousel.widget.json` / `tools/product-details.widget.json`
   -- **captured copies of Google's fixed Parameters schemas** for the two
   rich response widget tools (`productCarousel`, Widget Type
@@ -61,3 +54,73 @@ directly into each tool's API-key auth config in the console.
   `chat-messenger` build) actually renders
   these -- unresolved without a live check, hence this issue's
   `human-test-required` checkpoint.
+
+All three schemas point at the deployed storefront
+(`https://your-storefront.example.com`) and declare an
+`apiKey` security scheme on the `x-agent-api-key` header. The key's actual
+value (`AGENT_SHARED_SECRET` from the Vercel deploy, see
+`docs/setup-snowplow-trial.md` §7) is never committed -- it's entered
+directly into each tool's API-key auth config in the console.
+
+`get-user-context.openapi.yaml` and `search-catalog.openapi.yaml` also
+declare the same four platform-injected identity headers as
+`self-tracking.openapi.yaml` above (chat session id, shopper session id,
+user id, turn id). The context tool keeps its pre-existing `session_id`
+query parameter alongside them, as a fallback for an agent still running the
+old schema.
+
+## Spike: identity headers and per-turn id propagation (issue 22)
+
+The schema changes above, and `CesMessengerWidget.tsx` now passing
+`snowplow_user_id` alongside the existing `snowplow_session_id`, plus a
+`setSnowplowTurnId(element, turnId)` export the conversation hook (issue 25)
+will call before each send, are repo prep only. None of it proves the
+platform actually delivers a per-turn id to a tool call in time -- that
+depends on widget timing nobody has verified. This is a human checkpoint: it
+needs a deployed agent and cannot run from the pipeline.
+
+Run it against **the duplicate agent app and second storefront deployment
+from issue #28 only.** Never the production agent or the production
+storefront -- a colleague is using that pair for a separate demo during the
+week of 21 September 2026.
+
+### Checklist
+
+1. Deploy this branch to the second storefront deployment and re-import both
+   `get-user-context.openapi.yaml` and `search-catalog.openapi.yaml` into the
+   duplicate agent's existing `getUserContext` / `searchCatalog` tools,
+   replacing their current schemas (see `docs/setup-cx-agent-studio.md` §3).
+2. Declare two new agent variables on the duplicate agent, same pattern as
+   the existing `snowplow_session_id` (`docs/setup-cx-agent-studio.md` §4):
+   `snowplow_user_id` and `snowplow_turn_id`, both type Text, no default
+   value.
+3. Load the second storefront deployment, open the browser devtools console,
+   and manually run
+   `document.querySelector("ces-messenger").setQueryParameters({ snowplow_turn_id: "spike-test-turn-1" })`
+   immediately before sending a chat message that triggers a tool call (e.g.
+   ask something that requires a catalog search). This simulates what the
+   conversation hook (issue 25) will do automatically at send time.
+4. In Snowplow Micro (`http://localhost:9090/micro/good`, see the storefront
+   README's Micro section) or Console, find the `tool_execution` event(s)
+   emitted for that turn (`getUserContext` and/or `searchCatalog`,
+   `storefront/src/utils/agentTracking.ts`) and check:
+   - **(a) all four headers arrived:** the event's atomic `domain_sessionid`
+     and `domain_userid` columns are both populated (not just
+     `domain_sessionid`, which already worked via the context tool's old
+     `session_id` query parameter); the `agent_context` entity's `user_id`
+     field is present; the `conversation` entity's `chat_session_id` field is
+     non-null (this one only ever worked through the injected header --
+     these two tools had no built-in-session-id binding before this issue).
+   - **(b) the turn id specifically propagated:** the `conversation`
+     entity's `turn_id` field, and the `tool_execution` event's own
+     `invocation_id`, both equal `spike-test-turn-1` from step 3.
+5. Record the outcome below and in issue #22: which of (a) and (b) held.
+   If (b) fails, no code change is needed here -- issue #18 already documents
+   the fallback (the conversation hook still tracks the turn id on browser
+   `message_sent`/`message_received` events, and turns are reconstructed
+   downstream by ordering within the chat session).
+
+### Result
+
+_Not yet run. Fill in after the human checkpoint: date, outcome of (a) and
+(b), and a link to the Micro/Console payloads checked._
