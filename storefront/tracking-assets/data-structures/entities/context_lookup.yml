@@ -1,0 +1,56 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: >
+    Outcome of a getUserContext tool call: whether Signals returned real
+    context, how much of it, how long the round trip took, and why the
+    payload was degraded when it was.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: context_lookup
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    profile_returned:
+      type: boolean
+      description: Whether the Signals Profile Store returned any taste-profile attributes.
+    activity_returned:
+      type: boolean
+      description: Whether the Agentic Context event log returned a non-empty recent-activity narrative.
+    profile_attribute_count:
+      type: integer
+      minimum: 0
+      maximum: 1000
+      description: Number of profile attributes returned.
+    activity_event_count:
+      type: integer
+      minimum: 0
+      maximum: 1000
+      description: Number of buffered activity events returned.
+    signals_round_trip_ms:
+      type: number
+      minimum: 0
+      maximum: 60000
+      description: Time taken by the Signals profile and agentic-context calls, in milliseconds.
+    degraded_reason:
+      type: string
+      enum:
+        - none
+        - missing_session
+        - no_credentials
+        - upstream_error
+      description: Why the payload was degraded, or "none" when full context was returned.
+  required:
+    - profile_returned
+    - activity_returned
+    - profile_attribute_count
+    - activity_event_count
+    - signals_round_trip_ms
+    - degraded_reason
+  additionalProperties: false
