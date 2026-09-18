@@ -24,8 +24,19 @@ criteria.
   tool in CX Agent Studio.
 - `tools/search-catalog.openapi.yaml` -- OpenAPI schema for the
   `searchCatalog` tool (`GET /api/agent/catalog`), imported the same way.
+- `tools/self-tracking.openapi.yaml` -- OpenAPI schema for the three
+  self-tracking tools (`trackUserIntent`, `trackAgentDecision`,
+  `trackConstraintViolation`; `POST /api/agent/track-intent`,
+  `/track-decision`, `/track-constraint`), imported as a single toolset.
+  Each operation declares the four platform-injected identity headers: the
+  chat session id from the built-in session context, and the shopper
+  session id, user id, and turn id from the `snowplow_session_id`,
+  `snowplow_user_id`, and `snowplow_turn_id` agent variables. These tools
+  log what the agent thinks -- detected intent, decisions, and
+  unsatisfiable constraints -- as Snowplow events; they never change the
+  reply.
 
-Both schemas point at the deployed storefront
+All three schemas point at the deployed storefront
 (`https://your-storefront.example.com`) and declare an
 `apiKey` security scheme on the `x-agent-api-key` header. The key's actual
 value (`AGENT_SHARED_SECRET` from the Vercel deploy, see
