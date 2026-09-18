@@ -10,8 +10,7 @@
  * micro:up` — see storefront/README.md's Micro workflow. It needs both a
  * live dev server and a live Micro, so it is not run in CI.
  *
- * Add an entry to AGENT_ENDPOINTS to cover another instrumented endpoint —
- * the self-tracking tool endpoints (issue #21) will add three.
+ * Add an entry to AGENT_ENDPOINTS to cover another instrumented endpoint.
  *
  * Usage: AGENT_SHARED_SECRET=<secret> npm run verify:micro -- [devServerUrl] [microUrl]
  */
@@ -30,6 +29,9 @@ const HEADER_TURN_ID = "x-snowplow-turn-id";
 // rather than imported so this script stays a standalone Node process, like
 // the existing verify-deploy.ts.
 export const TOOL_EXECUTION_SCHEMA = "iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0";
+export const USER_INTENT_DETECTED_SCHEMA = "iglu:com.snowplow.agent.tracking/user_intent_detected/jsonschema/1-0-0";
+export const AGENT_DECISION_LOGGED_SCHEMA = "iglu:com.snowplow.agent.tracking/agent_decision_logged/jsonschema/1-0-0";
+export const CONSTRAINT_VIOLATION_SCHEMA = "iglu:com.snowplow.agent.tracking/constraint_violation/jsonschema/1-0-0";
 
 export interface AgentIdentity {
   chatSessionId: string;
@@ -78,6 +80,49 @@ export const AGENT_ENDPOINTS: AgentEndpointSpec[] = [
       init: { headers: identityHeaders(apiKey, identity) },
     }),
     expectedGoodEvents: [{ schema: TOOL_EXECUTION_SCHEMA, count: 1 }],
+  },
+  {
+    name: "trackUserIntent self-tracking",
+    request: (devServerUrl, apiKey, identity) => ({
+      url: new URL("/api/agent/track-intent", devServerUrl).toString(),
+      init: {
+        method: "POST",
+        headers: { ...identityHeaders(apiKey, identity), "Content-Type": "application/json" },
+        body: JSON.stringify({ intent_category: "browse_inspiration", confidence: 0.8 }),
+      },
+    }),
+    expectedGoodEvents: [{ schema: USER_INTENT_DETECTED_SCHEMA, count: 1 }],
+  },
+  {
+    name: "trackAgentDecision self-tracking",
+    request: (devServerUrl, apiKey, identity) => ({
+      url: new URL("/api/agent/track-decision", devServerUrl).toString(),
+      init: {
+        method: "POST",
+        headers: { ...identityHeaders(apiKey, identity), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision_type: "tool_selection",
+          reasoning: "Chose to search the catalog for this turn.",
+        }),
+      },
+    }),
+    expectedGoodEvents: [{ schema: AGENT_DECISION_LOGGED_SCHEMA, count: 1 }],
+  },
+  {
+    name: "trackConstraintViolation self-tracking",
+    request: (devServerUrl, apiKey, identity) => ({
+      url: new URL("/api/agent/track-constraint", devServerUrl).toString(),
+      init: {
+        method: "POST",
+        headers: { ...identityHeaders(apiKey, identity), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          constraint_type: "budget",
+          requirement: "Under $200.",
+          reason_not_met: "Nothing in stock under $200.",
+        }),
+      },
+    }),
+    expectedGoodEvents: [{ schema: CONSTRAINT_VIOLATION_SCHEMA, count: 1 }],
   },
 ];
 

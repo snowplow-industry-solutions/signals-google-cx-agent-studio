@@ -69,9 +69,34 @@ describe("AGENT_ENDPOINTS request construction", () => {
     expect(url).toBe("http://localhost:3001/api/agent/context?session_id=session%20with%20spaces");
   });
 
-  it("declares exactly one expected tool_execution good event per endpoint", () => {
+  it("declares exactly one expected good event per endpoint", () => {
     for (const spec of AGENT_ENDPOINTS) {
-      expect(spec.expectedGoodEvents).toEqual([{ schema: TOOL_EXECUTION_SCHEMA, count: 1 }]);
+      expect(spec.expectedGoodEvents).toHaveLength(1);
+      expect(spec.expectedGoodEvents[0].count).toBe(1);
+    }
+  });
+
+  it("declares the tool_execution schema for the context and catalog endpoints", () => {
+    const [contextSpec, catalogSpec] = AGENT_ENDPOINTS;
+    expect(contextSpec.expectedGoodEvents).toEqual([{ schema: TOOL_EXECUTION_SCHEMA, count: 1 }]);
+    expect(catalogSpec.expectedGoodEvents).toEqual([{ schema: TOOL_EXECUTION_SCHEMA, count: 1 }]);
+  });
+
+  it("builds the three self-tracking endpoint requests as authorized POSTs with a JSON body", () => {
+    const selfTrackingSpecs = AGENT_ENDPOINTS.filter((spec) => spec.name.includes("self-tracking"));
+    expect(selfTrackingSpecs).toHaveLength(3);
+
+    for (const spec of selfTrackingSpecs) {
+      const { init } = spec.request("http://localhost:3001", "my-secret", IDENTITY);
+      expect(init.method).toBe("POST");
+      expect(init.headers).toMatchObject({
+        "x-agent-api-key": "my-secret",
+        "x-ces-session-id": "chat-1",
+        "x-snowplow-session-id": "session-1",
+        "x-snowplow-user-id": "user-1",
+        "x-snowplow-turn-id": "turn-1",
+      });
+      expect(() => JSON.parse(init.body as string)).not.toThrow();
     }
   });
 });
@@ -79,7 +104,8 @@ describe("AGENT_ENDPOINTS request construction", () => {
 describe("aggregateExpectedCounts", () => {
   it("sums counts for the same schema across multiple endpoint specs", () => {
     const totals = aggregateExpectedCounts(AGENT_ENDPOINTS);
-    expect(totals.get(TOOL_EXECUTION_SCHEMA)).toBe(AGENT_ENDPOINTS.length);
+    expect(totals.get(TOOL_EXECUTION_SCHEMA)).toBe(2);
+    expect([...totals.values()].reduce((sum, count) => sum + count, 0)).toBe(AGENT_ENDPOINTS.length);
   });
 
   it("keeps separate schemas separate", () => {
