@@ -3,12 +3,18 @@
 Terraform config that codifies the console-built CES
 app/agent/toolsets/deployment (from
 `[../docs/setup-cx-agent-studio.md](../docs/setup-cx-agent-studio.md)`) using
-the `google_ces_*` resource family (`hashicorp/google >= 7.31.0`). Terraform
-does **not** create these greenfield — it adopts what the console already built,
-via `terraform import`, so the demo survives console drift and can be re-created
-after a trial expires. Import, `plan`, `apps.exportApp`, and live labelling all
-run against the real project, by a human. The full command sequence is in
-["Import, plan, and re-apply"](#import-plan-and-re-apply) below.
+the `google_ces_*` resource family (`hashicorp/google >= 7.31.0`). This config
+serves two paths against the same `.tf` files: it **adopts** the original
+console-built app via `terraform import`, so that demo survives console drift
+and can be re-created after a trial expires, and it can also **greenfield
+create** a whole new app from scratch -- used to stand up the duplicate agent
+app for issue #24/#28 in its own workspace, without an import step, while the
+original stays reserved for a colleague's demo. Import, `plan`,
+`apps.exportApp`, and live labelling all run against the real project, by a
+human. The full import command sequence is in ["Import, plan, and
+re-apply"](#import-plan-and-re-apply) below; the greenfield path is in
+["Creating a duplicate app in a new
+workspace"](#creating-a-duplicate-app-in-a-new-workspace).
 
 ## Layout
 
@@ -17,15 +23,22 @@ run against the real project, by a human. The full command sequence is in
 - `variables.tf` -- every live resource ID (project, app, agent, toolsets,
 app version, deployment) plus the console-chosen app display name as
 required inputs with no default; everything else (widget copy, labels)
-has a demo-appropriate default.
+has a demo-appropriate default. The three agent-variable declarations
+(`snowplow_session_id`, `snowplow_user_id`, `snowplow_turn_id`) are
+hardcoded on `google_ces_app.this` in `app.tf` rather than exposed as
+variables here -- their names are part of the contract with
+`agent/tools/*.openapi.yaml`'s `x-ces-session-context` bindings, not
+free choices.
 - `locals.tf` -- the baseline tagging-policy labels and a shared
 `deletion_policy = "PREVENT"` applied to every `google_ces_*` resource.
-- `secrets.tf` -- the Secret Manager secret backing both toolsets' API-key
-auth, labelled per policy, plus the CES service-agent IAM grant to read it.
+- `secrets.tf` -- the Secret Manager secret backing all three toolsets'
+API-key auth, labelled per policy, plus the CES service-agent IAM grant to
+read it.
 - `app.tf`, `agent.tf`, `toolsets.tf`, `deployment.tf` -- the app, root
-agent + app/root-agent association, the two OpenAPI toolsets (sourced from
-`agent/tools/*.openapi.yaml`), the app version, and the web-widget
-deployment (public access, origin check, recaptcha off).
+agent + app/root-agent association, the three OpenAPI toolsets (sourced
+from `agent/tools/*.openapi.yaml`: `getUserContext`, `searchCatalog`, and
+the self-tracking toolset added in issue 24), the app version, and the
+web-widget deployment (public access, origin check, recaptcha off).
 - `tools.tf` -- the two typed widget tools
 (`productCarousel`/`productDetails`), adopted after the console build added
 them.
@@ -37,15 +50,17 @@ fill in with real IDs; never commit real values.
 ## Ownership boundary (what Terraform owns vs. stays manual)
 
 **Terraform owns:** app (incl. its app-level model settings -- that's
-where the console stores them; the agent inherits), root agent
+where the console stores them; the agent inherits, and the three
+`snowplow_session_id`/`snowplow_user_id`/`snowplow_turn_id` agent-variable
+declarations), root agent
 (instructions from `agent/instructions.console.widgets.txt`, the
 console-format copy the live agent actually runs once the widget tools are
 added -- `agent/instructions.md` is the human-readable source and
 `agent/instructions.console.txt` the pre-widget base),
-the app/root-agent association, both OpenAPI toolsets (schemas from
-`agent/tools/`), both widget tools (`tools.tf`), the app version, the
-web-widget deployment's public-access settings, and the shared-secret
-Secret Manager secret.
+the app/root-agent association, all three OpenAPI toolsets (schemas from
+`agent/tools/`, including the self-tracking toolset), both widget tools
+(`tools.tf`), the app version, the web-widget deployment's public-access
+settings, and the shared-secret Secret Manager secret.
 
 **Console-owned, ignored by Terraform** (`lifecycle.ignore_changes` in
 `app.tf`): the app's default guardrails, audio/language/logging/timezone
@@ -147,11 +162,12 @@ can mint a duplicate version. Re-pinning after a publish needs a `terraform stat
 UUIDs from the agent's `tools` list (read-only CES REST), set
 `product_carousel_tool_id` / `product_details_tool_id` in tfvars, and import
 both (see [step 2](#2-import-the-console-built-resources)).
-- **`snowplow_session_id` must keep no default value.** It's a
-`google_ces_app` `variable_declarations` entry (see `app.tf`); a default
-there lets a missing or failed session id silently fall back to it instead
-of erroring, so the agent quietly describes a different shopper's journey
-using stale/wrong session context.
+- **`snowplow_session_id`, `snowplow_user_id`, and `snowplow_turn_id` must
+all keep no default value.** They're `google_ces_app` `variable_declarations`
+entries (see `app.tf`); a default on any of them lets a missing or failed
+value silently fall back to it instead of erroring, so the agent quietly
+describes a different shopper's journey (or mislabels events with the wrong
+identity/turn) using stale/wrong context.
 
 **State has no remote backend.** `terraform/terraform.tfstate` is local and
 gitignored, and it is the only record of the imports below; a fresh clone would
@@ -308,7 +324,10 @@ gcloud projects update "${PROJECT_ID}" --update-labels=<key>=<value>,...
 ### 6. Re-apply after trial expiry / re-publish a change
 
 1. Re-run the two setup guides against the fresh org/project to get new
-  console-built resources (Terraform doesn't create these greenfield).
+  console-built resources (this import path doesn't create them; for a
+  from-scratch app with no console step at all, see ["Creating a duplicate
+  app in a new workspace"](#creating-a-duplicate-app-in-a-new-workspace)
+  instead).
 2. Update `terraform.tfvars` with the new IDs and re-run steps 2–3 against the
   new project.
 3. **For a content-only change** (e.g. edited `agent/instructions.md`) on an
@@ -321,4 +340,101 @@ gcloud projects update "${PROJECT_ID}" --update-labels=<key>=<value>,...
 > **Re-pinning `app_version_id` after a publish needs `terraform state rm` +
 > `terraform import` of the live version** — editing tfvars alone won't move it,
 > because `app_version_id` sits in the version resource's `ignore_changes`.
+
+## Creating a duplicate app in a new workspace
+
+Issues #24/#28: the original app and the production storefront deployment are
+reserved for a colleague's demo (week of 21 September 2026), so this ticket's
+work runs against a **duplicate agent app** and a second storefront
+deployment instead. Unlike everything above, there is nothing to import here
+— this config creates the duplicate app, its three toolsets, both widget
+tools, the agent, the first app version, the web-widget deployment, and the
+backing secret from scratch, in one `apply`.
+
+**Never target the original app from this workspace.** Concretely: never
+reuse the original's `app_id`, `agent_id`, any toolset or tool ID, or
+`agent_shared_secret_id`; never point `storefront_url`/`allowed_origins` at
+the production storefront; never run these commands against
+`terraform.tfstate` (the original's state file).
+
+### Isolate state and variables
+
+```bash
+cd terraform
+terraform workspace new duplicate    # or: terraform workspace select duplicate
+```
+
+A Terraform workspace gives the duplicate its own state
+(`terraform.tfstate.d/duplicate/terraform.tfstate`, already covered by the
+`*.tfstate.*` rule in the repo's `.gitignore`) without touching the
+original's `terraform.tfstate`. Workspaces do **not** isolate variable
+files, though — `terraform.tfvars` and any `*.auto.tfvars` are loaded
+regardless of which workspace is selected. To stop the duplicate's IDs from
+colliding with (or silently overriding) the original's `terraform.tfvars` in
+the same directory, give the duplicate its own file that Terraform never
+auto-loads, and pass it explicitly on every command:
+
+```bash
+cp terraform.tfvars.example terraform.duplicate.tfvars   # gitignored: matches *.tfvars
+```
+
+Fill in every placeholder in `terraform.duplicate.tfvars`, with **new** IDs of
+your own choosing for `app_id`, `agent_id`, `context_toolset_id`,
+`catalog_toolset_id`, and `app_version_id` (or accept
+`self_tracking_toolset_id`'s greenfield default), display names of your
+choosing for `app_display_name`, `app_version_display_name`, and
+`deployment_display_name`, and `storefront_url`/`allowed_origins` pointed at
+the **second** storefront deployment from #28 — never the production one.
+Leave `agent_shared_secret_id` unset so a new secret is created rather than
+adopting the original's.
+
+```bash
+terraform init
+TF_VAR_agent_shared_secret_value=<a NEW value, distinct from the original AGENT_SHARED_SECRET> \
+  terraform plan -var-file=terraform.duplicate.tfvars
+TF_VAR_agent_shared_secret_value=<same value> \
+  terraform apply -var-file=terraform.duplicate.tfvars
+```
+
+### The secret-accessor grant happens automatically here
+
+On the import path, the CES service agent's `secretmanager.secretAccessor`
+grant already exists (it was created when the console tools were configured)
+and is only adopted — see the [troubleshooting entry in
+`docs/setup-cx-agent-studio.md`](../docs/setup-cx-agent-studio.md#troubleshooting)
+for the manual `gcloud secrets add-iam-policy-binding` that path needs if the
+grant is missing. On a greenfield create there's no console step at all, so
+nothing has granted it yet: `google_secret_manager_secret_iam_member.ces_service_agent_accessor`
+in `secrets.tf` creates the grant as part of the same `apply` that creates
+the secret, no manual `gcloud` command needed.
+
+### Plan noise to expect
+
+A clean first plan against an empty state reads `Plan: N to add, 0 to
+change, 0 to destroy` — none of the ["Known plan diffs after
+import"](#known-plan-diffs-after-import-accepted) apply, since there's no
+existing live resource for this state to reconcile against. The one live
+risk worth checking before this `apply` is provider issue
+[#26231](https://github.com/hashicorp/terraform-provider-google/issues/26231)
+(see ["Known risk"](#known-risk-to-check-before-relying-on-apply) above): it
+was reported against exactly this kind of *create* call, so confirm its
+status first if `model_name` is a `gemini-3-*` model paired with a non-null
+`model_temperature` in the `us` location.
+
+### The pinned agent version still needs a manual bump
+
+The web-widget deployment serves whatever `app_version_id` names — an
+immutable snapshot taken when that version was created, not the agent's live
+draft. On this fresh create, the very first `google_ces_app_version.current`
+you apply is what the widget (and its end-to-end checks) will see. Editing
+`agent/instructions.md` (mirrored into
+`agent/instructions.console.widgets.txt`) later and re-applying does
+**nothing** to what the widget serves until you add a **new**
+`google_ces_app_version` resource with a new `app_version_id`, repoint
+`google_ces_deployment.web_widget.app_version` at it, and `apply` again —
+the same procedure as [step 6](#6-re-apply-after-trial-expiry--re-publish-a-change)
+above, just starting from a version this workspace created rather than an
+imported one. The simulator tests the agent's live draft regardless of the
+pinned version; only the widget is affected, which is why this is easy to
+miss in testing and only shows up when a demo watches the widget specifically.
 
