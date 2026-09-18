@@ -1,0 +1,28 @@
+{
+  "schema": "iglu:com.snowplowanalytics.iglu/resolver-config/jsonschema/1-0-1",
+  "data": {
+    "cacheSize": 500,
+    "repositories": [
+      {
+        "name": "Fashion demo custom schemas (embedded)",
+        "priority": 0,
+        "vendorPrefixes": ["com.snowplow_demo.fashion"],
+        "connection": {
+          "embedded": {
+            "path": "/iglu-client-embedded"
+          }
+        }
+      },
+      {
+        "name": "Iglu Central",
+        "priority": 1,
+        "vendorPrefixes": [],
+        "connection": {
+          "http": {
+            "uri": "http://iglucentral.com"
+          }
+        }
+      }
+    ]
+  }
+}
