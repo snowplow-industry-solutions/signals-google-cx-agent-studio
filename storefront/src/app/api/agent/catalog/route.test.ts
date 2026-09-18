@@ -11,8 +11,33 @@ function makeRequest(query: string, headers?: Record<string, string>) {
   });
 }
 
-function authedRequest(query: string) {
-  return makeRequest(query, { "x-agent-api-key": SHARED_SECRET });
+function authedRequest(query: string, extraHeaders?: Record<string, string>) {
+  return makeRequest(query, { "x-agent-api-key": SHARED_SECRET, ...extraHeaders });
+}
+
+const TRACKING_ENV = {
+  NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL: "https://collector.example",
+  NEXT_PUBLIC_SNOWPLOW_APP_ID: "test-app",
+};
+
+function stubTrackingEnv() {
+  for (const [key, value] of Object.entries(TRACKING_ENV)) {
+    vi.stubEnv(key, value);
+  }
+}
+
+interface DecodedCollectorPayload {
+  payload: Record<string, string>;
+  event: { schema: string; data: Record<string, unknown> };
+  entities: Array<{ schema: string; data: Record<string, unknown> }>;
+}
+
+async function decodeCollectorPayload(request: Request): Promise<DecodedCollectorPayload> {
+  const body = (await request.clone().json()) as { data: Record<string, string>[] };
+  const [payload] = body.data;
+  const event = JSON.parse(payload.ue_pr).data as DecodedCollectorPayload["event"];
+  const entities = (JSON.parse(payload.co) as { data: DecodedCollectorPayload["entities"] }).data;
+  return { payload, event, entities };
 }
 
 describe("GET /api/agent/catalog", () => {
@@ -181,6 +206,134 @@ describe("GET /api/agent/catalog", () => {
         url: expect.stringMatching(/^\/products\//),
         image: expect.stringMatching(/^https?:\/\//),
       });
+    });
+  });
+
+  describe("tracking", () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("sends no collector event for an unauthorized request", async () => {
+      stubTrackingEnv();
+
+      await GET(makeRequest(""));
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("behaves exactly as today, with no fetch attempted, when no collector URL is configured", async () => {
+      const response = await GET(authedRequest("?query=Cashmere%20Wrap%20Coat"));
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("emits exactly one tool_execution event with the expected schema, entities, identity, and platform", async () => {
+      stubTrackingEnv();
+
+      const response = await GET(
+        authedRequest("?category=Outerwear&query=Cashmere%20Wrap%20Coat&limit=5", {
+          "x-ces-session-id": "chat-session-1",
+          "x-snowplow-session-id": "domain-session-1",
+          "x-snowplow-user-id": "domain-user-1",
+          "x-snowplow-turn-id": "turn-1",
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const { payload, event, entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+
+      expect(payload.p).toBe("srv");
+      expect(payload.aid).toBe("test-app-agent");
+      expect(payload.sid).toBe("domain-session-1");
+      expect(payload.duid).toBe("domain-user-1");
+
+      expect(event.schema).toBe("iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0");
+      expect(event.data).toMatchObject({ success: true, invocation_id: "turn-1" });
+
+      const toolContext = entities.find((e) => e.schema === "iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0");
+      expect(toolContext?.data).toMatchObject({ tool_name: "searchCatalog", tool_category: "business" });
+
+      const agentContext = entities.find((e) => e.schema === "iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0");
+      expect(agentContext?.data).toMatchObject({
+        invocation_id: "turn-1",
+        session_id: "chat-session-1",
+        agent_type: "Atelier Concierge",
+        model_provider: "google",
+        model_name: "gemini-3.0-flash-001",
+        user_id: "domain-user-1",
+      });
+
+      const conversation = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0");
+      expect(conversation?.data).toEqual({
+        chat_session_id: "chat-session-1",
+        turn_id: "turn-1",
+        turn_index: null,
+        channel: "unknown",
+      });
+
+      const catalogSearch = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/catalog_search/jsonschema/1-0-0");
+      expect(catalogSearch?.data).toEqual({
+        category: "Outerwear",
+        designer: null,
+        occasion: null,
+        color: null,
+        max_price: null,
+        query: "Cashmere Wrap Coat",
+        limit: 5,
+        result_count: 1,
+        product_ids: ["p3"],
+      });
+    });
+
+    it("caps an overlong free-text query before recording it on the catalog_search entity", async () => {
+      stubTrackingEnv();
+      const overLength = "z".repeat(250);
+
+      await GET(authedRequest(`?query=${encodeURIComponent(overLength)}`));
+
+      const { entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      const catalogSearch = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/catalog_search/jsonschema/1-0-0");
+      expect((catalogSearch?.data.query as string).length).toBe(200);
+    });
+
+    it("does not return the response until the collector POST has resolved", async () => {
+      stubTrackingEnv();
+
+      let releaseFetch = () => {};
+      const fetchGate = new Promise<void>((resolve) => {
+        releaseFetch = resolve;
+      });
+      fetchMock.mockImplementation(async () => {
+        await fetchGate;
+        return new Response("", { status: 200 });
+      });
+
+      let responseSettled = false;
+      const responsePromise = GET(authedRequest("")).then((response) => {
+        responseSettled = true;
+        return response;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(responseSettled).toBe(false);
+
+      releaseFetch();
+      const response = await responsePromise;
+
+      expect(responseSettled).toBe(true);
+      expect(response.status).toBe(200);
     });
   });
 });

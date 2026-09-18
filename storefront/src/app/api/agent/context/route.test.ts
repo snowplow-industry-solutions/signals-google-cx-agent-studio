@@ -29,14 +29,39 @@ function makeRequest(query: string, headers?: Record<string, string>) {
   });
 }
 
-function authedRequest(query: string) {
-  return makeRequest(query, { "x-agent-api-key": SHARED_SECRET });
+function authedRequest(query: string, extraHeaders?: Record<string, string>) {
+  return makeRequest(query, { "x-agent-api-key": SHARED_SECRET, ...extraHeaders });
 }
 
 function stubSignalsEnv() {
   for (const [key, value] of Object.entries(SIGNALS_ENV)) {
     vi.stubEnv(key, value);
   }
+}
+
+const TRACKING_ENV = {
+  NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL: "https://collector.example",
+  NEXT_PUBLIC_SNOWPLOW_APP_ID: "test-app",
+};
+
+function stubTrackingEnv() {
+  for (const [key, value] of Object.entries(TRACKING_ENV)) {
+    vi.stubEnv(key, value);
+  }
+}
+
+interface DecodedCollectorPayload {
+  payload: Record<string, string>;
+  event: { schema: string; data: Record<string, unknown> };
+  entities: Array<{ schema: string; data: Record<string, unknown> }>;
+}
+
+async function decodeCollectorPayload(request: Request): Promise<DecodedCollectorPayload> {
+  const body = (await request.clone().json()) as { data: Record<string, string>[] };
+  const [payload] = body.data;
+  const event = JSON.parse(payload.ue_pr).data as DecodedCollectorPayload["event"];
+  const entities = (JSON.parse(payload.co) as { data: DecodedCollectorPayload["entities"] }).data;
+  return { payload, event, entities };
 }
 
 describe("GET /api/agent/context", () => {
@@ -283,6 +308,200 @@ describe("GET /api/agent/context", () => {
         recent_activity: "",
         agent_instructions: "",
       });
+    });
+  });
+
+  describe("tracking", () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("sends no collector event for an unauthorized request", async () => {
+      stubTrackingEnv();
+
+      await GET(makeRequest("?session_id=abc-123"));
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("behaves exactly as today, with no fetch attempted, when no collector URL is configured", async () => {
+      stubSignalsEnv();
+      getServiceAttributesMock.mockResolvedValue({ favorite_designer: "Maison Cendre" });
+      getAgenticContextMock.mockResolvedValue({ summary: "Narrative." });
+
+      const response = await GET(authedRequest("?session_id=abc-123"));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        profile: { favorite_designer: "Maison Cendre" },
+        recent_activity: "Narrative.",
+        agent_instructions: "",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("emits exactly one tool_execution event with the expected schema, entities, identity, and platform", async () => {
+      stubSignalsEnv();
+      stubTrackingEnv();
+      getServiceAttributesMock.mockResolvedValue({
+        favorite_designer: "Maison Cendre",
+        favorite_category: "Dresses",
+      });
+      getAgenticContextMock.mockResolvedValue({
+        summary: "The shopper viewed three dresses.",
+        prompt: "Speak as a luxury concierge.",
+        events: [{ event: "product_viewed" }],
+      });
+
+      const response = await GET(
+        authedRequest("?session_id=abc-123", {
+          "x-ces-session-id": "chat-session-1",
+          "x-snowplow-session-id": "domain-session-1",
+          "x-snowplow-user-id": "domain-user-1",
+          "x-snowplow-turn-id": "turn-1",
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const { payload, event, entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+
+      expect(payload.p).toBe("srv");
+      expect(payload.aid).toBe("test-app-agent");
+      expect(payload.sid).toBe("domain-session-1");
+      expect(payload.duid).toBe("domain-user-1");
+
+      expect(event.schema).toBe("iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0");
+      expect(event.data).toMatchObject({ success: true, invocation_id: "turn-1" });
+
+      const toolContext = entities.find((e) => e.schema === "iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0");
+      expect(toolContext?.data).toMatchObject({ tool_name: "getUserContext", tool_category: "business" });
+
+      const agentContext = entities.find((e) => e.schema === "iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0");
+      expect(agentContext?.data).toMatchObject({
+        invocation_id: "turn-1",
+        session_id: "chat-session-1",
+        agent_type: "Atelier Concierge",
+        model_provider: "google",
+        model_name: "gemini-3.0-flash-001",
+        user_id: "domain-user-1",
+      });
+
+      const conversation = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0");
+      expect(conversation?.data).toEqual({
+        chat_session_id: "chat-session-1",
+        turn_id: "turn-1",
+        turn_index: null,
+        channel: "unknown",
+      });
+
+      const contextLookup = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0");
+      expect(contextLookup?.data).toMatchObject({
+        profile_returned: true,
+        activity_returned: true,
+        profile_attribute_count: 2,
+        activity_event_count: 1,
+        degraded_reason: "none",
+      });
+    });
+
+    it("records missing_session as the degraded reason when session_id is absent", async () => {
+      stubTrackingEnv();
+
+      await GET(authedRequest(""));
+
+      const { entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      const contextLookup = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0");
+      expect(contextLookup?.data).toMatchObject({
+        degraded_reason: "missing_session",
+        profile_returned: false,
+        activity_returned: false,
+        signals_round_trip_ms: 0,
+      });
+    });
+
+    it("records no_credentials as the degraded reason when Signals credentials are absent", async () => {
+      stubTrackingEnv();
+
+      await GET(authedRequest("?session_id=abc-123"));
+
+      const { entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      const contextLookup = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0");
+      expect(contextLookup?.data).toMatchObject({ degraded_reason: "no_credentials" });
+    });
+
+    it("records upstream_error as the degraded reason when the Signals calls fail", async () => {
+      stubSignalsEnv();
+      stubTrackingEnv();
+      getServiceAttributesMock.mockRejectedValue(new Error("upstream timeout"));
+      getAgenticContextMock.mockRejectedValue(new Error("event log unavailable"));
+
+      const response = await GET(authedRequest("?session_id=abc-123"));
+
+      expect(response.status).toBe(200);
+      const { event, entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      expect(event.data).toMatchObject({ success: true });
+      const contextLookup = entities.find((e) => e.schema === "iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0");
+      expect(contextLookup?.data).toMatchObject({ degraded_reason: "upstream_error" });
+    });
+
+    it("falls back to the domain session id for agent_context.session_id when no chat session id header is present", async () => {
+      stubTrackingEnv();
+
+      await GET(authedRequest("?session_id=abc-123", { "x-snowplow-session-id": "domain-session-2" }));
+
+      const { entities } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      const agentContext = entities.find((e) => e.schema === "iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0");
+      expect(agentContext?.data).toMatchObject({ session_id: "domain-session-2" });
+    });
+
+    it("falls back to the session_id query parameter for the domain session id when no header is sent", async () => {
+      stubTrackingEnv();
+
+      await GET(authedRequest("?session_id=query-session-1"));
+
+      const { payload } = await decodeCollectorPayload(fetchMock.mock.calls[0][0] as Request);
+      expect(payload.sid).toBe("query-session-1");
+    });
+
+    it("does not return the response until the collector POST has resolved", async () => {
+      stubSignalsEnv();
+      stubTrackingEnv();
+      getServiceAttributesMock.mockResolvedValue({});
+      getAgenticContextMock.mockResolvedValue({});
+
+      let releaseFetch = () => {};
+      const fetchGate = new Promise<void>((resolve) => {
+        releaseFetch = resolve;
+      });
+      fetchMock.mockImplementation(async () => {
+        await fetchGate;
+        return new Response("", { status: 200 });
+      });
+
+      let responseSettled = false;
+      const responsePromise = GET(authedRequest("?session_id=abc-123")).then((response) => {
+        responseSettled = true;
+        return response;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(responseSettled).toBe(false);
+
+      releaseFetch();
+      const response = await responsePromise;
+
+      expect(responseSettled).toBe(true);
+      expect(response.status).toBe(200);
     });
   });
 });
