@@ -36,9 +36,25 @@ const TRACKER_NAMESPACE = "fashion_demo_agent";
 
 export const MAX_TRACKED_QUERY_LENGTH = 200;
 
+// Mirrors tracking-assets/data-structures/entities/catalog_search.yml's
+// maxLength/maximum bounds, which the OpenAPI tool schema leaves unbounded.
+const MAX_TRACKED_CATEGORY_LENGTH = 64;
+const MAX_TRACKED_DESIGNER_LENGTH = 128;
+const MAX_TRACKED_OCCASION_LENGTH = 64;
+const MAX_TRACKED_COLOR_LENGTH = 64;
+const MAX_TRACKED_PRICE = 100000;
+
 /** Caps a free-text field before it's recorded on a tracking entity. Does not affect business logic. */
 export function capFreeTextQuery(query: string, maxLength: number = MAX_TRACKED_QUERY_LENGTH): string {
   return query.slice(0, maxLength);
+}
+
+/** Clamps a price into the catalog_search entity's schema range, or null when out of range. */
+export function clampTrackedMaxPrice(maxPrice: number | null): number | null {
+  if (maxPrice === null || maxPrice < 0 || maxPrice > MAX_TRACKED_PRICE) {
+    return null;
+  }
+  return maxPrice;
 }
 
 export interface AgentIdentity {
@@ -92,9 +108,9 @@ function getTrackingConfig(): TrackingConfig | null {
   return { collectorUrl, appId };
 }
 
-function buildAgentContext(identity: AgentIdentity) {
+function buildAgentContext(identity: AgentIdentity, invocationId: string) {
   const data: Record<string, unknown> = {
-    invocation_id: identity.turnId ?? randomUUID(),
+    invocation_id: invocationId,
     session_id: identity.chatSessionId ?? identity.domainSessionId ?? randomUUID(),
     agent_type: AGENT_TYPE,
     model_provider: MODEL_PROVIDER,
@@ -168,19 +184,26 @@ async function emitToolExecution({
     tracker.setDomainUserId(identity.domainUserId);
   }
 
+  const invocationId = identity.turnId ?? randomUUID();
+
   tracker.track(
     buildSelfDescribingEvent({
       event: {
         schema: TOOL_EXECUTION_SCHEMA,
         data: {
-          invocation_id: identity.turnId ?? randomUUID(),
+          invocation_id: invocationId,
           execution_duration_ms: Math.round(durationMs),
           success,
           executed_at: new Date().toISOString(),
         },
       },
     }),
-    [buildToolContext(toolName, "business", toolDescription), buildAgentContext(identity), buildConversation(identity), domainEntity]
+    [
+      buildToolContext(toolName, "business", toolDescription),
+      buildAgentContext(identity, invocationId),
+      buildConversation(identity),
+      domainEntity,
+    ]
   );
 
   await tracker.flush();
@@ -246,11 +269,19 @@ export async function trackCatalogSearchToolExecution(args: {
     domainEntity: {
       schema: CATALOG_SEARCH_SCHEMA,
       data: {
-        category: args.catalogSearch.category,
-        designer: args.catalogSearch.designer,
-        occasion: args.catalogSearch.occasion,
-        color: args.catalogSearch.color,
-        max_price: args.catalogSearch.maxPrice,
+        category: args.catalogSearch.category
+          ? capFreeTextQuery(args.catalogSearch.category, MAX_TRACKED_CATEGORY_LENGTH)
+          : null,
+        designer: args.catalogSearch.designer
+          ? capFreeTextQuery(args.catalogSearch.designer, MAX_TRACKED_DESIGNER_LENGTH)
+          : null,
+        occasion: args.catalogSearch.occasion
+          ? capFreeTextQuery(args.catalogSearch.occasion, MAX_TRACKED_OCCASION_LENGTH)
+          : null,
+        color: args.catalogSearch.color
+          ? capFreeTextQuery(args.catalogSearch.color, MAX_TRACKED_COLOR_LENGTH)
+          : null,
+        max_price: clampTrackedMaxPrice(args.catalogSearch.maxPrice),
         query: args.catalogSearch.query ? capFreeTextQuery(args.catalogSearch.query) : null,
         limit: args.catalogSearch.limit,
         result_count: args.catalogSearch.resultCount,
