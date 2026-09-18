@@ -24,6 +24,20 @@ const TOOL_CONTEXT_SCHEMA = "iglu:com.snowplow.agent.tracking/tool_context/jsons
 const CONVERSATION_SCHEMA = "iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0";
 const CONTEXT_LOOKUP_SCHEMA = "iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0";
 const CATALOG_SEARCH_SCHEMA = "iglu:com.snowplow_demo.fashion/catalog_search/jsonschema/1-0-0";
+const USER_INTENT_DETECTED_SCHEMA = "iglu:com.snowplow.agent.tracking/user_intent_detected/jsonschema/1-0-0";
+const AGENT_DECISION_LOGGED_SCHEMA = "iglu:com.snowplow.agent.tracking/agent_decision_logged/jsonschema/1-0-0";
+const CONSTRAINT_VIOLATION_SCHEMA = "iglu:com.snowplow.agent.tracking/constraint_violation/jsonschema/1-0-0";
+
+const HEADER_DRY_RUN = "x-agent-tracking-dry-run";
+
+/**
+ * Self-tracking endpoints (issue #21) honour this header so deploy
+ * verification can probe production without creating events: the request is
+ * still validated and answered normally, it just skips the emit step.
+ */
+export function isDryRunTrackingRequest(request: NextRequest): boolean {
+  return request.headers.get(HEADER_DRY_RUN) === "1";
+}
 
 // Fixed rather than configurable: this identifies the concierge persona
 // itself, not a deployment detail.
@@ -124,7 +138,7 @@ function buildAgentContext(identity: AgentIdentity, invocationId: string) {
   return { schema: AGENT_CONTEXT_SCHEMA, data };
 }
 
-function buildToolContext(toolName: string, toolCategory: "business", toolDescription: string) {
+function buildToolContext(toolName: string, toolCategory: "business" | "self_tracking", toolDescription: string) {
   return {
     schema: TOOL_CONTEXT_SCHEMA,
     data: {
@@ -288,5 +302,142 @@ export async function trackCatalogSearchToolExecution(args: {
         product_ids: args.catalogSearch.productIds,
       },
     },
+  });
+}
+
+/**
+ * Self-tracking events (issue #21): unlike `emitToolExecution`, these track
+ * the model's own reported thinking as the event itself, under the
+ * `self_tracking` tool category, with no domain entity of their own.
+ */
+interface SelfTrackingEventArgs {
+  identity: AgentIdentity;
+  dryRun: boolean;
+  toolName: string;
+  toolDescription: string;
+  eventSchema: string;
+  buildEventData: (invocationId: string) => Record<string, unknown>;
+}
+
+async function emitSelfTrackingEvent({
+  identity,
+  dryRun,
+  toolName,
+  toolDescription,
+  eventSchema,
+  buildEventData,
+}: SelfTrackingEventArgs): Promise<void> {
+  if (dryRun) {
+    return;
+  }
+
+  const config = getTrackingConfig();
+  if (!config) {
+    return;
+  }
+
+  const tracker = newTracker(
+    { namespace: TRACKER_NAMESPACE, appId: config.appId, encodeBase64: false },
+    { endpoint: config.collectorUrl, bufferSize: 1, eventMethod: "post" }
+  );
+
+  if (identity.domainSessionId) {
+    tracker.setSessionId(identity.domainSessionId);
+  }
+  if (identity.domainUserId) {
+    tracker.setDomainUserId(identity.domainUserId);
+  }
+
+  const invocationId = identity.turnId ?? randomUUID();
+
+  tracker.track(
+    buildSelfDescribingEvent({
+      event: { schema: eventSchema, data: buildEventData(invocationId) },
+    }),
+    [buildToolContext(toolName, "self_tracking", toolDescription), buildAgentContext(identity, invocationId), buildConversation(identity)]
+  );
+
+  await tracker.flush();
+}
+
+export async function trackUserIntentDetected(args: {
+  identity: AgentIdentity;
+  dryRun: boolean;
+  intentId: string;
+  intentCategory: string;
+  confidence: number;
+  reasoning: string | null;
+  detectedAt: string;
+}): Promise<void> {
+  await emitSelfTrackingEvent({
+    identity: args.identity,
+    dryRun: args.dryRun,
+    toolName: "trackUserIntent",
+    toolDescription: "Log the shopper intent category the agent detected this turn.",
+    eventSchema: USER_INTENT_DETECTED_SCHEMA,
+    buildEventData: (invocationId) => ({
+      invocation_id: invocationId,
+      intent_id: args.intentId,
+      intent_category: args.intentCategory,
+      confidence: args.confidence,
+      reasoning: args.reasoning,
+      detected_at: args.detectedAt,
+    }),
+  });
+}
+
+export async function trackAgentDecisionLogged(args: {
+  identity: AgentIdentity;
+  dryRun: boolean;
+  decisionId: string;
+  decisionType: string;
+  reasoning: string;
+  considerations: string[] | null;
+  loggedAt: string;
+}): Promise<void> {
+  await emitSelfTrackingEvent({
+    identity: args.identity,
+    dryRun: args.dryRun,
+    toolName: "trackAgentDecision",
+    toolDescription: "Log a decision the agent made this turn and why.",
+    eventSchema: AGENT_DECISION_LOGGED_SCHEMA,
+    buildEventData: (invocationId) => ({
+      invocation_id: invocationId,
+      decision_id: args.decisionId,
+      decision_type: args.decisionType,
+      reasoning: args.reasoning,
+      considerations: args.considerations,
+      logged_at: args.loggedAt,
+    }),
+  });
+}
+
+export async function trackConstraintViolationLogged(args: {
+  identity: AgentIdentity;
+  dryRun: boolean;
+  violationId: string;
+  constraintType: string;
+  userRequirement: string;
+  reasonNotMet: string;
+  alternativesConsidered: string[] | null;
+  recommendation: string | null;
+  violatedAt: string;
+}): Promise<void> {
+  await emitSelfTrackingEvent({
+    identity: args.identity,
+    dryRun: args.dryRun,
+    toolName: "trackConstraintViolation",
+    toolDescription: "Log a shopper requirement the catalog could not satisfy this turn.",
+    eventSchema: CONSTRAINT_VIOLATION_SCHEMA,
+    buildEventData: (invocationId) => ({
+      invocation_id: invocationId,
+      violation_id: args.violationId,
+      constraint_type: args.constraintType,
+      user_requirement: args.userRequirement,
+      reason_not_met: args.reasonNotMet,
+      alternatives_considered: args.alternativesConsidered,
+      recommendation: args.recommendation,
+      violated_at: args.violatedAt,
+    }),
   });
 }
