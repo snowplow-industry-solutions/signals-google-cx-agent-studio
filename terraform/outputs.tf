@@ -18,6 +18,11 @@ output "catalog_toolset_name" {
   value       = google_ces_toolset.catalog.name
 }
 
+output "self_tracking_toolset_name" {
+  description = "Full resource name of the self-tracking toolset."
+  value       = google_ces_toolset.self_tracking.name
+}
+
 output "app_version_name" {
   description = "Full resource name of the managed app version."
   value       = google_ces_app_version.current.name

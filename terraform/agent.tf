@@ -38,6 +38,11 @@ resource "google_ces_agent" "root" {
     tool_ids = ["searchCatalog"]
   }
 
+  toolsets {
+    toolset  = google_ces_toolset.self_tracking.id
+    tool_ids = ["trackUserIntent", "trackAgentDecision", "trackConstraintViolation"]
+  }
+
   # No llm_agent {} block: the live console-built agent stores no explicit
   # agent-type config (LLM is the default), and declaring the empty block
   # leaves a permanent "+ llm_agent {}" plan diff against imported state.
