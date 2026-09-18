@@ -35,10 +35,16 @@ paths:
             Studio's own conversation session id, not the Snowplow one.
             The variable must be declared on the agent (type Text) and is
             populated by the widget (issue 07); in the simulator, set it
-            manually. See `docs/setup-cx-agent-studio.md`.
+            manually. See `docs/setup-cx-agent-studio.md`. Kept alongside
+            the identity headers below so an agent still running the old
+            schema (headers not yet declared) keeps working.
           schema:
             type: string
           x-ces-session-context: $context.variables.snowplow_session_id
+        - $ref: "#/components/parameters/ChatSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowUserIdHeader"
+        - $ref: "#/components/parameters/TurnIdHeader"
       responses:
         "200":
           description: Context payload (degraded/empty on unknown session).
@@ -54,6 +60,51 @@ components:
       type: apiKey
       in: header
       name: x-agent-api-key
+  parameters:
+    ChatSessionIdHeader:
+      name: x-ces-session-id
+      in: header
+      required: false
+      description: >
+        CX Agent Studio's own conversation session id, injected from the
+        built-in session context (not model-produced). Threads this event
+        to the conversation's other tool calls and self-tracking events.
+      schema:
+        type: string
+      x-ces-session-context: $context.session_id
+    SnowplowSessionIdHeader:
+      name: x-snowplow-session-id
+      in: header
+      required: false
+      description: >
+        The shopper's Snowplow session identifier (`domain_sessionid`).
+        Injected from the `snowplow_session_id` agent variable (not
+        model-produced); see `docs/setup-cx-agent-studio.md`.
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_session_id
+    SnowplowUserIdHeader:
+      name: x-snowplow-user-id
+      in: header
+      required: false
+      description: >
+        The shopper's Snowplow domain user id. Injected from the
+        `snowplow_user_id` agent variable (not model-produced).
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_user_id
+    TurnIdHeader:
+      name: x-snowplow-turn-id
+      in: header
+      required: false
+      description: >
+        Per-turn id minted by the chat widget at send time. Injected from
+        the `snowplow_turn_id` agent variable (not model-produced); used as
+        this event's invocation id so tool calls and self-tracking events
+        from the same turn share an id.
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_turn_id
   schemas:
     ContextPayload:
       type: object
