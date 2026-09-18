@@ -8,6 +8,7 @@ import { useWidgetLoadingIndicator } from "@/components/Widget/useWidgetLoadingI
 import { useWidgetTokenRenderer } from "@/components/Widget/useWidgetTokenRenderer";
 import type { CesMessengerElement } from "@/types/ces-messenger";
 import { logSignalsDemo } from "@/utils/demo";
+import { getDomainUserId } from "@/utils/getDomainUserId";
 
 // GitHub-distributed component (not the gstatic "chat-messenger" generation) —
 // only this one documents setQueryParameters(), which is how
@@ -19,6 +20,15 @@ const WIDGET_SCRIPT_SRC =
 // Must match the agent variable name bound via `x-ces-session-context` in
 // agent/tools/get-user-context.openapi.yaml (docs/setup-cx-agent-studio.md §4).
 const SESSION_CONTEXT_VARIABLE = "snowplow_session_id";
+
+// Same binding pattern as SESSION_CONTEXT_VARIABLE, but for the shopper's
+// domain user id; matches the SnowplowUserIdHeader binding shared by all
+// three OpenAPI tool schemas (agent/tools/*.openapi.yaml).
+const USER_ID_CONTEXT_VARIABLE = "snowplow_user_id";
+
+// Set once per send by the conversation hook (issue 25), not on load; matches
+// the TurnIdHeader binding shared by all three OpenAPI tool schemas.
+const TURN_ID_CONTEXT_VARIABLE = "snowplow_turn_id";
 
 // The widget's shadow styles fall back to Vue-green (#42b883) for
 // --host-primary-color, which clashes hard with the luxury palette; pick up
@@ -55,11 +65,20 @@ export function CesMessengerWidget() {
       logSignalsDemo(
         "ces-messenger loaded with no domain_sessionid yet (new/cookieless visitor); leaving snowplow_session_id unset so the agent falls back to generic concierge behaviour"
       );
-      return;
+    } else {
+      element.setQueryParameters({ [SESSION_CONTEXT_VARIABLE]: sessionId });
+      logSignalsDemo("Passed domain_sessionid to ces-messenger", { sessionId });
     }
 
-    element.setQueryParameters({ [SESSION_CONTEXT_VARIABLE]: sessionId });
-    logSignalsDemo("Passed domain_sessionid to ces-messenger", { sessionId });
+    const userId = getDomainUserId();
+    if (!userId) {
+      logSignalsDemo(
+        "ces-messenger loaded with no domain_userid yet (new/cookieless visitor); leaving snowplow_user_id unset"
+      );
+    } else {
+      element.setQueryParameters({ [USER_ID_CONTEXT_VARIABLE]: userId });
+      logSignalsDemo("Passed domain_userid to ces-messenger", { userId });
+    }
   }, []);
 
   useEffect(() => {
@@ -112,4 +131,13 @@ export function CesMessengerWidget() {
       />
     </>
   );
+}
+
+// Called by the conversation hook (issue 25) right before each send, with
+// the same element the other widget hooks already receive via elementRef.
+// Unlike the session/user id variables above, the turn id is per-turn, not
+// set-once-on-load.
+export function setSnowplowTurnId(element: CesMessengerElement, turnId: string) {
+  element.setQueryParameters({ [TURN_ID_CONTEXT_VARIABLE]: turnId });
+  logSignalsDemo("Set snowplow_turn_id on ces-messenger", { turnId });
 }

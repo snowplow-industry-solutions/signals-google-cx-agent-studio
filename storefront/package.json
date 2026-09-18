@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@snowplow/browser-tracker": "^4.10.0",
+    "@snowplow/browser-tracker-core": "^4.10.0",
     "@snowplow/node-tracker": "^4.10.2",
     "@snowplow/signals-browser-plugin": "^0.2.2",
     "@snowplow/signals-node": "^0.4.0",
