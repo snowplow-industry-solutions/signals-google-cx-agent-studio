@@ -21,11 +21,12 @@ import { createProductListClickedTrackingProps } from "@/utils/snowtypeTracking"
  * a message fired before tracker init is deferred, not dropped.
  *
  * Schema URIs are declared as constants here rather than resolved through
- * generated Snowtype helpers -- issue #26 (tracking plan + Snowtype) may
- * switch these to generated helpers once the agent event specs are added to
- * the data product, mirroring how the server-side module
- * (src/utils/agentTracking.ts) already declares its own Iglu Central
- * constants.
+ * generated Snowtype helpers. Issue #26 added the message_sent/message_received
+ * event specifications to the tracking plan; switching this hook to generated
+ * helpers is a human checkpoint (needs a real seed + `snowtype:generate`
+ * against an org -- see storefront/README.md's Snowtype section), mirroring
+ * how the server-side module (src/utils/agentTracking.ts) keeps its own Iglu
+ * Central constants regardless.
  */
 
 const MESSAGE_SENT_SCHEMA = "iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0";
