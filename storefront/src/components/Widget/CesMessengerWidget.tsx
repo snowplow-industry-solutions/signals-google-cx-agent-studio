@@ -4,6 +4,7 @@ import { getDomainSessionId } from "@snowplow/browser-tracker";
 import Script from "next/script";
 import { useCallback, useEffect, useRef } from "react";
 
+import { useWidgetConversationTracking } from "@/components/Widget/useWidgetConversationTracking";
 import { useWidgetLoadingIndicator } from "@/components/Widget/useWidgetLoadingIndicator";
 import { useWidgetTokenRenderer } from "@/components/Widget/useWidgetTokenRenderer";
 import type { CesMessengerElement } from "@/types/ces-messenger";
@@ -53,6 +54,10 @@ export function CesMessengerWidget() {
 
   // Issue 13: typing/"still working" indicator — upstream ships none.
   useWidgetLoadingIndicator(elementRef);
+
+  // Issue 25: message_sent/message_received conversation tracking, plus
+  // concierge card-click tracking wired into useWidgetTokenRenderer's navigate.
+  useWidgetConversationTracking(elementRef);
 
   const handleLoaded = useCallback(() => {
     const element = elementRef.current;

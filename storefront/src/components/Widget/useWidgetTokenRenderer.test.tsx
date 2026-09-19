@@ -5,12 +5,17 @@ import { useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { logSignalsDemoMock } = vi.hoisted(() => ({
+const { logSignalsDemoMock, trackConciergeCardClickMock } = vi.hoisted(() => ({
   logSignalsDemoMock: vi.fn(),
+  trackConciergeCardClickMock: vi.fn(),
 }));
 
 vi.mock("@/utils/demo", () => ({
   logSignalsDemo: logSignalsDemoMock,
+}));
+
+vi.mock("@/components/Widget/useWidgetConversationTracking", () => ({
+  trackConciergeCardClick: trackConciergeCardClickMock,
 }));
 
 // useWidgetTokenRenderer calls next/navigation's useRouter, which requires a
@@ -165,6 +170,32 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
       expect.stringContaining("unrenderable"),
       { type: "product_detail_carousel" }
     );
+  });
+
+  it("tracks a concierge card click when a rich-message card navigates internally", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    const registerRichMessageHandler = vi.fn();
+    mount({ registerTemplate, registerHook, registerRichMessageHandler });
+
+    const clickHandler = registerRichMessageHandler.mock.calls[0][1] as (
+      message: unknown,
+      clicked: Element
+    ) => unknown;
+
+    const card = document.createElement("div");
+    card.setAttribute("data-uri", "/products/noir-double-breasted-blazer");
+    document.body.appendChild(card);
+
+    clickHandler({}, card);
+
+    expect(trackConciergeCardClickMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardClickMock.mock.calls[0][0]).toBeInstanceOf(URL);
+    expect(
+      (trackConciergeCardClickMock.mock.calls[0][0] as URL).pathname
+    ).toBe("/products/noir-double-breasted-blazer");
+
+    card.remove();
   });
 
   it("does not log for a payload it never claims", () => {
