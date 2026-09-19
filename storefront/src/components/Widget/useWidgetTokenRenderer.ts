@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, type RefObject } from "react";
 
+import { trackConciergeCardClick } from "@/components/Widget/useWidgetConversationTracking";
 import {
   makeWidgetTemplate,
   normalizeWidgetPayload,
@@ -70,6 +71,7 @@ export function useWidgetTokenRenderer(
         url.origin === window.location.origin ||
         /^\/(products|collections)\//.test(url.pathname);
       if (!internal) return false;
+      trackConciergeCardClick(url);
       router.push(url.pathname + url.search + url.hash);
       return true;
     };
