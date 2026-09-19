@@ -307,6 +307,22 @@ describe("useWidgetConversationTracking", () => {
     expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(2);
   });
 
+  it("dedupes a single event instance that bubbles from the element to the window listener", async () => {
+    const element = mount();
+
+    act(() => {
+      element.dispatchEvent(
+        new CustomEvent("ces-user-input-entered", { detail: { text: "hi" }, bubbles: true })
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(1);
+    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(1);
+  });
+
   it("tears down listeners on unmount without throwing or tracking further events", async () => {
     mount();
     const { root, container } = mounted.pop()!;

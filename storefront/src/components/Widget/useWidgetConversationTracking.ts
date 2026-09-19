@@ -183,8 +183,14 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
     let messageIndex = 0;
     let turnIndex = 0;
     let currentTurn: TurnState | null = null;
+    let lastSendEvent: Event | null = null;
 
     const handleUserInput = (event: Event) => {
+      if (event === lastSendEvent) {
+        return;
+      }
+      lastSendEvent = event;
+
       const turnId = crypto.randomUUID();
       messageIndex += 1;
       turnIndex += 1;
