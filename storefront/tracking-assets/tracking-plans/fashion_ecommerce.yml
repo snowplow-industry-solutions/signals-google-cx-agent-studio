@@ -11,6 +11,7 @@ data:
   owner: signals-demo@snowplowanalytics.com
   sourceApplications:
     - $ref: ./source-applications/fashion_storefront.yml
+    - $ref: ./source-applications/fashion_storefront_agent.yml
   eventSpecifications:
     - resourceName: a71ae6fc-8dd2-5383-87b1-c30bc221ce3d
       name: Product list viewed
@@ -33,6 +34,13 @@ data:
       triggers:
         - id: 714295e9-9307-4303-b261-bf184d5ddddc
           description: Trigger when a product card link is clicked from any tracked list.
+          appIds:
+            - signals-workshop-fashion-demo
+        - id: 6862710c-686f-4ba3-878f-fd994f8ff966
+          description: >
+            Trigger when a shopper clicks a concierge-rendered product card
+            in the chat widget (list id concierge_recommendations), tracked
+            client-side through the generated Snowtype helper.
           appIds:
             - signals-workshop-fashion-demo
       event:
@@ -149,4 +157,190 @@ data:
             maxCardinality: 1
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 0
+        enriched: []
+    # Agent self-tracking (issue #18/#26). Event schemas resolve from Iglu
+    # Central (com.snowplow.agent.tracking, unpublished to this org); entity
+    # schemas are the repo's own com.snowplow_demo.fashion data structures.
+    # Risk: publishing event specifications that reference Iglu Central
+    # schemas has not been tried against a live tracking-plan API from this
+    # repo -- see storefront/README.md "Agent event specifications" for the
+    # documented fallback if the seed rejects them.
+    - resourceName: c746572a-fc8d-5d52-908a-cdd060aaf81e
+      name: "Tool execution: search catalog"
+      description: >
+        Fires for every searchCatalog tool call the concierge makes, with
+        the filters used and the result count/ids.
+      triggers:
+        - id: d68d1f31-aa8b-49b5-a8b8-dfc81d0548d2
+          description: Trigger on every searchCatalog tool endpoint call.
+          appIds:
+            - signals-workshop-fashion-demo-agent
+            - signals-workshop-fashion-demo-dev-agent
+      event:
+        source: iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/catalog_search/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: bb2e2c15-3498-5ba3-ac8e-5c20fcc5b58d
+      name: "Tool execution: get user context"
+      description: >
+        Fires for every getUserContext tool call the concierge makes, with
+        whether Signals returned a profile, recent activity, or a degraded
+        payload.
+      triggers:
+        - id: 7643b030-d782-448f-af5d-e8bb27f1e00f
+          description: Trigger on every getUserContext tool endpoint call.
+          appIds:
+            - signals-workshop-fashion-demo-agent
+            - signals-workshop-fashion-demo-dev-agent
+      event:
+        source: iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/context_lookup/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: c3e2070a-5413-5114-b0d9-e68365ece187
+      name: User intent detected
+      description: >
+        Fires when the concierge logs the shopper intent it detected for
+        the current turn (trackUserIntent self-tracking tool).
+      triggers:
+        - id: 458800e9-4bf2-418e-9a56-8b92b87d7e4c
+          description: Trigger on every trackUserIntent self-tracking tool call.
+          appIds:
+            - signals-workshop-fashion-demo-agent
+            - signals-workshop-fashion-demo-dev-agent
+      event:
+        source: iglu:com.snowplow.agent.tracking/user_intent_detected/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: e84e0d10-ea35-5da4-87ec-da0145dbbe22
+      name: Agent decision logged
+      description: >
+        Fires when the concierge logs a decision it made (trackAgentDecision
+        self-tracking tool) -- tool selection, recommendation choice, widget
+        choice, clarification needed, or constraint handling.
+      triggers:
+        - id: b0b1a2e7-3bb9-48c4-b79c-f1a388f03b32
+          description: Trigger on every trackAgentDecision self-tracking tool call.
+          appIds:
+            - signals-workshop-fashion-demo-agent
+            - signals-workshop-fashion-demo-dev-agent
+      event:
+        source: iglu:com.snowplow.agent.tracking/agent_decision_logged/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: c72f981c-f3ee-5b26-8ded-7be787472192
+      name: Constraint violation
+      description: >
+        Fires when the concierge logs a shopper requirement the catalog
+        could not satisfy (trackConstraintViolation self-tracking tool).
+      triggers:
+        - id: d0f8cffd-0b4f-4892-ba7b-fe7d9f87f576
+          description: Trigger on every trackConstraintViolation self-tracking tool call.
+          appIds:
+            - signals-workshop-fashion-demo-agent
+            - signals-workshop-fashion-demo-dev-agent
+      event:
+        source: iglu:com.snowplow.agent.tracking/constraint_violation/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/tool_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow.agent.tracking/agent_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: 02793aa9-8e4b-595f-bb7e-69f3de1d9641
+      name: Message sent
+      description: >
+        Fires from the chat widget when the shopper sends a message
+        (useWidgetConversationTracking).
+      triggers:
+        - id: 80ea7a76-6c7c-4613-8eb1-9ebbef97cc24
+          description: Trigger on every ces-user-input-entered widget event.
+          appIds:
+            - signals-workshop-fashion-demo
+            - signals-workshop-fashion-demo-dev
+      event:
+        source: iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/message_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+        enriched: []
+    - resourceName: bded4159-ed24-5cba-b616-2c11cf4838c4
+      name: Message received
+      description: >
+        Fires from the chat widget on the first chunk of the concierge's
+        reply for a turn (useWidgetConversationTracking).
+      triggers:
+        - id: 2f6f8a8e-2f8c-4e0a-9a3a-4a0c6e0d5f2b
+          description: >
+            Trigger on the first ces-text-received or ces-payload-received
+            widget event for a turn.
+          appIds:
+            - signals-workshop-fashion-demo
+            - signals-workshop-fashion-demo-dev
+      event:
+        source: iglu:com.snowplow.agent.tracking/message_received/jsonschema/1-0-0
+      entities:
+        tracked:
+          - source: iglu:com.snowplow.agent.tracking/message_context/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
+          - source: iglu:com.snowplow_demo.fashion/conversation/jsonschema/1-0-0
+            minCardinality: 1
+            maxCardinality: 1
         enriched: []
