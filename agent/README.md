@@ -7,18 +7,33 @@ simulator verification happen in the console, by a human. See
 `docs/setup-cx-agent-studio.md` for the console steps and the acceptance
 criteria.
 
-- `instructions.console.txt` -- the **live console copy**: the persona and
-  tool-use contract in CX Agent Studio's structured format, with
-  `{@TOOL: ...}` references resolving to the attached tools
-  (`getUserContext_getUserContext` / `searchCatalog_searchCatalog` — the
-  toolset-qualified names). Paste this verbatim into the **Root Agent
-  node's instructions field** (not Settings → Advanced; that's the
-  app-wide `globalInstruction`). If the console flags the tool references,
-  re-insert them with the editor's `@` picker rather than hand-typing.
-- `instructions.md` -- the human-readable source for the same contract.
-  Behavioural changes start here, then get mirrored into
-  `instructions.console.txt` (reformatting via the console's Gemini
-  assistant is fine — diff the result against this file before accepting).
+- `instructions.console.widgets.txt` -- the **live console copy**: the
+  persona and tool-use contract in CX Agent Studio's structured format,
+  including the rich-response-widget constraint, with `{@TOOL: ...}` /
+  `{@Widget: ...}` references resolving to the attached tools and widgets
+  (`getUserContext_getUserContext` / `searchCatalog_searchCatalog` /
+  `selfTracking_trackUserIntent` / `selfTracking_trackAgentDecision` /
+  `selfTracking_trackConstraintViolation` — the toolset-qualified names;
+  `productCarousel` / `productDetails` for the widgets). Paste this
+  verbatim into the **Root Agent node's instructions field** (not
+  Settings → Advanced; that's the app-wide `globalInstruction`). If the
+  console flags a tool reference, re-insert it with the editor's `@`
+  picker rather than hand-typing -- **after importing the self-tracking
+  toolset, a human must confirm with the picker that all three
+  `selfTracking_*` references resolve**, the same check already done for
+  the two existing references.
+- `instructions.console.txt` -- the text-only revert target, kept only as
+  a contingency for when the widget renderer isn't available; mirrors the
+  same contract minus the widget constraint and taskflow branches. Same
+  `@` picker confirmation applies to its `selfTracking_*` references.
+- `instructions.md` -- the human-readable source for the same contract,
+  including the self-tracking protocol (when to call each of the three
+  self-tracking tools, the once-per-purpose-per-turn limit, and why
+  tracking must never delay or replace the reply). Behavioural changes
+  start here, then get mirrored into both console copies (reformatting via
+  the console's Gemini assistant is fine — diff the result against this
+  file before accepting; a diff between this file and either console copy
+  should show only formatting differences, not content differences).
 - `tools/get-user-context.openapi.yaml` -- OpenAPI schema for the
   `getUserContext` tool (`GET /api/agent/context`), imported as an OpenAPI
   tool in CX Agent Studio.
@@ -27,14 +42,22 @@ criteria.
 - `tools/self-tracking.openapi.yaml` -- OpenAPI schema for the three
   self-tracking tools (`trackUserIntent`, `trackAgentDecision`,
   `trackConstraintViolation`; `POST /api/agent/track-intent`,
-  `/track-decision`, `/track-constraint`), imported as a single toolset.
-  Each operation declares the four platform-injected identity headers: the
-  chat session id from the built-in session context, and the shopper
-  session id, user id, and turn id from the `snowplow_session_id`,
-  `snowplow_user_id`, and `snowplow_turn_id` agent variables. These tools
-  log what the agent thinks -- detected intent, decisions, and
-  unsatisfiable constraints -- as Snowplow events; they never change the
-  reply.
+  `/track-decision`, `/track-constraint`), imported as a single toolset
+  (console display name `selfTracking`, so the toolset-qualified tool
+  references are `selfTracking_trackUserIntent`,
+  `selfTracking_trackAgentDecision`, and
+  `selfTracking_trackConstraintViolation`). Each operation declares the
+  four platform-injected identity headers: the chat session id from the
+  built-in session context, and the shopper session id, user id, and turn
+  id from the `snowplow_session_id`, `snowplow_user_id`, and
+  `snowplow_turn_id` agent variables. These tools log what the agent
+  thinks -- detected intent, decisions, and unsatisfiable constraints -- as
+  Snowplow events; they never change the reply. The instructions'
+  self-tracking protocol (see `instructions.md`) governs when the agent
+  calls them: once per turn for intent, right before a catalog search or
+  widget choice for a decision, and whenever the catalog can't satisfy a
+  shopper requirement for a constraint -- never more than once per tool per
+  turn for the same purpose, and never mentioned to the shopper.
 
 - `tools/product-carousel.widget.json` / `tools/product-details.widget.json`
   -- **captured copies of Google's fixed Parameters schemas** for the two
