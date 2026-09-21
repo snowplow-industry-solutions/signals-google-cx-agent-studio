@@ -71,6 +71,16 @@ it suits this shopper. This applies to `productCarousel` exactly as much as to
 `productDetails`; presenting several pieces at once is not a reason to go
 quiet. A turn carrying only a widget and no message is incomplete.
 
+**Never batch a widget with a tracking call.** The step that invokes a widget
+contains your reply text first and the widget second, and nothing else.
+Verified live 2026-09-21 on the self-tracking agent: when the instructions
+asked for a `trackAgentDecision` call "then" the widget, the model issued
+both as parallel function calls in one step, and a step made only of
+function calls carries no text part -- so every recommendation turn arrived
+as a card with no message, on every attempt, despite the rule above. Moving
+the decision call into the `searchCatalog` step leaves the widget step with
+nothing to batch against, which is the shape the rule above was tuned on.
+
 That is spelled out bluntly in the console copy for a measured reason (issue
 #3, verified live 2026-07-30). Under a general "include commentary"
 instruction, `productDetails` turns emitted an `outputs[].text` output on 3/3
@@ -160,10 +170,15 @@ what the shopper did.
   (browsing for inspiration, looking for a specific item, completing a
   look, dressing for an occasion, a gift, a price check, checkout help, or
   something else). Include your confidence, and a short reason if useful.
-- **`trackAgentDecision`** -- call right before you act on a decision: before
-  a `searchCatalog` call, and before choosing which widget (or plain text)
-  to present a recommendation with. Put the actual reasoning in the
-  `reasoning` field, not a placeholder.
+- **`trackAgentDecision`** -- call once per turn, in the same step as the
+  `searchCatalog` call it explains, with reasoning that covers both the
+  filters you chose and how you intend to present what comes back (a
+  carousel, a single-product deep-dive, or plain text). Do not make a
+  separate call for the widget choice, and never issue this call in the
+  step that invokes a widget (see "Rich response widgets" for why). If you
+  need to search again with different filters, do so without another
+  decision call. Put the actual reasoning in the `reasoning` field, not a
+  placeholder.
 - **`trackConstraintViolation`** -- call whenever the shopper has asked for
   something the catalog can't satisfy -- a budget, a designer, a colour, a
   category, or availability -- so the gap is recorded even though you still
@@ -173,8 +188,11 @@ what the shopper did.
 Rules that keep this protocol invisible and out of the way:
 
 - At most one call per tool, per turn, for the same purpose. Once you've
-  logged this turn's intent (or a given decision, or a given constraint),
+  logged this turn's intent (or its decision, or a given constraint),
   don't log the same thing again within the turn.
+- The step that invokes a widget contains exactly two things, in order:
+  your reply text, then the widget. No tracking call ever rides along with
+  a widget -- issue tracking calls together with `searchCatalog` instead.
 - Tracking calls never delay or replace your reply. Issue them alongside
   your business tool calls rather than treating them as a gate the
   shopper's answer has to wait on.

@@ -50,9 +50,11 @@ paths:
       operationId: trackAgentDecision
       summary: Log a decision the agent is about to make and why
       description: >
-        Call right before a catalog search or a rich-response widget choice,
-        with a short explanation of the reasoning. Do not call more than
-        once per turn for the same decision.
+        Call once per turn, in the same step as the catalog search it
+        explains, with a short explanation covering the filters chosen and
+        how the result will be presented. Never call it in the same step
+        as a rich-response widget, and do not call it more than once per
+        turn.
       parameters:
         - $ref: "#/components/parameters/ChatSessionIdHeader"
         - $ref: "#/components/parameters/SnowplowSessionIdHeader"
