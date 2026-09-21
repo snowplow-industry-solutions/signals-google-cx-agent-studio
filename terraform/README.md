@@ -468,3 +468,13 @@ imported one. The simulator tests the agent's live draft regardless of the
 pinned version; only the widget is affected, which is why this is easy to
 miss in testing and only shows up when a demo watches the widget specifically.
 
+The first such bump is in the config already: `google_ces_app_version.v2_text_with_widgets`
+in `deployment.tf` (added 21 September 2026 after PRs #38 and #40), which the
+web-widget deployment now serves. `current` stays as the retained v1 snapshot.
+To publish the next change, copy that resource block with a new
+`app_version_id` and display name, repoint `google_ces_deployment.web_widget.app_version`
+and the `app_version_name` output at it, and apply. Expect the plan to show
+one version to add and the deployment changed in place; if it shows the
+deployment being replaced, stop -- a new deployment means a new
+`NEXT_PUBLIC_CES_DEPLOYMENT_ID` for the storefront.
+
