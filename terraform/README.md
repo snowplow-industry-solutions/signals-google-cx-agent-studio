@@ -199,6 +199,7 @@ running anything.
 | `deployment_display_name` | Console → the web-widget deployment's display name                                                                                                 |
 | `app_display_name`        | Console → the app's display name                                                                                                                   |
 | `model_name`              | Console → the **app's** model settings (the console sets model/temperature at the app level; the agent inherits). Read the live value, don't guess |
+| `storefront_url`          | The deployed storefront's public `https://` origin. Becomes the widget deployment's allowed origin **and** the `servers[0].url` inside all three OpenAPI toolsets — see "Tool schema server URL" below. Required: the placeholder default fails validation |
 
 
 All of the above are also discoverable without console access via the CES REST
@@ -386,7 +387,9 @@ choosing for `app_display_name`, `app_version_display_name`, and
 `deployment_display_name`, and `storefront_url`/`allowed_origins` pointed at
 the **second** storefront deployment from #28 — never the production one.
 Leave `agent_shared_secret_id` unset so a new secret is created rather than
-adopting the original's.
+adopting the original's. `storefront_url` also becomes the server URL inside
+the three tool schemas — you do not edit anything under `agent/tools/` (see
+"Tool schema server URL" below).
 
 ```bash
 terraform init
@@ -420,6 +423,33 @@ risk worth checking before this `apply` is provider issue
 was reported against exactly this kind of *create* call, so confirm its
 status first if `model_name` is a `gemini-3-*` model paired with a non-null
 `model_temperature` in the `us` location.
+
+### Tool schema server URL is rendered from `storefront_url`
+
+The three OpenAPI files under `agent/tools/` are committed with
+`servers[0].url: https://your-storefront.example.com`, so no real hostname
+ever lands in git. `locals.tf`'s `openapi_schemas` map substitutes
+`var.storefront_url` for that placeholder at plan time and `toolsets.tf`
+feeds the rendered text to each `google_ces_toolset`. Consequences:
+
+- **Never hand-edit the URL in `agent/tools/*.openapi.yaml` before an
+  `apply`, and never commit such an edit.** Earlier provisioning runs did
+  this by hand and then reverted the files, which left a plan that wanted
+  to put the placeholder back — a diff that must not be applied. With the
+  substitution in config, a clean tree gives a clean plan.
+- **A plan that changes only the toolsets' `open_api_schema`, with the
+  diff confined to the `servers:` block, means the `storefront_url` in
+  your active tfvars differs from the one applied.** Check which one is
+  right before applying; the widget deployment's `allowed_origins` uses the
+  same variable, so the two always move together.
+- `storefront_url` has a validation rule rejecting the placeholder default
+  and anything that is not a bare `https://` origin, so a forgotten tfvars
+  value fails at plan time instead of creating tools that call a dead host.
+
+The manual console import in
+[`docs/setup-cx-agent-studio.md` §3](../docs/setup-cx-agent-studio.md#3-import-the-two-openapi-tools)
+still needs the URL swapped into a local copy of each file, because the
+console reads the file verbatim.
 
 ### The pinned agent version still needs a manual bump
 

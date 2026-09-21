@@ -35,9 +35,12 @@ app_version_display_name = "<PLACEHOLDER: the version's display name, e.g. the c
 
 deployment_display_name = "<PLACEHOLDER: existing deployment's display name (import), or one of your choosing (greenfield)>"
 
-# The deployed storefront's public origin -- the web-widget deployment's
-# allowed_origins (deployment.tf) rejects the widget everywhere else. For
-# the duplicate-app workspace (issue 24/28) this must be the *second*
+# The deployed storefront's public origin. Used twice: as the web-widget
+# deployment's allowed_origins (deployment.tf), which rejects the widget
+# everywhere else, and as the servers[0].url rendered into the three
+# OpenAPI tool schemas (toolsets.tf replaces the committed placeholder at
+# plan time, so agent/tools/*.openapi.yaml never needs editing). For the
+# duplicate-app workspace (issue 24/28) this must be the *second*
 # storefront deployment's origin, never the production one.
 storefront_url  = "<PLACEHOLDER: e.g. https://your-storefront.example.com>"
 allowed_origins = ["<PLACEHOLDER: e.g. https://your-storefront.example.com>"]

@@ -13,7 +13,15 @@ resource "google_ces_agent" "root" {
   # 2026-07-29); instructions.console.txt is the pre-widget base copy.
   # agent/instructions.md is the human-readable source for the same
   # contract; edit there first and mirror changes into the console copy.
-  instruction = file("${path.module}/../agent/instructions.console.widgets.txt")
+  # The copy names the storefront host once (the product-carousel `uri`
+  # rule) via the committed placeholder; render var.storefront_url there
+  # the same way toolsets.tf does for the OpenAPI schemas, or the widget's
+  # product cards link to the placeholder host.
+  instruction = replace(
+    file("${path.module}/../agent/instructions.console.widgets.txt"),
+    local.storefront_url_placeholder,
+    var.storefront_url,
+  )
 
   # Model settings are app-level (see app.tf) -- the live agent carries
   # none and inherits the app's.

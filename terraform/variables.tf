@@ -87,8 +87,18 @@ variable "deployment_display_name" {
 
 variable "storefront_url" {
   type        = string
-  description = "Public HTTPS origin of the deployed storefront (docs/setup-snowplow-trial.md §7); used as the widget deployment's allowed origin."
+  description = <<-EOT
+    Public HTTPS origin of the deployed storefront (docs/setup-snowplow-trial.md
+    §7). Used as the widget deployment's allowed origin and rendered into the
+    three OpenAPI tool schemas' servers[0].url (locals.tf openapi_schemas), so
+    the committed agent/tools/*.openapi.yaml keep their placeholder.
+  EOT
   default     = "https://your-storefront.example.com"
+
+  validation {
+    condition     = var.storefront_url != "https://your-storefront.example.com" && can(regex("^https://[^/]+$", var.storefront_url))
+    error_message = "storefront_url must be the deployed storefront's real https:// origin (no path, no trailing slash) -- the placeholder default would make every agent tool call a dead URL."
+  }
 }
 
 variable "allowed_origins" {
