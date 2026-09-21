@@ -7,6 +7,10 @@
 import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
 export interface CesMessengerElement extends HTMLElement {
+  /** Sets the session variables the agent reads as `$context.variables.<key>`.
+   * REPLACES the whole set on every call -- it does not merge with previous
+   * calls -- so each call must carry every variable the agent still needs.
+   * CesMessengerWidget.tsx tracks the last-sent set and resends it. */
   setQueryParameters(params: Record<string, string>): void;
   endSession?(): void;
   clearStorage?(args: { clearAuthentication?: boolean }): void;
