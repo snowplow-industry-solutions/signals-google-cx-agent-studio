@@ -43,6 +43,17 @@ const WIDGET_CUSTOM_CSS = `
   button { letter-spacing: 0.08em; }
 `;
 
+// Last variable set handed to each widget element. setQueryParameters()
+// replaces the whole set on every call (see CesMessengerElement), so every
+// later call must resend what came before. Keyed per element so the entry
+// dies with the widget instance.
+const lastSentQueryParameters = new WeakMap<CesMessengerElement, Record<string, string>>();
+
+function sendQueryParameters(element: CesMessengerElement, params: Record<string, string>) {
+  lastSentQueryParameters.set(element, params);
+  element.setQueryParameters({ ...params });
+}
+
 export function CesMessengerWidget() {
   const elementRef = useRef<CesMessengerElement | null>(null);
   const deploymentId = process.env.NEXT_PUBLIC_CES_DEPLOYMENT_ID;
@@ -65,14 +76,18 @@ export function CesMessengerWidget() {
       return;
     }
 
+    // Both ids go in ONE call: setQueryParameters replaces the whole variable
+    // set, so setting them one key at a time left the agent with only the
+    // last one (the getUserContext-called-with-{} regression from issue 22).
+    const params: Record<string, string> = {};
+
     const sessionId = getDomainSessionId();
     if (!sessionId) {
       logSignalsDemo(
         "ces-messenger loaded with no domain_sessionid yet (new/cookieless visitor); leaving snowplow_session_id unset so the agent falls back to generic concierge behaviour"
       );
     } else {
-      element.setQueryParameters({ [SESSION_CONTEXT_VARIABLE]: sessionId });
-      logSignalsDemo("Passed domain_sessionid to ces-messenger", { sessionId });
+      params[SESSION_CONTEXT_VARIABLE] = sessionId;
     }
 
     const userId = getDomainUserId();
@@ -81,9 +96,15 @@ export function CesMessengerWidget() {
         "ces-messenger loaded with no domain_userid yet (new/cookieless visitor); leaving snowplow_user_id unset"
       );
     } else {
-      element.setQueryParameters({ [USER_ID_CONTEXT_VARIABLE]: userId });
-      logSignalsDemo("Passed domain_userid to ces-messenger", { userId });
+      params[USER_ID_CONTEXT_VARIABLE] = userId;
     }
+
+    if (Object.keys(params).length === 0) {
+      return;
+    }
+
+    sendQueryParameters(element, params);
+    logSignalsDemo("Passed Snowplow identity variables to ces-messenger", params);
   }, []);
 
   useEffect(() => {
@@ -141,8 +162,13 @@ export function CesMessengerWidget() {
 // Called by the conversation hook (issue 25) right before each send, with
 // the same element the other widget hooks already receive via elementRef.
 // Unlike the session/user id variables above, the turn id is per-turn, not
-// set-once-on-load.
+// set-once-on-load -- but because setQueryParameters replaces rather than
+// merges, it is resent together with whatever handleLoaded last sent, or the
+// first send would wipe the session and user ids again.
 export function setSnowplowTurnId(element: CesMessengerElement, turnId: string) {
-  element.setQueryParameters({ [TURN_ID_CONTEXT_VARIABLE]: turnId });
+  sendQueryParameters(element, {
+    ...(lastSentQueryParameters.get(element) ?? {}),
+    [TURN_ID_CONTEXT_VARIABLE]: turnId,
+  });
   logSignalsDemo("Set snowplow_turn_id on ces-messenger", { turnId });
 }

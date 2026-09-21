@@ -119,10 +119,13 @@ week of 21 September 2026.
    value.
 3. Load the second storefront deployment, open the browser devtools console,
    and manually run
-   `document.querySelector("ces-messenger").setQueryParameters({ snowplow_turn_id: "spike-test-turn-1" })`
-   immediately before sending a chat message that triggers a tool call (e.g.
-   ask something that requires a catalog search). This simulates what the
-   conversation hook (issue 25) will do automatically at send time.
+   `document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: "<domain_sessionid>", snowplow_user_id: "<domain_userid>", snowplow_turn_id: "spike-test-turn-1" })`
+   (copy the two ids from the `Passed Snowplow identity variables` console
+   line; `setQueryParameters` replaces the whole set, so passing the turn id
+   alone would drop them) immediately before sending a chat message that
+   triggers a tool call (e.g. ask something that requires a catalog search).
+   This simulates what the conversation hook (issue 25) will do automatically
+   at send time.
 4. In Snowplow Micro (`http://localhost:9090/micro/good`, see the storefront
    README's Micro section) or Console, find the `tool_execution` event(s)
    emitted for that turn (`getUserContext` and/or `searchCatalog`,
@@ -145,5 +148,22 @@ week of 21 September 2026.
 
 ### Result
 
-_Not yet run. Fill in after the human checkpoint: date, outcome of (a) and
-(b), and a link to the Micro/Console payloads checked._
+Run 21 September 2026 against the issue #28 duplicate agent and storefront,
+by driving the deployed widget with Playwright and reading the `runSession`
+request body plus the CX Insights trace, rather than steps 3--4 as written.
+
+- **(a) did not hold, because of a storefront bug, not the platform.**
+  `setQueryParameters()` replaces the whole variable set on every call, and
+  `CesMessengerWidget.tsx` was calling it once per key, so only the
+  last-set variable (`snowplow_user_id`) reached the agent and
+  `getUserContext` ran with an empty input. Fixed by sending all ids in one
+  call and resending the full set with each turn id; (a) still needs
+  re-checking once the fix is deployed to the duplicate storefront.
+- **(b) did not hold for the current widget timing.** The conversation hook
+  sets `snowplow_turn_id` only after the widget has already opened its
+  stream (console order: `Initializing WebStream...`, then
+  `Setting query parameters: {snowplow_turn_id: ...}`), and the
+  `runSession` body carried no turn id. No code change here: issue #18's
+  fallback applies -- browser `message_sent`/`message_received` events carry
+  the turn id and turns are reconstructed downstream by ordering within
+  the chat session.

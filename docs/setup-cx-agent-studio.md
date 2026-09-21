@@ -129,8 +129,11 @@ component, **not** the gstatic-hosted `chat-messenger` build. Only
 `ces-messenger` documents `setQueryParameters({ key: value })`, where each key
 becomes readable in the agent session as `$context.variables.<key>` — the exact
 mechanism §4's `x-ces-session-context: $context.variables.snowplow_session_id`
-binding depends on. The two builds are related but not kept in sync, so don't
-mix them.
+binding depends on. Note that each `setQueryParameters` call **replaces** the
+whole variable set rather than merging into it, so the storefront sends every
+identity variable in one call and resends the full set whenever it adds the
+per-turn id. The two builds are related but not kept in sync, so don't mix
+them.
 
 ### Create the web-widget deployment
 
@@ -190,8 +193,13 @@ Once the widget is ready (the `ces-messenger-loaded` event, dispatched on
 
 ```js
 const sessionId = getDomainSessionId(); // @snowplow/browser-tracker >= 4.9.0
-if (sessionId) {
-  document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: sessionId });
+const userId = getDomainUserId(); // domain_userid from the same tracker cookie
+const params = {};
+if (sessionId) params.snowplow_session_id = sessionId;
+if (userId) params.snowplow_user_id = userId;
+if (Object.keys(params).length > 0) {
+  // One call: setQueryParameters replaces the whole set, it does not merge.
+  document.querySelector("ces-messenger").setQueryParameters(params);
 }
 ```
 
@@ -284,9 +292,9 @@ than passing an empty value, so the agent's degraded-session instructions apply
 - **Agent describes a different user's journey (wrong cart/browsing)** —
   the agent is not receiving your real session id, and is reading whatever
   the `snowplow_session_id` variable falls back to. Check three things in
-  order: (1) the browser console must log `[Signals Demo] Passed
-  domain_sessionid to ces-messenger` — if missing, `setQueryParameters` was
-  never called (the loaded event fires on `window`, not the element; fixed
+  order: (1) the browser console must log `[Signals Demo] Passed Snowplow
+  identity variables to ces-messenger` with your session id — if missing,
+  `setQueryParameters` was never called (the loaded event fires on `window`, not the element; fixed
   in `CesMessengerWidget.tsx`, and §6's verification steps isolate this);
   (2) the agent variable must have **no default value** in CX Agent Studio
   (§4) — a default silently masks a missing session id with another

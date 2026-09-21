@@ -19,7 +19,7 @@ Storefront (Next.js)  ──tracking──▶  Snowplow pipeline  ──▶  Sig
        │                                                          │
        │  /api/agent/context, /api/agent/catalog  ◀──── reads ────┘
        ▼
-  ces-messenger widget  ──setQueryParameters(domain_sessionid)──▶  CX Agent Studio agent
+  ces-messenger widget  ──setQueryParameters(session + user id)──▶  CX Agent Studio agent
                                                                         │
                                               getUserContext / searchCatalog (OpenAPI tools)
 ```
