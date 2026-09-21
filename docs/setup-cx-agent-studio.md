@@ -58,9 +58,13 @@ directly (the console supports upload or paste):
 | `searchCatalog` | `agent/tools/search-catalog.openapi.yaml` | `GET /api/agent/catalog` |
 
 Both schemas declare `servers[0].url` as your deployed storefront URL and an
-`apiKey` security scheme on the `x-agent-api-key` header. If the deployed URL
+`apiKey` security scheme on the `x-agent-api-key` header. The committed files
+carry a placeholder (`https://your-storefront.example.com`), so for a console
+import replace it with your real URL in a local copy first. If the deployed URL
 changes, update `servers[0].url` in both files and re-import rather than
-overriding it only in the console.
+overriding it only in the console. (The Terraform path needs none of this: it
+renders the URL from its `storefront_url` variable at plan time, see
+[`terraform/README.md`](../terraform/README.md).)
 
 For each tool's authentication config, choose **API key** auth and set:
 - Header name: `x-agent-api-key`

@@ -78,9 +78,12 @@ criteria.
   these -- unresolved without a live check, hence this issue's
   `human-test-required` checkpoint.
 
-All three schemas point at the deployed storefront
-(`https://your-storefront.example.com`) and declare an
-`apiKey` security scheme on the `x-agent-api-key` header. The key's actual
+All three schemas point at the deployed storefront through the committed
+placeholder `https://your-storefront.example.com` and declare an
+`apiKey` security scheme on the `x-agent-api-key` header. Terraform
+(`terraform/toolsets.tf`) replaces the placeholder with its `storefront_url`
+variable at plan time, so the files are never edited for a Terraform-managed
+app; only a manual console import needs the URL swapped in a local copy. The key's actual
 value (`AGENT_SHARED_SECRET` from the Vercel deploy, see
 `docs/setup-snowplow-trial.md` §7) is never committed -- it's entered
 directly into each tool's API-key auth config in the console.

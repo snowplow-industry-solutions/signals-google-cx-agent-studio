@@ -6,6 +6,11 @@
 # config (issue 24) -- so its display name follows the same operationId
 # convention for consistency. The console sets no descriptions on any of
 # these, so none are set here.
+#
+# open_api_schema comes from local.openapi_schemas (locals.tf), which
+# substitutes var.storefront_url for the committed placeholder server URL.
+# A plan whose toolsets want to change only servers[0].url means
+# storefront_url in the active tfvars disagrees with what was applied.
 
 # Merged Signals context (Profile Store attributes + Agentic Context
 # narrative) for a shopper session. GET /api/agent/context.
@@ -17,7 +22,7 @@ resource "google_ces_toolset" "context" {
   display_name = "getUserContext"
 
   open_api_toolset {
-    open_api_schema = file("${path.module}/../agent/tools/get-user-context.openapi.yaml")
+    open_api_schema = local.openapi_schemas["get-user-context"]
 
     api_authentication {
       api_key_config {
@@ -49,7 +54,7 @@ resource "google_ces_toolset" "self_tracking" {
   display_name = "selfTracking"
 
   open_api_toolset {
-    open_api_schema = file("${path.module}/../agent/tools/self-tracking.openapi.yaml")
+    open_api_schema = local.openapi_schemas["self-tracking"]
 
     api_authentication {
       api_key_config {
@@ -73,7 +78,7 @@ resource "google_ces_toolset" "catalog" {
   display_name = "searchCatalog"
 
   open_api_toolset {
-    open_api_schema = file("${path.module}/../agent/tools/search-catalog.openapi.yaml")
+    open_api_schema = local.openapi_schemas["search-catalog"]
 
     api_authentication {
       api_key_config {
