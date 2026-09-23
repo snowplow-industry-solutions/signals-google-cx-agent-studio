@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import Ajv from "ajv";
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,18 +8,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { products } from "@/data/products";
 import type { CesMessengerElement } from "@/types/ces-messenger";
 
+import messageContextSchema from "./__fixtures__/com.snowplow.agent.tracking.message_context.1-0-0.json";
+import messageReceivedSchema from "./__fixtures__/com.snowplow.agent.tracking.message_received.1-0-0.json";
+import messageSentSchema from "./__fixtures__/com.snowplow.agent.tracking.message_sent.1-0-0.json";
+
 const {
   trackSelfDescribingEventMock,
+  getDomainSessionIdMock,
   setSnowplowTurnIdMock,
   trackProductListClickedSpecMock,
 } = vi.hoisted(() => ({
   trackSelfDescribingEventMock: vi.fn(),
+  getDomainSessionIdMock: vi.fn<() => string | undefined>(),
   setSnowplowTurnIdMock: vi.fn(),
   trackProductListClickedSpecMock: vi.fn(),
 }));
 
 vi.mock("@snowplow/browser-tracker", () => ({
   trackSelfDescribingEvent: trackSelfDescribingEventMock,
+  getDomainSessionId: getDomainSessionIdMock,
 }));
 
 vi.mock("@/components/Widget/CesMessengerWidget", () => ({
@@ -47,6 +55,9 @@ import {
 } from "./useWidgetConversationTracking";
 
 const PRODUCT = products[0];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DOMAIN_SESSION_ID = "6f1d2c3b-4a5e-4f60-8b71-9c0d1e2f3a4b";
 
 function Harness({
   onElement,
@@ -116,6 +127,7 @@ describe("useWidgetConversationTracking", () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     trackerReadyPromise = Promise.resolve();
+    getDomainSessionIdMock.mockReturnValue(DOMAIN_SESSION_ID);
     window.sessionStorage.clear();
   });
 
@@ -148,13 +160,19 @@ describe("useWidgetConversationTracking", () => {
       "iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0"
     );
 
+    expect(dataOf(call)).toEqual({
+      session_id: DOMAIN_SESSION_ID,
+      sent_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+
     const messageContext = findEntity(call, "message_context")!;
-    expect(messageContext.data).toMatchObject({
-      role: "user",
-      length: "Hello there".length,
-      preview: "Hello there",
-      index: 1,
-      turn: 1,
+    expect(messageContext.data).toEqual({
+      message_id: expect.stringMatching(UUID_RE),
+      message_role: "user",
+      message_length: "Hello there".length,
+      message_preview: "Hello there",
+      message_index: 1,
+      conversation_turn: 1,
     });
 
     const conversation = findEntity(call, "conversation")!;
@@ -175,9 +193,12 @@ describe("useWidgetConversationTracking", () => {
     const secondTurnId = setSnowplowTurnIdMock.mock.calls[1][1] as string;
     expect(secondTurnId).not.toBe(turnId);
     expect(findEntity(secondCall, "message_context")!.data).toMatchObject({
-      index: 2,
-      turn: 2,
+      message_index: 2,
+      conversation_turn: 2,
     });
+    expect(findEntity(secondCall, "message_context")!.data.message_id).not.toBe(
+      messageContext.data.message_id
+    );
   });
 
   it("tracks message_received on the first chunk only, sharing the turn id with a positive response time", async () => {
@@ -202,13 +223,19 @@ describe("useWidgetConversationTracking", () => {
     expect(schemaOf(receivedCall)).toBe(
       "iglu:com.snowplow.agent.tracking/message_received/jsonschema/1-0-0"
     );
-    expect(dataOf(receivedCall)).toMatchObject({
+    expect(dataOf(receivedCall)).toEqual({
+      session_id: DOMAIN_SESSION_ID,
       invocation_id: turnId,
       response_time_ms: 500,
       tool_calls_count: 0,
+      received_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
     });
     expect(findEntity(receivedCall, "message_context")!.data).toMatchObject({
-      role: "assistant",
+      message_id: expect.stringMatching(UUID_RE),
+      message_role: "assistant",
+      message_length: "Here is a coat.".length,
+      message_index: 1,
+      conversation_turn: 1,
     });
     expect(findEntity(receivedCall, "conversation")!.data).toMatchObject({
       turn_id: turnId,
@@ -222,6 +249,25 @@ describe("useWidgetConversationTracking", () => {
     expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(2);
   });
 
+  it("caps response_time_ms at the schema maximum of 300000 when a reply arrives after five minutes", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+
+    mount();
+    dispatchOn(window, "ces-user-input-entered", { text: "Slow one" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    now = 1_000 + 600_000;
+    dispatchOn(window, "ces-text-received", { text: "Finally." });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(dataOf(trackSelfDescribingEventMock.mock.calls[1]).response_time_ms).toBe(300_000);
+  });
+
   it("caps message previews at 100 characters while still reporting the full length", async () => {
     mount();
     const longText = "a".repeat(150);
@@ -232,8 +278,8 @@ describe("useWidgetConversationTracking", () => {
     });
 
     const messageContext = findEntity(trackSelfDescribingEventMock.mock.calls[0], "message_context")!;
-    expect(messageContext.data.length).toBe(150);
-    expect(messageContext.data.preview).toBe("a".repeat(100));
+    expect(messageContext.data.message_length).toBe(150);
+    expect(messageContext.data.message_preview).toBe("a".repeat(100));
   });
 
   it("omits the preview when the public toggle is disabled, but still reports length", async () => {
@@ -246,8 +292,8 @@ describe("useWidgetConversationTracking", () => {
     });
 
     const messageContext = findEntity(trackSelfDescribingEventMock.mock.calls[0], "message_context")!;
-    expect(messageContext.data.preview).toBeNull();
-    expect(messageContext.data.length).toBe(5);
+    expect(messageContext.data.message_preview).toBeNull();
+    expect(messageContext.data.message_length).toBe(5);
   });
 
   it("reads the chat session id from the widget's session-storage entry, or null when unavailable", async () => {
@@ -268,6 +314,131 @@ describe("useWidgetConversationTracking", () => {
     expect(
       findEntity(trackSelfDescribingEventMock.mock.calls[1], "conversation")!.data.chat_session_id
     ).toBe("chat-session-42");
+  });
+
+  describe("session_id resolution", () => {
+    const CHAT_SESSION_UUID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+
+    async function sendAndReceive() {
+      dispatchOn(window, "ces-user-input-entered", { text: "Hi" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      dispatchOn(window, "ces-text-received", { text: "Hello" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      return trackSelfDescribingEventMock.mock.calls.map((call) => dataOf(call).session_id);
+    }
+
+    it("prefers a UUID-shaped chat session id, on both message_sent and message_received", async () => {
+      window.sessionStorage.setItem("ces-messenger-session-id", CHAT_SESSION_UUID);
+      mount();
+
+      expect(await sendAndReceive()).toEqual([CHAT_SESSION_UUID, CHAT_SESSION_UUID]);
+    });
+
+    it("skips a non-UUID chat session id for session_id but still reports it on the conversation entity", async () => {
+      window.sessionStorage.setItem("ces-messenger-session-id", "chat-session-42");
+      mount();
+
+      expect(await sendAndReceive()).toEqual([DOMAIN_SESSION_ID, DOMAIN_SESSION_ID]);
+      expect(
+        findEntity(trackSelfDescribingEventMock.mock.calls[0], "conversation")!.data.chat_session_id
+      ).toBe("chat-session-42");
+    });
+
+    it("falls back to the shopper's domain session id when no chat session id is available", async () => {
+      mount();
+
+      expect(await sendAndReceive()).toEqual([DOMAIN_SESSION_ID, DOMAIN_SESSION_ID]);
+    });
+
+    it("resolves session_id once per turn, so a chat session id that appears mid-turn does not split the pair", async () => {
+      mount();
+      dispatchOn(window, "ces-user-input-entered", { text: "Hi" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      window.sessionStorage.setItem("ces-messenger-session-id", CHAT_SESSION_UUID);
+      dispatchOn(window, "ces-text-received", { text: "Hello" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const [sent, received] = trackSelfDescribingEventMock.mock.calls;
+      expect(dataOf(sent).session_id).toBe(DOMAIN_SESSION_ID);
+      expect(dataOf(received).session_id).toBe(DOMAIN_SESSION_ID);
+    });
+
+    it("falls back to one UUID per mount when neither id is available", async () => {
+      getDomainSessionIdMock.mockReturnValue(undefined);
+      mount();
+
+      const ids = await sendAndReceive();
+      expect(ids[0]).toMatch(UUID_RE);
+      expect(ids[1]).toBe(ids[0]);
+
+      dispatchOn(window, "ces-user-input-entered", { text: "Again" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(dataOf(trackSelfDescribingEventMock.mock.calls[2]).session_id).toBe(ids[0]);
+    });
+  });
+
+  describe("Iglu Central schema conformance", () => {
+    // ajv 6 speaks the draft-04 dialect these Iglu schemas use and ships the
+    // "uuid" and "date-time" format checks built in. The self-describing
+    // "$schema" URI points at Iglu's meta-schema, which ajv cannot fetch, so
+    // it is stripped along with the Iglu "self" block before compiling.
+    function compile(schema: Record<string, unknown>) {
+      const plain = { ...schema };
+      delete plain.$schema;
+      delete plain.self;
+      return new Ajv({ allErrors: true, schemaId: "auto" }).compile(plain);
+    }
+    const validateSent = compile(messageSentSchema);
+    const validateReceived = compile(messageReceivedSchema);
+    const validateContext = compile(messageContextSchema);
+
+    function expectValid(validate: ReturnType<typeof compile>, data: unknown) {
+      const ok = validate(data);
+      expect(validate.errors ?? []).toEqual([]);
+      expect(ok).toBe(true);
+    }
+
+    it("emits message_sent and message_received payloads and message_context entities that validate", async () => {
+      mount();
+      dispatchOn(window, "ces-user-input-entered", { text: "Show me coats" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      dispatchOn(window, "ces-text-received", { text: "Here are some coats." });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const [sent, received] = trackSelfDescribingEventMock.mock.calls;
+      expectValid(validateSent, dataOf(sent));
+      expectValid(validateReceived, dataOf(received));
+      expectValid(validateContext, findEntity(sent, "message_context")!.data);
+      expectValid(validateContext, findEntity(received, "message_context")!.data);
+    });
+
+    it("still validates with previews disabled and an unparseable message detail", async () => {
+      vi.stubEnv("NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED", "false");
+      mount();
+      dispatchOn(window, "ces-user-input-entered", { nothing: "useful" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const [sent] = trackSelfDescribingEventMock.mock.calls;
+      expectValid(validateSent, dataOf(sent));
+      expectValid(validateContext, findEntity(sent, "message_context")!.data);
+    });
   });
 
   it("defers tracking until the tracker is ready, instead of dropping it", async () => {
