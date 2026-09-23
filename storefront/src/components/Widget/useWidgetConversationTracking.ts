@@ -19,7 +19,7 @@ import {
 /**
  * Issue 25's conversation-tracking hook: browser-side `message_sent` /
  * `message_received` events (Iglu Central `com.snowplow.agent.tracking`)
- * plus concierge card-click tracking, following the defensive
+ * plus concierge card click and impression tracking, following the defensive
  * window-and-element listener pattern already used by
  * useWidgetLoadingIndicator.ts and waiting on the same tracker-ready signal
  * as the rest of the storefront (SnowplowProvider.waitForSnowplowTracker) so

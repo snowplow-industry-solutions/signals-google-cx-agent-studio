@@ -33,9 +33,10 @@ import type { CesMessengerElement } from "@/types/ces-messenger";
 import { useWidgetTokenRenderer } from "./useWidgetTokenRenderer";
 
 /**
- * Bare harness: no real <ces-messenger> custom element, no shadow root —
- * only the payload-registration path (attachPayloadPath) is under test
- * here, so a plain div stands in for the element.
+ * Bare harness: a plain div stands in for the <ces-messenger> custom
+ * element. Tests attach whatever the path under test needs -- the
+ * registration methods for the payload path, an open shadow root for the
+ * in-band token path -- via onElement.
  */
 function Harness({
   onElement,
@@ -62,7 +63,15 @@ function Harness({
 
 const mounted: { root: Root; container: HTMLDivElement }[] = [];
 
-function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
+/**
+ * Mounts the hook against a stand-in element carrying `methods`; `prepare`
+ * runs first, before the hook's effect, for anything else the element
+ * needs (e.g. a shadow root with existing chat content).
+ */
+function mount(
+  methods: Partial<CesMessengerElement>,
+  prepare?: (element: HTMLElement) => void
+): CesMessengerElement {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -73,6 +82,7 @@ function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
     root.render(
       <Harness
         onElement={(el) => {
+          prepare?.(el as unknown as HTMLElement);
           Object.assign(el, methods);
           element = el;
         }}
@@ -81,6 +91,21 @@ function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
   });
   return element;
 }
+
+beforeEach(() => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  while (mounted.length) {
+    const { root, container } = mounted.pop()!;
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  }
+});
 
 function normalizedContext() {
   return {
@@ -98,21 +123,6 @@ function normalizedContext() {
 }
 
 describe("useWidgetTokenRenderer — payload-mode registration", () => {
-  beforeEach(() => {
-    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    while (mounted.length) {
-      const { root, container } = mounted.pop()!;
-      act(() => {
-        root.unmount();
-      });
-      container.remove();
-    }
-  });
-
   it("falls back to anchor cards and skips the rich-message handler when the build lacks registerRichMessageHandler", () => {
     const registerTemplate = vi.fn();
     const registerHook = vi.fn();
@@ -270,47 +280,20 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
 });
 
 describe("useWidgetTokenRenderer — in-band token path", () => {
-  beforeEach(() => {
-    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    while (mounted.length) {
-      const { root, container } = mounted.pop()!;
-      act(() => {
-        root.unmount();
-      });
-      container.remove();
-    }
-  });
-
   const TOKEN =
     '{@Widget: productCarousel(payload: {productDetails: [{title: "Silk Twill Square Scarf", uri: "https://example.com/products/scarf"}, {title: "Felt Cloche Hat", uri: "https://example.com/products/hat"}]})}';
 
   it("counts the cards rendered in place of a chat token as one concierge impression", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    mounted.push({ root, container });
-
-    act(() => {
-      root.render(
-        <Harness
-          onElement={(el) => {
-            // Stand in for the upgraded <ces-messenger>: an open shadow root
-            // already holding a bot message with a complete widget token.
-            const shadow = (el as unknown as HTMLElement).attachShadow({ mode: "open" });
-            const message = document.createElement("span");
-            message.textContent = `Take a look: ${TOKEN}`;
-            shadow.appendChild(message);
-            Object.assign(el, { registerTemplate: vi.fn(), registerHook: vi.fn() });
-          }}
-        />
-      );
+    const element = mount({ registerTemplate: vi.fn(), registerHook: vi.fn() }, (el) => {
+      // Stand in for the upgraded <ces-messenger>: an open shadow root
+      // already holding a bot message with a complete widget token.
+      const shadow = el.attachShadow({ mode: "open" });
+      const message = document.createElement("span");
+      message.textContent = `Take a look: ${TOKEN}`;
+      shadow.appendChild(message);
     });
 
-    const shadow = (container.firstElementChild as HTMLElement).shadowRoot!;
+    const shadow = (element as unknown as HTMLElement).shadowRoot!;
     expect(shadow.querySelector("[data-widget-card=productCarousel]")).not.toBeNull();
     expect(trackConciergeCardsShownMock).toHaveBeenCalledTimes(1);
     expect(trackConciergeCardsShownMock.mock.calls[0][0]).toEqual([

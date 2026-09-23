@@ -66,6 +66,12 @@ function cardItem(uri: string, title = "A card") {
   return { title, subtitle: "", price: "", uri, imageUri: "" };
 }
 
+/** Lets a tracker call queued behind an already-resolved waitForSnowplowTracker run. */
+async function flushTrackerQueue() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DOMAIN_SESSION_ID = "6f1d2c3b-4a5e-4f60-8b71-9c0d1e2f3a4b";
 
@@ -691,8 +697,7 @@ describe("trackConciergeCardClick", () => {
 
   it("fires the product list clicked helper with the concierge list id/name for a resolvable product URL", async () => {
     trackConciergeCardClick(new URL(`https://example.com/products/${PRODUCT.slug}`));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).toHaveBeenCalledTimes(1);
     const props = trackProductListClickedSpecMock.mock.calls[0][0];
@@ -705,16 +710,14 @@ describe("trackConciergeCardClick", () => {
 
   it("tracks nothing for a URL whose slug does not match a catalog product", async () => {
     trackConciergeCardClick(new URL("https://example.com/products/not-a-real-product"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).not.toHaveBeenCalled();
   });
 
   it("tracks nothing for a non-product URL", async () => {
     trackConciergeCardClick(new URL("https://example.com/collections/winter-salon"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).not.toHaveBeenCalled();
   });
@@ -731,8 +734,7 @@ describe("trackConciergeCardsShown", () => {
       cardItem(`https://storefront.example.com/products/${PRODUCT.slug}`),
       cardItem(`https://storefront.example.com/products/${SECOND_PRODUCT.slug}/`),
     ]);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
     const props = trackProductListViewedSpecMock.mock.calls[0][0];
@@ -750,8 +752,7 @@ describe("trackConciergeCardsShown", () => {
 
   it("resolves a relative card uri against the current page", async () => {
     trackConciergeCardsShown([cardItem(`/products/${PRODUCT.slug}`)]);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
     expect(trackProductListViewedSpecMock.mock.calls[0][0]).toMatchObject({
@@ -768,8 +769,7 @@ describe("trackConciergeCardsShown", () => {
       cardItem(""),
       cardItem(`https://storefront.example.com/products/${PRODUCT.slug}`),
     ]);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
     expect(trackProductListViewedSpecMock.mock.calls[0][0]).toMatchObject({
@@ -783,8 +783,7 @@ describe("trackConciergeCardsShown", () => {
       cardItem("https://storefront.example.com/products/not-a-real-product"),
       cardItem(""),
     ]);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListViewedSpecMock).not.toHaveBeenCalled();
   });
