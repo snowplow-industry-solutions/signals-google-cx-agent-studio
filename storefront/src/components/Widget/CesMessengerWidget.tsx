@@ -54,7 +54,7 @@ const WIDGET_CUSTOM_CSS = `
 const queryParameters = new WeakMap<CesMessengerElement, Record<string, string>>();
 
 /** Merges `params` into the element's variable set and pushes the whole set if the widget is loaded. Returns whether it pushed. */
-function mergeQueryParameters(element: CesMessengerElement, params: Record<string, string>): boolean {
+function mergeAndPushQueryParameters(element: CesMessengerElement, params: Record<string, string>): boolean {
   const merged = { ...(queryParameters.get(element) ?? {}), ...params };
   queryParameters.set(element, merged);
   if (Object.keys(merged).length === 0 || typeof element.setQueryParameters !== "function") {
@@ -95,7 +95,8 @@ export function sendIdentityVariables(element: CesMessengerElement) {
     params[USER_ID_CONTEXT_VARIABLE] = userId;
   }
 
-  if (mergeQueryParameters(element, params)) {
+  const pushed = mergeAndPushQueryParameters(element, params);
+  if (pushed && Object.keys(params).length > 0) {
     logSignalsDemo("Passed Snowplow identity variables to ces-messenger", params);
   }
 }
@@ -185,7 +186,7 @@ export function CesMessengerWidget() {
 // whatever else has been merged for this element. Before the widget has
 // loaded, the id is held and goes out with the identity variables.
 export function setSnowplowTurnId(element: CesMessengerElement, turnId: string) {
-  const pushed = mergeQueryParameters(element, { [TURN_ID_CONTEXT_VARIABLE]: turnId });
+  const pushed = mergeAndPushQueryParameters(element, { [TURN_ID_CONTEXT_VARIABLE]: turnId });
   logSignalsDemo(
     pushed
       ? "Set snowplow_turn_id on ces-messenger"

@@ -448,15 +448,7 @@ describe("useWidgetConversationTracking", () => {
 
     it("reads the CES session id from the widget's bidi-widget-session storage entry and uses it as session_id", async () => {
       const cesSessionId = "644698e5-1b2c-4d3e-9f80-a1b2c3d4e5f6";
-      window.sessionStorage.setItem(
-        "bidi-widget-session",
-        JSON.stringify({
-          messages: [{ type: "USER", text: "hi" }],
-          sessionId: cesSessionId,
-          chatUiStatus: "OPEN",
-          toolMessageQueue: [],
-        })
-      );
+      seedWidgetSession(cesSessionId);
       mount();
 
       dispatchOn(window, "ces-user-input-entered", { input: "hi" });

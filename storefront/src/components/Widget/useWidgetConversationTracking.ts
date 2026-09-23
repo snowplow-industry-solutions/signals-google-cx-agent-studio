@@ -337,6 +337,11 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       })();
     };
 
+    // Records the FIRST receive event of a turn only. Live on 2026-09-23 the
+    // first backend message already carried the full text plus the payload,
+    // so this is adequate for now; if the agent ever streams partials, or
+    // sends a payload-only message ahead of the text, the text would need
+    // accumulating until `turnCompleted` instead.
     const handleReceived = (event: Event) => {
       const turn = currentTurn;
       if (!turn || turn.receivedForTurn) {
