@@ -27,8 +27,10 @@ const SESSION_CONTEXT_VARIABLE = "snowplow_session_id";
 // three OpenAPI tool schemas (agent/tools/*.openapi.yaml).
 const USER_ID_CONTEXT_VARIABLE = "snowplow_user_id";
 
-// Set once per send by the conversation hook (issue 25), not on load; matches
-// the TurnIdHeader binding shared by all three OpenAPI tool schemas.
+// Armed by the conversation hook (issue 25) at mount and re-armed after every
+// send, so each turn's request carries the id the browser's message events
+// use; matches the TurnIdHeader binding shared by all three OpenAPI tool
+// schemas.
 const TURN_ID_CONTEXT_VARIABLE = "snowplow_turn_id";
 
 // The widget's shadow styles fall back to Vue-green (#42b883) for
@@ -43,15 +45,60 @@ const WIDGET_CUSTOM_CSS = `
   button { letter-spacing: 0.08em; }
 `;
 
-// Last variable set handed to each widget element. setQueryParameters()
+// The full variable set each widget element should carry. setQueryParameters()
 // replaces the whole set on every call (see CesMessengerElement), so every
-// later call must resend what came before. Keyed per element so the entry
-// dies with the widget instance.
-const lastSentQueryParameters = new WeakMap<CesMessengerElement, Record<string, string>>();
+// push resends everything merged so far. Callers can also run before the
+// gstatic script has upgraded the element (no setQueryParameters yet): the
+// merge is kept and the next push after load carries it. Keyed per element
+// so the entry dies with the widget instance.
+const queryParameters = new WeakMap<CesMessengerElement, Record<string, string>>();
 
-function sendQueryParameters(element: CesMessengerElement, params: Record<string, string>) {
-  lastSentQueryParameters.set(element, params);
-  element.setQueryParameters({ ...params });
+/** Merges `params` into the element's variable set and pushes the whole set if the widget is loaded. Returns whether it pushed. */
+function mergeAndPushQueryParameters(element: CesMessengerElement, params: Record<string, string>): boolean {
+  const merged = { ...(queryParameters.get(element) ?? {}), ...params };
+  queryParameters.set(element, merged);
+  if (Object.keys(merged).length === 0 || typeof element.setQueryParameters !== "function") {
+    return false;
+  }
+  element.setQueryParameters({ ...merged });
+  return true;
+}
+
+/**
+ * Sends the shopper's identity variables (domain_sessionid, domain_userid)
+ * to a loaded widget element, together with anything already merged for it
+ * (the conversation hook arms `snowplow_turn_id` at mount, before the widget
+ * has loaded). Exported for the component test; the component calls it from
+ * its loaded handler.
+ */
+export function sendIdentityVariables(element: CesMessengerElement) {
+  // Both ids go in ONE call: setQueryParameters replaces the whole variable
+  // set, so setting them one key at a time left the agent with only the
+  // last one (the getUserContext-called-with-{} regression from issue 22).
+  const params: Record<string, string> = {};
+
+  const sessionId = getDomainSessionId();
+  if (!sessionId) {
+    logSignalsDemo(
+      "ces-messenger loaded with no domain_sessionid yet (new/cookieless visitor); leaving snowplow_session_id unset so the agent falls back to generic concierge behaviour"
+    );
+  } else {
+    params[SESSION_CONTEXT_VARIABLE] = sessionId;
+  }
+
+  const userId = getDomainUserId();
+  if (!userId) {
+    logSignalsDemo(
+      "ces-messenger loaded with no domain_userid yet (new/cookieless visitor); leaving snowplow_user_id unset"
+    );
+  } else {
+    params[USER_ID_CONTEXT_VARIABLE] = userId;
+  }
+
+  const pushed = mergeAndPushQueryParameters(element, params);
+  if (pushed && Object.keys(params).length > 0) {
+    logSignalsDemo("Passed Snowplow identity variables to ces-messenger", params);
+  }
 }
 
 export function CesMessengerWidget() {
@@ -75,36 +122,7 @@ export function CesMessengerWidget() {
     if (!element) {
       return;
     }
-
-    // Both ids go in ONE call: setQueryParameters replaces the whole variable
-    // set, so setting them one key at a time left the agent with only the
-    // last one (the getUserContext-called-with-{} regression from issue 22).
-    const params: Record<string, string> = {};
-
-    const sessionId = getDomainSessionId();
-    if (!sessionId) {
-      logSignalsDemo(
-        "ces-messenger loaded with no domain_sessionid yet (new/cookieless visitor); leaving snowplow_session_id unset so the agent falls back to generic concierge behaviour"
-      );
-    } else {
-      params[SESSION_CONTEXT_VARIABLE] = sessionId;
-    }
-
-    const userId = getDomainUserId();
-    if (!userId) {
-      logSignalsDemo(
-        "ces-messenger loaded with no domain_userid yet (new/cookieless visitor); leaving snowplow_user_id unset"
-      );
-    } else {
-      params[USER_ID_CONTEXT_VARIABLE] = userId;
-    }
-
-    if (Object.keys(params).length === 0) {
-      return;
-    }
-
-    sendQueryParameters(element, params);
-    logSignalsDemo("Passed Snowplow identity variables to ces-messenger", params);
+    sendIdentityVariables(element);
   }, []);
 
   useEffect(() => {
@@ -159,16 +177,20 @@ export function CesMessengerWidget() {
   );
 }
 
-// Called by the conversation hook (issue 25) right before each send, with
-// the same element the other widget hooks already receive via elementRef.
-// Unlike the session/user id variables above, the turn id is per-turn, not
-// set-once-on-load -- but because setQueryParameters replaces rather than
-// merges, it is resent together with whatever handleLoaded last sent, or the
-// first send would wipe the session and user ids again.
+// Called by the conversation hook (issue 25): once at mount to arm the first
+// turn's id, then again right after each send to arm the next one (the widget
+// dispatches its user-input event only after the request has gone, so an id
+// set at send time would ride on the following turn). Unlike the identity
+// variables above, the turn id changes every turn, but because
+// setQueryParameters replaces rather than merges it travels together with
+// whatever else has been merged for this element. Before the widget has
+// loaded, the id is held and goes out with the identity variables.
 export function setSnowplowTurnId(element: CesMessengerElement, turnId: string) {
-  sendQueryParameters(element, {
-    ...(lastSentQueryParameters.get(element) ?? {}),
-    [TURN_ID_CONTEXT_VARIABLE]: turnId,
-  });
-  logSignalsDemo("Set snowplow_turn_id on ces-messenger", { turnId });
+  const pushed = mergeAndPushQueryParameters(element, { [TURN_ID_CONTEXT_VARIABLE]: turnId });
+  logSignalsDemo(
+    pushed
+      ? "Set snowplow_turn_id on ces-messenger"
+      : "Holding snowplow_turn_id until ces-messenger loads",
+    { turnId }
+  );
 }

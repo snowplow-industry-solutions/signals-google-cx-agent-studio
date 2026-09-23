@@ -99,6 +99,14 @@ function dispatchOn(target: EventTarget, name: string, detail?: unknown) {
   });
 }
 
+/** Mirrors the JSON entry ces-messenger writes under sessionStorage["bidi-widget-session"]. */
+function seedWidgetSession(sessionId: string) {
+  window.sessionStorage.setItem(
+    "bidi-widget-session",
+    JSON.stringify({ messages: [], sessionId, chatUiStatus: "OPEN", toolMessageQueue: [] })
+  );
+}
+
 function schemaOf(call: unknown[]): string {
   const arg = call[0] as { event: { schema: string } };
   return arg.event.schema;
@@ -141,16 +149,17 @@ describe("useWidgetConversationTracking", () => {
     }
   });
 
-  it("tracks one message_sent per user input, sets the turn id on the widget first, with an increasing index", async () => {
+  it("tracks one message_sent per user input, using the turn id armed on the widget before the send, with an increasing index", async () => {
     mount();
 
-    dispatchOn(window, "ces-user-input-entered", { text: "Hello there" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Hello there" });
     await act(async () => {
       await Promise.resolve();
     });
 
     expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(1);
-    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(1);
+    // Armed at mount, then re-armed for the next turn once this send consumed it.
+    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(2);
     expect(setSnowplowTurnIdMock.mock.invocationCallOrder[0]).toBeLessThan(
       trackSelfDescribingEventMock.mock.invocationCallOrder[0]
     );
@@ -183,7 +192,7 @@ describe("useWidgetConversationTracking", () => {
       channel: "web_widget",
     });
 
-    dispatchOn(window, "ces-user-input-entered", { text: "Another one" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Another one" });
     await act(async () => {
       await Promise.resolve();
     });
@@ -206,14 +215,14 @@ describe("useWidgetConversationTracking", () => {
     vi.spyOn(Date, "now").mockImplementation(() => now);
 
     mount();
-    dispatchOn(window, "ces-user-input-entered", { text: "Find me a coat" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Find me a coat" });
     await act(async () => {
       await Promise.resolve();
     });
     const turnId = setSnowplowTurnIdMock.mock.calls[0][1] as string;
 
     now = 1_500;
-    dispatchOn(window, "ces-text-received", { text: "Here is a coat." });
+    dispatchOn(window, "ces-text-received", { outputs: [{ text: "Here is a coat." }] });
     await act(async () => {
       await Promise.resolve();
     });
@@ -242,7 +251,7 @@ describe("useWidgetConversationTracking", () => {
     });
 
     // A later chunk for the same turn must be ignored.
-    dispatchOn(window, "ces-payload-received", { text: "more" });
+    dispatchOn(window, "ces-payload-received", { outputs: [{ text: "more" }] });
     await act(async () => {
       await Promise.resolve();
     });
@@ -254,13 +263,13 @@ describe("useWidgetConversationTracking", () => {
     vi.spyOn(Date, "now").mockImplementation(() => now);
 
     mount();
-    dispatchOn(window, "ces-user-input-entered", { text: "Slow one" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Slow one" });
     await act(async () => {
       await Promise.resolve();
     });
 
     now = 1_000 + 600_000;
-    dispatchOn(window, "ces-text-received", { text: "Finally." });
+    dispatchOn(window, "ces-text-received", { outputs: [{ text: "Finally." }] });
     await act(async () => {
       await Promise.resolve();
     });
@@ -272,7 +281,7 @@ describe("useWidgetConversationTracking", () => {
     mount();
     const longText = "a".repeat(150);
 
-    dispatchOn(window, "ces-user-input-entered", { text: longText });
+    dispatchOn(window, "ces-user-input-entered", { input: longText });
     await act(async () => {
       await Promise.resolve();
     });
@@ -286,7 +295,7 @@ describe("useWidgetConversationTracking", () => {
     vi.stubEnv("NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED", "false");
     mount();
 
-    dispatchOn(window, "ces-user-input-entered", { text: "Hello" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Hello" });
     await act(async () => {
       await Promise.resolve();
     });
@@ -296,9 +305,9 @@ describe("useWidgetConversationTracking", () => {
     expect(messageContext.data.message_length).toBe(5);
   });
 
-  it("reads the chat session id from the widget's session-storage entry, or null when unavailable", async () => {
+  it("reports the chat session id on the conversation entity, or null when the widget has not stored one", async () => {
     mount();
-    dispatchOn(window, "ces-user-input-entered", { text: "Hi" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Hi" });
     await act(async () => {
       await Promise.resolve();
     });
@@ -306,8 +315,8 @@ describe("useWidgetConversationTracking", () => {
       findEntity(trackSelfDescribingEventMock.mock.calls[0], "conversation")!.data.chat_session_id
     ).toBeNull();
 
-    window.sessionStorage.setItem("ces-messenger-session-id", "chat-session-42");
-    dispatchOn(window, "ces-user-input-entered", { text: "Hi again" });
+    seedWidgetSession("chat-session-42");
+    dispatchOn(window, "ces-user-input-entered", { input: "Hi again" });
     await act(async () => {
       await Promise.resolve();
     });
@@ -316,15 +325,166 @@ describe("useWidgetConversationTracking", () => {
     ).toBe("chat-session-42");
   });
 
+  // ces-messenger dispatches ces-user-input-entered only AFTER the request has
+  // gone (it awaits the network send first), so an id set inside that handler
+  // rides on the NEXT turn's request. The hook therefore arms the id ahead of
+  // the send and consumes it when the send is reported.
+  it("arms the next turn id on the widget at mount, uses it for the turn the shopper then sends, and re-arms a fresh one", async () => {
+    mount();
+
+    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(1);
+    const armedTurnId = setSnowplowTurnIdMock.mock.calls[0][1] as string;
+    expect(armedTurnId).toMatch(UUID_RE);
+    expect(trackSelfDescribingEventMock).not.toHaveBeenCalled();
+
+    dispatchOn(window, "ces-user-input-entered", { input: "first" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(findEntity(trackSelfDescribingEventMock.mock.calls[0], "conversation")!.data.turn_id).toBe(
+      armedTurnId
+    );
+    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(2);
+    const nextTurnId = setSnowplowTurnIdMock.mock.calls[1][1] as string;
+    expect(nextTurnId).toMatch(UUID_RE);
+    expect(nextTurnId).not.toBe(armedTurnId);
+
+    dispatchOn(window, "ces-text-received", { outputs: [{ text: "reply" }] });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(dataOf(trackSelfDescribingEventMock.mock.calls[1]).invocation_id).toBe(armedTurnId);
+
+    dispatchOn(window, "ces-user-input-entered", { input: "second" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(findEntity(trackSelfDescribingEventMock.mock.calls[2], "conversation")!.data.turn_id).toBe(
+      nextTurnId
+    );
+  });
+
+  describe("ces-messenger event detail shapes (captured from the live widget, 2026-09-23)", () => {
+    it("reads the user's message from the {input} detail of ces-user-input-entered", async () => {
+      mount();
+
+      dispatchOn(window, "ces-user-input-entered", {
+        input: "DQ check from Claude: what scarves do you have?",
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const messageContext = findEntity(trackSelfDescribingEventMock.mock.calls[0], "message_context")!;
+      expect(messageContext.data).toMatchObject({
+        message_role: "user",
+        message_length: "DQ check from Claude: what scarves do you have?".length,
+        message_preview: "DQ check from Claude: what scarves do you have?",
+      });
+    });
+
+    it("reads the assistant's text from outputs[].text of the raw backend message on ces-text-received", async () => {
+      mount();
+      dispatchOn(window, "ces-user-input-entered", { input: "what scarves do you have?" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      dispatchOn(window, "ces-text-received", {
+        outputs: [
+          { text: "We have three scarves in the winter salon.", turnIndex: 1 },
+          { turnCompleted: true, turnIndex: 1, payload: { richContent: [] } },
+        ],
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const messageContext = findEntity(trackSelfDescribingEventMock.mock.calls[1], "message_context")!;
+      expect(messageContext.data).toMatchObject({
+        message_role: "assistant",
+        message_length: "We have three scarves in the winter salon.".length,
+        message_preview: "We have three scarves in the winter salon.",
+      });
+    });
+
+    it("falls back to the sessionOutput.text and detectIntentResponse wire shapes the widget also unmarshals", async () => {
+      mount();
+
+      dispatchOn(window, "ces-user-input-entered", { input: "one" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      dispatchOn(window, "ces-text-received", {
+        sessionOutput: { text: "Bidi session reply", turnIndex: 1, turnCompleted: true },
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(
+        findEntity(trackSelfDescribingEventMock.mock.calls[1], "message_context")!.data.message_preview
+      ).toBe("Bidi session reply");
+
+      dispatchOn(window, "ces-user-input-entered", { input: "two" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      dispatchOn(window, "ces-text-received", {
+        detectIntentResponse: {
+          responseType: "FINAL",
+          queryResult: {
+            responseMessages: [{ text: { text: ["Dialogflow", "reply"] } }, { payload: {} }],
+          },
+        },
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(
+        findEntity(trackSelfDescribingEventMock.mock.calls[3], "message_context")!.data.message_preview
+      ).toBe("Dialogflow\nreply");
+    });
+
+    it("reads the CES session id from the widget's bidi-widget-session storage entry and uses it as session_id", async () => {
+      const cesSessionId = "644698e5-1b2c-4d3e-9f80-a1b2c3d4e5f6";
+      seedWidgetSession(cesSessionId);
+      mount();
+
+      dispatchOn(window, "ces-user-input-entered", { input: "hi" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const call = trackSelfDescribingEventMock.mock.calls[0];
+      expect(findEntity(call, "conversation")!.data.chat_session_id).toBe(cesSessionId);
+      expect(dataOf(call).session_id).toBe(cesSessionId);
+    });
+
+    it("degrades to a null chat session id and the domain session fallback when the storage entry is not JSON", async () => {
+      window.sessionStorage.setItem("bidi-widget-session", "not json");
+      mount();
+
+      dispatchOn(window, "ces-user-input-entered", { input: "hi" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const call = trackSelfDescribingEventMock.mock.calls[0];
+      expect(findEntity(call, "conversation")!.data.chat_session_id).toBeNull();
+      expect(dataOf(call).session_id).toBe(DOMAIN_SESSION_ID);
+    });
+  });
+
   describe("session_id resolution", () => {
     const CHAT_SESSION_UUID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 
     async function sendAndReceive() {
-      dispatchOn(window, "ces-user-input-entered", { text: "Hi" });
+      dispatchOn(window, "ces-user-input-entered", { input: "Hi" });
       await act(async () => {
         await Promise.resolve();
       });
-      dispatchOn(window, "ces-text-received", { text: "Hello" });
+      dispatchOn(window, "ces-text-received", { outputs: [{ text: "Hello" }] });
       await act(async () => {
         await Promise.resolve();
       });
@@ -332,14 +492,14 @@ describe("useWidgetConversationTracking", () => {
     }
 
     it("prefers a UUID-shaped chat session id, on both message_sent and message_received", async () => {
-      window.sessionStorage.setItem("ces-messenger-session-id", CHAT_SESSION_UUID);
+      seedWidgetSession(CHAT_SESSION_UUID);
       mount();
 
       expect(await sendAndReceive()).toEqual([CHAT_SESSION_UUID, CHAT_SESSION_UUID]);
     });
 
     it("skips a non-UUID chat session id for session_id but still reports it on the conversation entity", async () => {
-      window.sessionStorage.setItem("ces-messenger-session-id", "chat-session-42");
+      seedWidgetSession("chat-session-42");
       mount();
 
       expect(await sendAndReceive()).toEqual([DOMAIN_SESSION_ID, DOMAIN_SESSION_ID]);
@@ -356,13 +516,13 @@ describe("useWidgetConversationTracking", () => {
 
     it("resolves session_id once per turn, so a chat session id that appears mid-turn does not split the pair", async () => {
       mount();
-      dispatchOn(window, "ces-user-input-entered", { text: "Hi" });
+      dispatchOn(window, "ces-user-input-entered", { input: "Hi" });
       await act(async () => {
         await Promise.resolve();
       });
 
-      window.sessionStorage.setItem("ces-messenger-session-id", CHAT_SESSION_UUID);
-      dispatchOn(window, "ces-text-received", { text: "Hello" });
+      seedWidgetSession(CHAT_SESSION_UUID);
+      dispatchOn(window, "ces-text-received", { outputs: [{ text: "Hello" }] });
       await act(async () => {
         await Promise.resolve();
       });
@@ -380,7 +540,7 @@ describe("useWidgetConversationTracking", () => {
       expect(ids[0]).toMatch(UUID_RE);
       expect(ids[1]).toBe(ids[0]);
 
-      dispatchOn(window, "ces-user-input-entered", { text: "Again" });
+      dispatchOn(window, "ces-user-input-entered", { input: "Again" });
       await act(async () => {
         await Promise.resolve();
       });
@@ -411,11 +571,11 @@ describe("useWidgetConversationTracking", () => {
 
     it("emits message_sent and message_received payloads and message_context entities that validate", async () => {
       mount();
-      dispatchOn(window, "ces-user-input-entered", { text: "Show me coats" });
+      dispatchOn(window, "ces-user-input-entered", { input: "Show me coats" });
       await act(async () => {
         await Promise.resolve();
       });
-      dispatchOn(window, "ces-text-received", { text: "Here are some coats." });
+      dispatchOn(window, "ces-text-received", { outputs: [{ text: "Here are some coats." }] });
       await act(async () => {
         await Promise.resolve();
       });
@@ -448,7 +608,7 @@ describe("useWidgetConversationTracking", () => {
     });
 
     mount();
-    dispatchOn(window, "ces-user-input-entered", { text: "Hello" });
+    dispatchOn(window, "ces-user-input-entered", { input: "Hello" });
     await act(async () => {
       await Promise.resolve();
     });
@@ -465,13 +625,13 @@ describe("useWidgetConversationTracking", () => {
   it("also responds to events dispatched on the element itself, not just window", async () => {
     const element = mount();
 
-    dispatchOn(element, "ces-user-input-entered", { text: "Hi" });
+    dispatchOn(element, "ces-user-input-entered", { input: "Hi" });
     await act(async () => {
       await Promise.resolve();
     });
     expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(1);
 
-    dispatchOn(element, "ces-text-received", { text: "hello" });
+    dispatchOn(element, "ces-text-received", { outputs: [{ text: "hello" }] });
     await act(async () => {
       await Promise.resolve();
     });
@@ -483,7 +643,7 @@ describe("useWidgetConversationTracking", () => {
 
     act(() => {
       element.dispatchEvent(
-        new CustomEvent("ces-user-input-entered", { detail: { text: "hi" }, bubbles: true })
+        new CustomEvent("ces-user-input-entered", { detail: { input: "hi" }, bubbles: true })
       );
     });
     await act(async () => {
@@ -491,7 +651,8 @@ describe("useWidgetConversationTracking", () => {
     });
 
     expect(trackSelfDescribingEventMock).toHaveBeenCalledTimes(1);
-    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(1);
+    // One arm at mount plus one re-arm for the single deduped send.
+    expect(setSnowplowTurnIdMock).toHaveBeenCalledTimes(2);
   });
 
   it("tears down listeners on unmount without throwing or tracking further events", async () => {
@@ -502,7 +663,7 @@ describe("useWidgetConversationTracking", () => {
     });
 
     expect(() => {
-      dispatchOn(window, "ces-user-input-entered", { text: "after unmount" });
+      dispatchOn(window, "ces-user-input-entered", { input: "after unmount" });
     }).not.toThrow();
     await act(async () => {
       await Promise.resolve();

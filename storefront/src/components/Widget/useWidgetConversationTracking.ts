@@ -65,56 +65,101 @@ export function capMessagePreview(text: string): string | null {
 }
 
 /**
- * ces-messenger's user-input/text/payload event detail shapes are
- * undocumented (same gstatic-script caveat as the event names themselves --
- * see useWidgetLoadingIndicator.ts) and unverifiable in this sandbox.
- * Assumed shape: a plain string, or an object carrying the text under one of
- * these common keys. Falls back to an empty string rather than throwing --
- * the message is still tracked, just with a zero length/empty preview.
+ * ces-messenger dispatches `ces-user-input-entered` on window with
+ * `detail: { input: <the typed text> }` (verified against the served
+ * gstatic ces-messenger.js on 2026-09-23; the script is unversioned, so this
+ * is the observed shape, not a contract). Falls back to an empty string
+ * rather than throwing -- the message is still tracked, just with a zero
+ * length/empty preview.
  */
-function extractMessageText(detail: unknown): string {
-  if (typeof detail === "string") {
-    return detail;
-  }
+function extractUserInputText(detail: unknown): string {
   if (detail && typeof detail === "object") {
-    const obj = detail as Record<string, unknown>;
-    for (const key of ["text", "message", "value", "content"]) {
-      const candidate = obj[key];
-      if (typeof candidate === "string") {
-        return candidate;
-      }
+    const input = (detail as Record<string, unknown>).input;
+    if (typeof input === "string") {
+      return input;
     }
   }
   return "";
 }
 
 /**
- * ces-messenger persists its own chat session id in sessionStorage; the key
- * name is undocumented and unverifiable without a live embed. Tries the
- * assumed key first, then falls back to scanning for any key that looks
- * like it, in case a given build namespaces it (e.g. by deployment id). A
- * human should confirm against a live embed and adjust here if it differs;
- * until then this degrades to the documented null fallback (spec #18:
- * "if unavailable, the conversation entity's field is null").
+ * ces-messenger dispatches `ces-text-received` / `ces-payload-received` with
+ * `detail` = the raw backend message, not the text. Its own unmarshallers
+ * accept three wire shapes, tried here in the same order; the deployment
+ * observed on 2026-09-23 sends the first, `{ outputs: [{ text, turnIndex },
+ * { turnCompleted, payload }] }`. Every text output of one message is joined
+ * with a newline.
  */
-const CHAT_SESSION_STORAGE_KEY = "ces-messenger-session-id";
+function extractAssistantText(detail: unknown): string {
+  if (!detail || typeof detail !== "object") {
+    return "";
+  }
+  const message = detail as Record<string, unknown>;
+
+  if (message.outputs !== undefined) {
+    const outputs = Array.isArray(message.outputs) ? message.outputs : [message.outputs];
+    return joinTexts(outputs.map((output) => (output as Record<string, unknown> | null)?.text));
+  }
+
+  const sessionOutput = message.sessionOutput as Record<string, unknown> | undefined;
+  if (typeof sessionOutput?.text === "string") {
+    return sessionOutput.text;
+  }
+
+  const responseMessages = (
+    (message.detectIntentResponse as Record<string, unknown> | undefined)?.queryResult as
+      | Record<string, unknown>
+      | undefined
+  )?.responseMessages;
+  if (Array.isArray(responseMessages)) {
+    return joinTexts(
+      responseMessages.flatMap((responseMessage) => {
+        const texts = (responseMessage as Record<string, unknown> | null)?.text as
+          | Record<string, unknown>
+          | undefined;
+        return Array.isArray(texts?.text) ? texts.text : [];
+      })
+    );
+  }
+
+  return "";
+}
+
+function joinTexts(candidates: unknown[]): string {
+  return candidates.filter((text): text is string => typeof text === "string").join("\n");
+}
+
+/**
+ * ces-messenger persists its chat state under one sessionStorage entry,
+ * `bidi-widget-session`, as JSON `{ messages, sessionId, chatUiStatus,
+ * toolMessageQueue }` (verified against the served script on 2026-09-23).
+ * `sessionId` is the CES session UUID: the tail of the `config.session`
+ * resource name on the wire and the value the server-side tool endpoints
+ * emit as `agent_context.session_id`. The widget saves this entry when it
+ * appends the user's message, before the network send, so it is already
+ * present when `ces-user-input-entered` fires for the very first turn.
+ * Anything missing or malformed degrades to the documented null fallback
+ * (spec #18: "if unavailable, the conversation entity's field is null").
+ */
+const CHAT_SESSION_STORAGE_KEY = "bidi-widget-session";
 
 function getChatSessionId(): string | null {
   try {
-    const direct = window.sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY);
-    if (direct) {
-      return direct;
+    const raw = window.sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
     }
-
-    for (let i = 0; i < window.sessionStorage.length; i++) {
-      const key = window.sessionStorage.key(i);
-      if (key && /ces-messenger.*session/i.test(key)) {
-        return window.sessionStorage.getItem(key);
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      const sessionId = (parsed as Record<string, unknown>).sessionId;
+      if (typeof sessionId === "string" && sessionId.length > 0) {
+        return sessionId;
       }
     }
   } catch {
     // sessionStorage can throw in locked-down browser contexts (e.g. some
-    // privacy modes); treat as unavailable rather than crashing the widget.
+    // privacy modes) and the entry may not be JSON; treat both as
+    // unavailable rather than crashing the widget.
   }
   return null;
 }
@@ -223,13 +268,40 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
     let lastSendEvent: Event | null = null;
     const mountSessionId = crypto.randomUUID();
 
+    /**
+     * Mints the id for the shopper's NEXT turn and hands it to the widget
+     * (issue #22's exported setter) so that turn's request carries it as
+     * `snowplow_turn_id`. ces-messenger dispatches `ces-user-input-entered`
+     * only after awaiting the network send, so an id set inside that handler
+     * arrived one turn late (turn N+1's request carried turn N's id and the
+     * agent's server-side events paired with the wrong browser messages).
+     * Armed once at mount and again as soon as a send consumes it.
+     */
+    const armNextTurnId = (): string => {
+      const turnId = crypto.randomUUID();
+      const element = ref.current;
+      if (element) {
+        setSnowplowTurnId(element, turnId);
+      } else {
+        logSignalsDemo(
+          "ces-messenger element not ready; snowplow_turn_id not armed on the widget",
+          { turnId }
+        );
+      }
+      return turnId;
+    };
+    let armedTurnId = armNextTurnId();
+
     const handleUserInput = (event: Event) => {
       if (event === lastSendEvent) {
         return;
       }
       lastSendEvent = event;
 
-      const turnId = crypto.randomUUID();
+      // The widget has already sent this turn's request with the armed id;
+      // consume it here and arm the next one straight away.
+      const turnId = armedTurnId;
+      armedTurnId = armNextTurnId();
       messageIndex += 1;
       turnIndex += 1;
       const turn: TurnState = {
@@ -242,18 +314,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       };
       currentTurn = turn;
 
-      // Must be set on the widget before the send is tracked (issue #25
-      // acceptance criterion), using issue #22's exported setter.
-      const element = ref.current;
-      if (element) {
-        setSnowplowTurnId(element, turnId);
-      } else {
-        logSignalsDemo(
-          "ces-messenger user-input event fired before the element was ready; snowplow_turn_id not set for this turn"
-        );
-      }
-
-      const text = extractMessageText((event as CustomEvent).detail);
+      const text = extractUserInputText((event as CustomEvent).detail);
       const chatSessionId = getChatSessionId();
 
       void (async () => {
@@ -276,6 +337,11 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       })();
     };
 
+    // Records the FIRST receive event of a turn only. Live on 2026-09-23 the
+    // first backend message already carried the full text plus the payload,
+    // so this is adequate for now; if the agent ever streams partials, or
+    // sends a payload-only message ahead of the text, the text would need
+    // accumulating until `turnCompleted` instead.
     const handleReceived = (event: Event) => {
       const turn = currentTurn;
       if (!turn || turn.receivedForTurn) {
@@ -284,7 +350,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       turn.receivedForTurn = true;
 
       const responseTimeMs = Math.min(Date.now() - turn.sentAt, MAX_RESPONSE_TIME_MS);
-      const text = extractMessageText((event as CustomEvent).detail);
+      const text = extractAssistantText((event as CustomEvent).detail);
       const chatSessionId = getChatSessionId();
 
       void (async () => {
@@ -296,6 +362,14 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
               session_id: turn.sessionId ?? resolveSessionId(chatSessionId, mountSessionId),
               invocation_id: turn.turnId,
               response_time_ms: responseTimeMs,
+              // Schema-required placeholder the browser cannot know: the
+              // agent's tool calls run server-side and never pass through
+              // the widget (ces-tool-call-received fires only for
+              // client-side tools). The true count is derived in SQL from
+              // the server-side tool_execution events grouped by
+              // agent_context.invocation_id (the analytics turn-level
+              // reconstruction), which matches this event's invocation_id
+              // because the turn id is armed ahead of the send.
               tool_calls_count: 0,
               received_at: new Date().toISOString(),
             },
