@@ -1,6 +1,6 @@
 "use client";
 
-import { trackSelfDescribingEvent } from "@snowplow/browser-tracker";
+import { getDomainSessionId, trackSelfDescribingEvent } from "@snowplow/browser-tracker";
 import { useEffect, type RefObject } from "react";
 
 import { setSnowplowTurnId } from "@/components/Widget/CesMessengerWidget";
@@ -27,6 +27,12 @@ import { createProductListClickedTrackingProps } from "@/utils/snowtypeTracking"
  * against an org -- see storefront/README.md's Snowtype section), mirroring
  * how the server-side module (src/utils/agentTracking.ts) keeps its own Iglu
  * Central constants regardless.
+ *
+ * Payload field names follow the published 1-0-0 schemas exactly. All three
+ * set `additionalProperties: false`, so a misnamed or extra key makes
+ * enrichment reject the whole event (and every entity riding on it). The
+ * schema JSON is committed under __fixtures__/ and the test validates the
+ * built payloads against it.
  */
 
 const MESSAGE_SENT_SCHEMA = "iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0";
@@ -43,6 +49,10 @@ export const CONCIERGE_LIST_ID = "concierge_recommendations";
 export const CONCIERGE_LIST_NAME = "Concierge Recommendations";
 
 const MAX_PREVIEW_LENGTH = 100;
+/** message_received 1-0-0 caps response_time_ms at 300000; a longer wait must clamp, not fail validation. */
+const MAX_RESPONSE_TIME_MS = 300_000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Off only when explicitly disabled; on by default (spec #18/#25). */
 function previewsEnabled(): boolean {
@@ -109,6 +119,29 @@ function getChatSessionId(): string | null {
   return null;
 }
 
+/**
+ * `session_id` on message_sent/message_received is required and must be a
+ * UUID. Mirrors the server-side fallback order in src/utils/agentTracking.ts
+ * (chat session id, then the shopper's domain_sessionid, then a fresh UUID)
+ * so browser message events join server-side agent events on the same value.
+ * The chat session id is only used when it is UUID-shaped, since a non-UUID
+ * value would fail schema validation; it still appears verbatim on the
+ * `conversation` entity. The final fallback is minted once per hook mount so
+ * every message in that mount shares it. Resolved once per turn, at send time,
+ * so a chat session id that ces-messenger persists mid-turn cannot give the
+ * message_sent/message_received pair different session ids.
+ */
+function resolveSessionId(chatSessionId: string | null, mountSessionId: string): string {
+  if (chatSessionId && UUID_RE.test(chatSessionId)) {
+    return chatSessionId;
+  }
+  const domainSessionId = getDomainSessionId();
+  if (domainSessionId && UUID_RE.test(domainSessionId)) {
+    return domainSessionId;
+  }
+  return mountSessionId;
+}
+
 function buildConversationEntity(chatSessionId: string | null, turnId: string, turnIndex: number) {
   return {
     schema: CONVERSATION_SCHEMA,
@@ -130,11 +163,12 @@ function buildMessageContextEntity(
   return {
     schema: MESSAGE_CONTEXT_SCHEMA,
     data: {
-      role,
-      length: text.length,
-      preview: capMessagePreview(text),
-      index,
-      turn,
+      message_id: crypto.randomUUID(),
+      message_role: role,
+      message_length: text.length,
+      message_preview: capMessagePreview(text),
+      message_index: index,
+      conversation_turn: turn,
     },
   };
 }
@@ -145,6 +179,8 @@ interface TurnState {
   messageIndex: number;
   turnIndex: number;
   receivedForTurn: boolean;
+  /** Set once the tracker is ready and message_sent has resolved it; reused by message_received. */
+  sessionId: string | null;
 }
 
 /**
@@ -185,6 +221,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
     let turnIndex = 0;
     let currentTurn: TurnState | null = null;
     let lastSendEvent: Event | null = null;
+    const mountSessionId = crypto.randomUUID();
 
     const handleUserInput = (event: Event) => {
       if (event === lastSendEvent) {
@@ -201,6 +238,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
         messageIndex,
         turnIndex,
         receivedForTurn: false,
+        sessionId: null,
       };
       currentTurn = turn;
 
@@ -220,11 +258,12 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
 
       void (async () => {
         await waitForSnowplowTracker();
+        turn.sessionId = resolveSessionId(chatSessionId, mountSessionId);
         trackSelfDescribingEvent({
           event: {
             schema: MESSAGE_SENT_SCHEMA,
             data: {
-              message_id: crypto.randomUUID(),
+              session_id: turn.sessionId,
               sent_at: new Date(turn.sentAt).toISOString(),
             },
           },
@@ -244,7 +283,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       }
       turn.receivedForTurn = true;
 
-      const responseTimeMs = Date.now() - turn.sentAt;
+      const responseTimeMs = Math.min(Date.now() - turn.sentAt, MAX_RESPONSE_TIME_MS);
       const text = extractMessageText((event as CustomEvent).detail);
       const chatSessionId = getChatSessionId();
 
@@ -254,7 +293,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
           event: {
             schema: MESSAGE_RECEIVED_SCHEMA,
             data: {
-              message_id: crypto.randomUUID(),
+              session_id: turn.sessionId ?? resolveSessionId(chatSessionId, mountSessionId),
               invocation_id: turn.turnId,
               response_time_ms: responseTimeMs,
               tool_calls_count: 0,
