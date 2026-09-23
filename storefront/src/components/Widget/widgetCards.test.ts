@@ -293,6 +293,41 @@ describe("replaceWidgetTokensIn", () => {
     expect(span.textContent).toContain(" B ");
     expect(span.textContent).toContain(" C");
   });
+
+  it("reports each rendered token to onRender once with the normalised card context", () => {
+    const onRender = vi.fn();
+    const { root } = messageNode(`A ${TOKEN} B ${TOKEN} C`);
+
+    expect(replaceWidgetTokensIn(root, undefined, onRender)).toBe(2);
+
+    expect(onRender).toHaveBeenCalledTimes(2);
+    expect(onRender.mock.calls[0][0]).toEqual({
+      kind: "details",
+      items: [
+        {
+          title: "Silk Twill Square Scarf",
+          subtitle: "Atelier Lune",
+          price: "$340",
+          uri: "https://x.test/products/scarf",
+          imageUri: "https://img.test/scarf.jpg",
+        },
+      ],
+    });
+
+    // Re-running over the same root renders nothing new, so nothing is re-reported.
+    expect(replaceWidgetTokensIn(root, undefined, onRender)).toBe(0);
+    expect(onRender).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not call onRender for a token that is stripped without rendering", () => {
+    const onRender = vi.fn();
+    const { root } = messageNode(
+      "Before {@Widget: quickActions(payload: {x: 1})} after {@Widget: productDetails(payload: {price: \"$1\"})}"
+    );
+
+    expect(replaceWidgetTokensIn(root, undefined, onRender)).toBe(2);
+    expect(onRender).not.toHaveBeenCalled();
+  });
 });
 
 describe("findPartialTokenTextNodes", () => {

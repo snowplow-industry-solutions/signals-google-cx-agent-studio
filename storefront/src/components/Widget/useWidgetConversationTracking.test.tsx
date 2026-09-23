@@ -17,11 +17,13 @@ const {
   getDomainSessionIdMock,
   setSnowplowTurnIdMock,
   trackProductListClickedSpecMock,
+  trackProductListViewedSpecMock,
 } = vi.hoisted(() => ({
   trackSelfDescribingEventMock: vi.fn(),
   getDomainSessionIdMock: vi.fn<() => string | undefined>(),
   setSnowplowTurnIdMock: vi.fn(),
   trackProductListClickedSpecMock: vi.fn(),
+  trackProductListViewedSpecMock: vi.fn(),
 }));
 
 vi.mock("@snowplow/browser-tracker", () => ({
@@ -38,6 +40,7 @@ vi.mock("@/snowtype/snowplow", async (importOriginal) => {
   return {
     ...actual,
     trackProductListClickedSpec: trackProductListClickedSpecMock,
+    trackProductListViewedSpec: trackProductListViewedSpecMock,
   };
 });
 
@@ -51,10 +54,23 @@ import {
   CONCIERGE_LIST_ID,
   CONCIERGE_LIST_NAME,
   trackConciergeCardClick,
+  trackConciergeCardsShown,
   useWidgetConversationTracking,
 } from "./useWidgetConversationTracking";
 
 const PRODUCT = products[0];
+const SECOND_PRODUCT = products[1];
+
+/** A ProductCardData item as normalizeWidgetPayload produces it for a card pointing at `uri`. */
+function cardItem(uri: string, title = "A card") {
+  return { title, subtitle: "", price: "", uri, imageUri: "" };
+}
+
+/** Lets a tracker call queued behind an already-resolved waitForSnowplowTracker run. */
+async function flushTrackerQueue() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DOMAIN_SESSION_ID = "6f1d2c3b-4a5e-4f60-8b71-9c0d1e2f3a4b";
@@ -681,8 +697,7 @@ describe("trackConciergeCardClick", () => {
 
   it("fires the product list clicked helper with the concierge list id/name for a resolvable product URL", async () => {
     trackConciergeCardClick(new URL(`https://example.com/products/${PRODUCT.slug}`));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).toHaveBeenCalledTimes(1);
     const props = trackProductListClickedSpecMock.mock.calls[0][0];
@@ -695,17 +710,97 @@ describe("trackConciergeCardClick", () => {
 
   it("tracks nothing for a URL whose slug does not match a catalog product", async () => {
     trackConciergeCardClick(new URL("https://example.com/products/not-a-real-product"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).not.toHaveBeenCalled();
   });
 
   it("tracks nothing for a non-product URL", async () => {
     trackConciergeCardClick(new URL("https://example.com/collections/winter-salon"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTrackerQueue();
 
     expect(trackProductListClickedSpecMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("trackConciergeCardsShown", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    trackerReadyPromise = Promise.resolve();
+  });
+
+  it("fires one product list viewed event for the concierge list carrying every rendered catalog product", async () => {
+    trackConciergeCardsShown([
+      cardItem(`https://storefront.example.com/products/${PRODUCT.slug}`),
+      cardItem(`https://storefront.example.com/products/${SECOND_PRODUCT.slug}/`),
+    ]);
+    await flushTrackerQueue();
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+    const props = trackProductListViewedSpecMock.mock.calls[0][0];
+    expect(props).toMatchObject({
+      list_id: CONCIERGE_LIST_ID,
+      list_name: CONCIERGE_LIST_NAME,
+      list_type: "agent_recommendation",
+      product_count: 2,
+    });
+    expect(props.context.map((entity: { data: { product_id: string } }) => entity.data.product_id)).toEqual([
+      PRODUCT.id,
+      SECOND_PRODUCT.id,
+    ]);
+  });
+
+  it("resolves a relative card uri against the current page", async () => {
+    trackConciergeCardsShown([cardItem(`/products/${PRODUCT.slug}`)]);
+    await flushTrackerQueue();
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+    expect(trackProductListViewedSpecMock.mock.calls[0][0]).toMatchObject({
+      product_count: 1,
+      context: [{ data: { product_id: PRODUCT.id } }],
+    });
+  });
+
+  it("skips cards that do not resolve to a catalog product and counts only the ones that do", async () => {
+    trackConciergeCardsShown([
+      cardItem("https://storefront.example.com/products/not-a-real-product"),
+      cardItem("https://storefront.example.com/collections/winter-salon"),
+      cardItem("javascript:alert(1)"),
+      cardItem(""),
+      cardItem(`https://storefront.example.com/products/${PRODUCT.slug}`),
+    ]);
+    await flushTrackerQueue();
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+    expect(trackProductListViewedSpecMock.mock.calls[0][0]).toMatchObject({
+      product_count: 1,
+      context: [{ data: { product_id: PRODUCT.id } }],
+    });
+  });
+
+  it("tracks nothing when no card resolves to a catalog product", async () => {
+    trackConciergeCardsShown([
+      cardItem("https://storefront.example.com/products/not-a-real-product"),
+      cardItem(""),
+    ]);
+    await flushTrackerQueue();
+
+    expect(trackProductListViewedSpecMock).not.toHaveBeenCalled();
+  });
+
+  it("defers the event until the tracker is ready instead of dropping it", async () => {
+    let resolveReady: () => void = () => {};
+    trackerReadyPromise = new Promise((resolve) => {
+      resolveReady = resolve;
+    });
+
+    trackConciergeCardsShown([cardItem(`/products/${PRODUCT.slug}`)]);
+    await Promise.resolve();
+    expect(trackProductListViewedSpecMock).not.toHaveBeenCalled();
+
+    resolveReady();
+    await trackerReadyPromise;
+    await Promise.resolve();
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
   });
 });

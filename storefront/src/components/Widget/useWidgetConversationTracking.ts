@@ -5,16 +5,21 @@ import { useEffect, type RefObject } from "react";
 
 import { setSnowplowTurnId } from "@/components/Widget/CesMessengerWidget";
 import { waitForSnowplowTracker } from "@/components/Analytics/SnowplowProvider";
+import { safeCardUrl, type ProductCardData } from "@/components/Widget/widgetCards";
 import { getProductBySlug } from "@/data/products";
-import { trackProductListClickedSpec } from "@/snowtype/snowplow";
+import { trackProductListClickedSpec, trackProductListViewedSpec } from "@/snowtype/snowplow";
 import type { CesMessengerElement } from "@/types/ces-messenger";
+import type { Product } from "@/types/commerce";
 import { logSignalsDemo } from "@/utils/demo";
-import { createProductListClickedTrackingProps } from "@/utils/snowtypeTracking";
+import {
+  createProductListClickedTrackingProps,
+  createProductListViewedTrackingProps,
+} from "@/utils/snowtypeTracking";
 
 /**
  * Issue 25's conversation-tracking hook: browser-side `message_sent` /
  * `message_received` events (Iglu Central `com.snowplow.agent.tracking`)
- * plus concierge card-click tracking, following the defensive
+ * plus concierge card click and impression tracking, following the defensive
  * window-and-element listener pattern already used by
  * useWidgetLoadingIndicator.ts and waiting on the same tracker-ready signal
  * as the rest of the storefront (SnowplowProvider.waitForSnowplowTracker) so
@@ -47,6 +52,8 @@ const CHANNEL = "web_widget";
 
 export const CONCIERGE_LIST_ID = "concierge_recommendations";
 export const CONCIERGE_LIST_NAME = "Concierge Recommendations";
+/** `list_type` for the concierge placement, alongside the storefront's `homepage` / `collection` / `product_detail`. */
+export const CONCIERGE_LIST_TYPE = "agent_recommendation";
 
 const MAX_PREVIEW_LENGTH = 100;
 /** message_received 1-0-0 caps response_time_ms at 300000; a longer wait must clamp, not fail validation. */
@@ -229,6 +236,18 @@ interface TurnState {
 }
 
 /**
+ * Maps a card URL's `/products/<slug>` path to the catalog product it points
+ * at, or undefined when the URL is not a product page or the slug is unknown.
+ * Shared by the click and impression trackers so both resolve cards the same
+ * way.
+ */
+function resolveCardProduct(url: URL): Product | undefined {
+  const match = /^\/products\/([^/?#]+)\/?$/.exec(url.pathname);
+  const slug = match?.[1];
+  return slug ? getProductBySlug(slug) : undefined;
+}
+
+/**
  * Resolves a card-click navigation URL's `/products/<slug>` path against the
  * catalog and, when it matches, fires the existing product-list-clicked
  * event (generated Snowtype helper) with the concierge list id/name. An
@@ -238,9 +257,7 @@ interface TurnState {
  * click -- can call it directly.
  */
 export function trackConciergeCardClick(url: URL): void {
-  const match = /^\/products\/([^/?#]+)\/?$/.exec(url.pathname);
-  const slug = match?.[1];
-  const product = slug ? getProductBySlug(slug) : undefined;
+  const product = resolveCardProduct(url);
 
   if (!product) {
     logSignalsDemo("Concierge card click did not resolve to a catalog product", {
@@ -256,6 +273,54 @@ export function trackConciergeCardClick(url: URL): void {
     );
     logSignalsDemo("Tracked concierge card click as a product list click", {
       productId: product.id,
+    });
+  })();
+}
+
+/**
+ * Counts agent-rendered product cards as impressions of the concierge list,
+ * so the placement has `product_list_viewed` to pair with the
+ * `product_list_clicked` events trackConciergeCardClick already fires. Every
+ * other storefront placement fires both via useTrackDemoProductListView.
+ *
+ * Card `uri`s are model-emitted text, so each is resolved through the same
+ * safeCardUrl gate the renderer uses (relative to the current page, since
+ * widget payloads carry the deployed storefront's absolute URLs -- see the
+ * `navigate` comment in useWidgetTokenRenderer) and then matched against the
+ * catalog by slug. Cards that do not resolve are logged and dropped, and a
+ * batch with nothing resolvable is not tracked at all, mirroring how the
+ * click tracker never invents a product.
+ */
+export function trackConciergeCardsShown(items: ProductCardData[]): void {
+  const products: Product[] = [];
+  for (const item of items) {
+    const url = item.uri ? safeCardUrl(item.uri, window.location.href) : null;
+    const product = url ? resolveCardProduct(url) : undefined;
+    if (product) {
+      products.push(product);
+    } else {
+      logSignalsDemo("Concierge card did not resolve to a catalog product; not counted as an impression", {
+        uri: item.uri,
+      });
+    }
+  }
+
+  if (products.length === 0) {
+    return;
+  }
+
+  void (async () => {
+    await waitForSnowplowTracker();
+    trackProductListViewedSpec(
+      createProductListViewedTrackingProps(
+        CONCIERGE_LIST_ID,
+        CONCIERGE_LIST_NAME,
+        CONCIERGE_LIST_TYPE,
+        products
+      )
+    );
+    logSignalsDemo("Tracked concierge cards as a product list view", {
+      productIds: products.map((product) => product.id),
     });
   })();
 }
