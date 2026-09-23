@@ -5,10 +5,12 @@ import { useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { logSignalsDemoMock, trackConciergeCardClickMock } = vi.hoisted(() => ({
-  logSignalsDemoMock: vi.fn(),
-  trackConciergeCardClickMock: vi.fn(),
-}));
+const { logSignalsDemoMock, trackConciergeCardClickMock, trackConciergeCardsShownMock } =
+  vi.hoisted(() => ({
+    logSignalsDemoMock: vi.fn(),
+    trackConciergeCardClickMock: vi.fn(),
+    trackConciergeCardsShownMock: vi.fn(),
+  }));
 
 vi.mock("@/utils/demo", () => ({
   logSignalsDemo: logSignalsDemoMock,
@@ -16,6 +18,7 @@ vi.mock("@/utils/demo", () => ({
 
 vi.mock("@/components/Widget/useWidgetConversationTracking", () => ({
   trackConciergeCardClick: trackConciergeCardClickMock,
+  trackConciergeCardsShown: trackConciergeCardsShownMock,
 }));
 
 // useWidgetTokenRenderer calls next/navigation's useRouter, which requires a
@@ -198,6 +201,60 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
     card.remove();
   });
 
+  it("counts the cards of a widget-shaped payload as a concierge impression once, with the normalised items", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    mount({ registerTemplate, registerHook });
+
+    const hookCallback = registerHook.mock.calls[0][1] as (
+      payload: unknown
+    ) => boolean;
+
+    // Shape captured live 2026-07-29 for PRODUCT_CAROUSEL.
+    hookCallback({
+      type: "product_detail_carousel",
+      productDetails: [
+        { title: "Silk Twill Square Scarf", uri: "https://example.com/products/scarf" },
+        { title: "Felt Cloche Hat", uri: "https://example.com/products/hat" },
+      ],
+    });
+
+    expect(trackConciergeCardsShownMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardsShownMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        title: "Silk Twill Square Scarf",
+        uri: "https://example.com/products/scarf",
+      }),
+      expect.objectContaining({
+        title: "Felt Cloche Hat",
+        uri: "https://example.com/products/hat",
+      }),
+    ]);
+  });
+
+  it("does not count an impression for a payload it leaves alone or cannot render", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    mount({ registerTemplate, registerHook });
+
+    const hookCallback = registerHook.mock.calls[0][1] as (
+      payload: unknown
+    ) => boolean;
+
+    // Already targets a template: not ours to claim.
+    hookCallback({
+      template_id: "someone_elses_template",
+      type: "product_detail_carousel",
+      productDetails: [{ title: "Scarf", uri: "https://example.com/products/scarf" }],
+    });
+    // Not a widget shape at all.
+    hookCallback({ type: "some_other_widget" });
+    // Claimed but unrenderable (no title).
+    hookCallback({ type: "product_detail_carousel" });
+
+    expect(trackConciergeCardsShownMock).not.toHaveBeenCalled();
+  });
+
   it("does not log for a payload it never claims", () => {
     const registerTemplate = vi.fn();
     const registerHook = vi.fn();
@@ -209,5 +266,56 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
 
     expect(hookCallback({ type: "some_other_widget" })).toBe(true);
     expect(logSignalsDemoMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useWidgetTokenRenderer — in-band token path", () => {
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    while (mounted.length) {
+      const { root, container } = mounted.pop()!;
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  const TOKEN =
+    '{@Widget: productCarousel(payload: {productDetails: [{title: "Silk Twill Square Scarf", uri: "https://example.com/products/scarf"}, {title: "Felt Cloche Hat", uri: "https://example.com/products/hat"}]})}';
+
+  it("counts the cards rendered in place of a chat token as one concierge impression", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+
+    act(() => {
+      root.render(
+        <Harness
+          onElement={(el) => {
+            // Stand in for the upgraded <ces-messenger>: an open shadow root
+            // already holding a bot message with a complete widget token.
+            const shadow = (el as unknown as HTMLElement).attachShadow({ mode: "open" });
+            const message = document.createElement("span");
+            message.textContent = `Take a look: ${TOKEN}`;
+            shadow.appendChild(message);
+            Object.assign(el, { registerTemplate: vi.fn(), registerHook: vi.fn() });
+          }}
+        />
+      );
+    });
+
+    const shadow = (container.firstElementChild as HTMLElement).shadowRoot!;
+    expect(shadow.querySelector("[data-widget-card=productCarousel]")).not.toBeNull();
+    expect(trackConciergeCardsShownMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardsShownMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ uri: "https://example.com/products/scarf" }),
+      expect.objectContaining({ uri: "https://example.com/products/hat" }),
+    ]);
   });
 });

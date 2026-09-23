@@ -38,6 +38,15 @@ export interface WidgetCardContext {
 export type NavigateHandler = (url: URL) => boolean;
 
 /**
+ * Called once per widget that actually renders as cards, with the normalised
+ * context those cards were built from. The tracking seam: this module stays
+ * free of tracker imports (so its tests stay pure), and the caller decides
+ * what rendering a card means (useWidgetTokenRenderer counts it as a
+ * concierge-list impression).
+ */
+export type RenderHandler = (context: WidgetCardContext) => void;
+
+/**
  * Parses `uri` against `base` and returns the resulting URL only when its
  * protocol is `http:` or `https:` — otherwise null. Model-emitted card URIs
  * are untrusted text: without this gate a `javascript:` (or `data:`) URI
@@ -259,13 +268,16 @@ export function buildWidgetElement(
   doc: Document,
   name: string,
   payload: unknown,
-  onNavigate?: NavigateHandler
+  onNavigate?: NavigateHandler,
+  onRender?: RenderHandler
 ): HTMLElement | null {
   if (name !== "productCarousel" && name !== "productDetails") return null;
   const context = normalizeWidgetPayload(payload);
   if (!context) return null;
   if (name === "productDetails") context.kind = "details";
-  return buildCards(doc, context, onNavigate);
+  const element = buildCards(doc, context, onNavigate);
+  onRender?.(context);
+  return element;
 }
 
 /**
@@ -305,11 +317,14 @@ export const renderWidgetCardsHtml = makeWidgetTemplate(false);
  * under `root` with rendered cards (or with nothing when unrenderable).
  * Safe to call repeatedly — processed text no longer contains tokens, and
  * injected cards carry no token text. Returns how many tokens were
- * replaced.
+ * replaced. `onRender` fires once per token that produced cards (never for
+ * a stripped unrenderable token), and because each token is replaced
+ * exactly once it fires at most once per widget across repeated calls.
  */
 export function replaceWidgetTokensIn(
   root: Node,
-  onNavigate?: NavigateHandler
+  onNavigate?: NavigateHandler,
+  onRender?: RenderHandler
 ): number {
   const doc = root.ownerDocument ?? (root as Document);
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -331,7 +346,7 @@ export function replaceWidgetTokensIn(
     for (const token of tokens) {
       const before = text.slice(cursor, token.start);
       if (before) fragment.appendChild(doc.createTextNode(before));
-      const el = buildWidgetElement(doc, token.name, token.payload, onNavigate);
+      const el = buildWidgetElement(doc, token.name, token.payload, onNavigate, onRender);
       if (el) fragment.appendChild(el);
       cursor = token.end;
       replaced++;
