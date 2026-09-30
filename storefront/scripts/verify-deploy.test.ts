@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildChecks, evaluateResult } from "./verify-deploy";
+import { buildChecks, evaluateResult, runCheck } from "./verify-deploy";
 
 describe("buildChecks", () => {
   it("builds a reachability check that requires no auth header", () => {
@@ -181,5 +181,54 @@ describe("self-tracking checks", () => {
     )!;
     expect(evaluateResult(check, 200, { violation_id: "abc-123" }).pass).toBe(true);
     expect(evaluateResult(check, 200, {}).pass).toBe(false);
+  });
+});
+
+describe("runCheck", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const selfTrackingChecks = buildChecks("my-secret", "session-1").filter((check) =>
+    check.path.startsWith("/api/agent/track-"),
+  );
+  const authorizedChecks = selfTrackingChecks.filter((check) => check.expectedStatus === 200);
+  const unauthenticatedCheck = selfTrackingChecks.find((check) => check.expectedStatus === 401)!;
+
+  it.each(authorizedChecks.map((check) => [check.name, check] as const))(
+    "sends a POST with the JSON body and dry-run headers for %s",
+    async (_name, check) => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+
+      await runCheck("http://localhost:3000", check);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, init] = fetchMock.mock.calls[0];
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe(JSON.stringify(check.body));
+      expect(init.headers).toMatchObject({
+        "Content-Type": "application/json",
+        "x-agent-api-key": "my-secret",
+        "x-agent-tracking-dry-run": "1",
+      });
+    },
+  );
+
+  it("sends no x-agent-api-key header for an unauthenticated self-tracking check", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 401 }));
+
+    await runCheck("http://localhost:3000", unauthenticatedCheck);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify(unauthenticatedCheck.body));
+    expect(init.headers?.["x-agent-api-key"]).toBeUndefined();
   });
 });

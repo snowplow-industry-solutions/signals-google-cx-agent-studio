@@ -184,7 +184,7 @@ export function evaluateResult(check: Check, status: number, body: unknown): Che
   return { name: check.name, pass: true, detail: `status ${status}` };
 }
 
-async function runCheck(baseUrl: string, check: Check): Promise<CheckResult> {
+export async function runCheck(baseUrl: string, check: Check): Promise<CheckResult> {
   const response = await fetch(new URL(check.path, baseUrl), {
     method: check.method ?? "GET",
     headers: check.body !== undefined ? { "Content-Type": "application/json", ...check.headers } : check.headers,

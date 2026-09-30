@@ -79,7 +79,9 @@
 - BigQuery queries over the events these endpoints emit:
   `../../analytics/agent-self-tracking.sql` (agent tool/reasoning events) and
   `../../analytics/ecommerce-web-analytics.sql` (storefront web/ecommerce
-  events, including the concierge card placement).
+  events, including the concierge card placement — note its browser-impression
+  branch is untested on real data; only the searchCatalog fallback has run
+  against real events).
 
 ## Verification Commands
 
