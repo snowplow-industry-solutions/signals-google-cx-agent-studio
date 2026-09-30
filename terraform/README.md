@@ -362,11 +362,11 @@ the production storefront; never run these commands against
 
 ```bash
 cd terraform
-terraform workspace new duplicate    # or: terraform workspace select duplicate
+terraform workspace new new-app    # or: terraform workspace select new-app
 ```
 
 A Terraform workspace gives the new app its own state
-(`terraform.tfstate.d/duplicate/terraform.tfstate`, already covered by the
+(`terraform.tfstate.d/new-app/terraform.tfstate`, already covered by the
 `*.tfstate.*` rule in the repo's `.gitignore`) without touching the
 original's `terraform.tfstate`. Workspaces do **not** isolate variable
 files, though — `terraform.tfvars` and any `*.auto.tfvars` are loaded
@@ -376,10 +376,10 @@ the same directory, give the new app its own file that Terraform never
 auto-loads, and pass it explicitly on every command:
 
 ```bash
-cp terraform.tfvars.example terraform.duplicate.tfvars   # gitignored: matches *.tfvars
+cp terraform.tfvars.example terraform.new-app.tfvars   # gitignored: matches *.tfvars
 ```
 
-Fill in every placeholder in `terraform.duplicate.tfvars`, with **new** IDs of
+Fill in every placeholder in `terraform.new-app.tfvars`, with **new** IDs of
 your own choosing for `app_id`, `agent_id`, `context_toolset_id`,
 `catalog_toolset_id`, and `app_version_id` (or accept
 `self_tracking_toolset_id`'s greenfield default), display names of your
@@ -394,9 +394,9 @@ the three tool schemas — you do not edit anything under `agent/tools/` (see
 ```bash
 terraform init
 TF_VAR_agent_shared_secret_value=<a NEW value, distinct from the original AGENT_SHARED_SECRET> \
-  terraform plan -var-file=terraform.duplicate.tfvars
+  terraform plan -var-file=terraform.new-app.tfvars
 TF_VAR_agent_shared_secret_value=<same value> \
-  terraform apply -var-file=terraform.duplicate.tfvars
+  terraform apply -var-file=terraform.new-app.tfvars
 ```
 
 ### The secret-accessor grant happens automatically here
