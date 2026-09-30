@@ -101,9 +101,10 @@ From `storefront/`, with `.env.local` populated:
    ```
    `snowtype.config.json` and `snowtype/` are gitignored because both name
    org-specific IDs; this command writes the config from
-   `snowtype.config.example.json` (org ID from `.env.local`, data product ID
-   derived the same way the seed script derives it) and then generates the
-   helpers. `storefront/src` imports them, so `npm test`, `npm run lint` and
+   `snowtype.config.example.json` (org ID from `.env.local`, plus the IDs of
+   the tracking plan's own-schema event specifications, each derived the same
+   way the seed script derives them) and then generates the helpers.
+   `storefront/src` imports them, so `npm test`, `npm run lint` and
    `npm run build` all fail until this has run once.
 
 > Tracking-plan IDs are derived per-org (a stable UUIDv5 from the org ID), so a

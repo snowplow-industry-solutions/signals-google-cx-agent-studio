@@ -574,12 +574,13 @@ fi
 # ── 8 ─────────────────────────────────────────────────────────────────────
 if begin "Regenerate the Snowtype helpers" 3; then
 say "snowtype.config.json and snowtype/ are per-org and gitignored: the config"
-say "names the org and its data product, and the generated helpers embed the"
-say "event-spec IDs read back from it. Both rebuild from the org ID in $ENV_FILE."
-note "the data product ID is derived, not pasted — same UUIDv5 rule stage 7 used"
+say "names the org and the derived IDs of its own-schema event specifications,"
+say "and the generated helpers embed the event-spec IDs read back from it. Both"
+say "rebuild from the org ID in $ENV_FILE."
+note "the event specification IDs are derived, not pasted — same UUIDv5 rule stage 7 used"
 if confirm "Regenerate snowtype.config.json and storefront/snowtype/?"; then
   run "snowtype generate" npm --prefix storefront run snowtype:generate || {
-    warn "generation failed. If it can't find the data product, stage 7 didn't"
+    warn "generation failed. If it can't find the event specifications, stage 7 didn't"
     warn "finish — the plan must be published before snowtype can read it."
     SKIPPED+=("snowtype regenerate: npm --prefix storefront run snowtype:generate")
   }
