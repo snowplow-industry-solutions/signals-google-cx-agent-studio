@@ -117,8 +117,7 @@ validation workflow. The implementation in this repo was validated against:
 The tracking plan's event specifications describe the agent events already
 emitted in code (`src/utils/agentTracking.ts`, `src/utils/agentSelfTracking.ts`,
 `src/components/Widget/useWidgetConversationTracking.ts`) so Console shows
-them as part of the data product and Snowtype can generate typed helpers for
-them:
+them as part of the data product:
 
 | Event | Source application | Schema | Entities |
 |---|---|---|---|
@@ -141,7 +140,7 @@ Publishing event specifications that reference Iglu Central event/entity
 schemas works: seeding the tracking plan with the agent specifications above
 succeeds, and Console shows them correctly. Snowtype generates helpers for
 the tracking plan's own-schema event specifications only — see "Snowtype"
-below.
+below for these seven.
 
 ## Local Agent Tracking Verification (Snowplow Micro)
 
