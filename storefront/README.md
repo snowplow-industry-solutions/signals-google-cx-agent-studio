@@ -137,22 +137,11 @@ own `com.snowplow_demo.fashion` data structures alongside the Iglu Central
 clicked" event specification also has a trigger for clicks on
 concierge-rendered product cards (list id `concierge_recommendations`).
 
-**Known risk, not yet resolved:** publishing event specifications that
-reference Iglu Central event/entity schemas (rather than only this repo's
-own `com.snowplow_demo.fashion` ones) has not been tried against a live
-tracking-plan API from this repo. `npm run seed:tracking-plans -- --dry-run`
-validates the YAML and UUID derivation but cannot exercise the publish call
-itself. If a real seed
-(`npm run seed:tracking-plans`) rejects the tracking plan specifically
-because of the Iglu Central references, the fallback is:
-
-1. Keep both source applications and the concierge "Product list clicked" trigger
-   — those only reference this repo's own schemas and are not implicated.
-2. Delete the seven event specifications above from
-   `tracking-assets/tracking-plans/fashion_ecommerce.yml` (search for the
-   "Agent self-tracking" comment marking the block).
-3. This table then becomes the sole record of the agent event vocabulary —
-   keep it up to date by hand instead of relying on Console/Snowtype for it.
+Publishing event specifications that reference Iglu Central event/entity
+schemas works: seeding the tracking plan with the agent specifications above
+succeeds, and Console shows them correctly. Snowtype generates helpers for
+the tracking plan's own-schema event specifications only — see "Snowtype"
+below.
 
 ## Local Agent Tracking Verification (Snowplow Micro)
 
@@ -221,10 +210,10 @@ npm run signals:publish
 The storefront uses generated Snowtype helpers from `snowtype/snowplow.ts` for its ecommerce self-describing events and event-specification wrappers.
 
 Neither `snowtype/` nor `snowtype.config.json` is committed — both are specific to
-one Snowplow org. The config names an organization ID and a data product ID, and
-the generated helpers embed the event specification IDs derived from them, so
-committing either would mean re-pointing the repo at a different org produced a
-diff every time. `snowtype.config.example.json` is the committed template.
+one Snowplow org. The config names an organization ID and a list of event
+specification IDs, and the generated helpers embed those IDs, so committing
+either would mean re-pointing the repo at a different org produced a diff every
+time. `snowtype.config.example.json` is the committed template.
 
 **On a fresh clone, generate them before running `npm test`, `npm run lint` or
 `npm run build`** — `src/` imports `@/snowtype/snowplow`, so those all fail
@@ -236,27 +225,27 @@ npm run snowtype:generate
 ```
 
 That runs `npm run snowtype:config` first, which writes `snowtype.config.json`
-from the example: the organization ID comes from `.env.local`, and the data
-product ID is derived from it with the same UUIDv5 rule
-`scripts/seed-tracking-plans.ts` uses to publish the tracking plan. So the two
-always name the same data product. The org's tracking plan must already be
-seeded (see [`docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md)
-§4) or generation has no data product to read.
+from the example: the organization ID comes from `.env.local`, and
+`scripts/write-snowtype-config.ts` lists the tracking plan's own-schema event
+specifications — Snowtype resolves each specification's event schema against
+the org's own registry, so it can only generate from a specification whose
+event schema lives in this repo's own `tracking-assets/data-structures` (today
+the `com.snowplow_demo.fashion` vendor). Each listed ID is derived from the
+org ID with the same UUIDv5 rule `scripts/seed-tracking-plans.ts` uses to
+publish the tracking plan, so the list always names the same specifications
+the seed created. The org's tracking plan must already be seeded (see
+[`docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md) §4) or
+generation has nothing to read.
 
 Do not edit `snowtype/` or `snowtype.config.json` by hand — regenerate instead.
 
-**Agent events:** once the tracking plan's agent
-event specifications (see "Agent event specifications" above) are seeded to
-an org, re-run `npm run snowtype:generate` and check whether it produces
-wrappers for `message_sent`/`message_received`. If it does, switch
-`src/components/Widget/useWidgetConversationTracking.ts` off its hardcoded
-`MESSAGE_SENT_SCHEMA` / `MESSAGE_RECEIVED_SCHEMA` / `MESSAGE_CONTEXT_SCHEMA`
-constants and onto the generated helpers (mirroring how it already uses
-`trackProductListClickedSpec` for card clicks), then confirm
-`npm test`, `npm run lint`, and `npm run build` still pass. The server-side
-module (`src/utils/agentTracking.ts`, `src/utils/agentSelfTracking.ts`)
-keeps its own Iglu Central schema constants either way — Snowtype only
-generates browser-tracker helpers.
+**Agent events:** Snowtype cannot generate helpers for the seven agent event
+specifications (see "Agent event specifications" above) — it does not resolve
+Iglu Central event schemas, only this repo's own. Those events
+(`message_sent`, `message_received`, and the server-side agent events) keep
+their hardcoded schema constants in
+`src/components/Widget/useWidgetConversationTracking.ts`,
+`src/utils/agentTracking.ts`, and `src/utils/agentSelfTracking.ts`.
 
 ## Personalization Workflows
 

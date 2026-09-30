@@ -60,6 +60,7 @@ data:
       items:
         type: string
         maxLength: 128
+        description: Stable identifier of a single returned product.
       description: Stable identifiers of the returned products, in result order.
   required:
     - category
