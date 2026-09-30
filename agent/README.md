@@ -92,78 +92,22 @@ user id, turn id). The context tool keeps its pre-existing `session_id`
 query parameter alongside them, as a fallback for an agent still running the
 old schema.
 
-## Spike: identity headers and per-turn id propagation (issue 22)
+## Identity headers and per-turn ids
 
-The schema changes above, and `CesMessengerWidget.tsx` now passing
-`snowplow_user_id` alongside the existing `snowplow_session_id`, plus a
-`setSnowplowTurnId(element, turnId)` export the conversation hook (issue 25)
-will call before each send, are repo prep only. None of it proves the
-platform actually delivers a per-turn id to a tool call in time -- that
-depends on widget timing nobody has verified. This is a human checkpoint: it
-needs a deployed agent and cannot run from the pipeline.
+The shopper's identity reaches the tool calls once the widget sends every id
+in a single `setQueryParameters` call. `setQueryParameters` replaces the
+whole variable set rather than merging into it, so `CesMessengerWidget.tsx`
+sends `snowplow_session_id` and `snowplow_user_id` together, and resends the
+full set whenever it adds a turn id. With that in place the tool events carry
+`domain_sessionid`, `domain_userid`, the `agent_context` user id and the
+`conversation` entity's chat session id.
 
-Run it against **the duplicate agent app and second storefront deployment
-from issue #28 only.** Never the production agent or the production
-storefront -- a colleague is using that pair for a separate demo during the
-week of 21 September 2026.
-
-### Checklist
-
-1. Deploy this branch to the second storefront deployment and re-import both
-   `get-user-context.openapi.yaml` and `search-catalog.openapi.yaml` into the
-   duplicate agent's existing `getUserContext` / `searchCatalog` tools,
-   replacing their current schemas (see `docs/setup-cx-agent-studio.md` §3).
-2. Declare two new agent variables on the duplicate agent, same pattern as
-   the existing `snowplow_session_id` (`docs/setup-cx-agent-studio.md` §4):
-   `snowplow_user_id` and `snowplow_turn_id`, both type Text, no default
-   value.
-3. Load the second storefront deployment, open the browser devtools console,
-   and manually run
-   `document.querySelector("ces-messenger").setQueryParameters({ snowplow_session_id: "<domain_sessionid>", snowplow_user_id: "<domain_userid>", snowplow_turn_id: "spike-test-turn-1" })`
-   (copy the two ids from the `Passed Snowplow identity variables` console
-   line; `setQueryParameters` replaces the whole set, so passing the turn id
-   alone would drop them) immediately before sending a chat message that
-   triggers a tool call (e.g. ask something that requires a catalog search).
-   This simulates what the conversation hook (issue 25) will do automatically
-   at send time.
-4. In Snowplow Micro (`http://localhost:9090/micro/good`, see the storefront
-   README's Micro section) or Console, find the `tool_execution` event(s)
-   emitted for that turn (`getUserContext` and/or `searchCatalog`,
-   `storefront/src/utils/agentTracking.ts`) and check:
-   - **(a) all four headers arrived:** the event's atomic `domain_sessionid`
-     and `domain_userid` columns are both populated (not just
-     `domain_sessionid`, which already worked via the context tool's old
-     `session_id` query parameter); the `agent_context` entity's `user_id`
-     field is present; the `conversation` entity's `chat_session_id` field is
-     non-null (this one only ever worked through the injected header --
-     these two tools had no built-in-session-id binding before this issue).
-   - **(b) the turn id specifically propagated:** the `conversation`
-     entity's `turn_id` field, and the `tool_execution` event's own
-     `invocation_id`, both equal `spike-test-turn-1` from step 3.
-5. Record the outcome below and in issue #22: which of (a) and (b) held.
-   If (b) fails, no code change is needed here -- issue #18 already documents
-   the fallback (the conversation hook still tracks the turn id on browser
-   `message_sent`/`message_received` events, and turns are reconstructed
-   downstream by ordering within the chat session).
-
-### Result
-
-Run 21 September 2026 against the issue #28 duplicate agent and storefront,
-by driving the deployed widget with Playwright and reading the `runSession`
-request body plus the CX Insights trace, rather than steps 3--4 as written.
-
-- **(a) did not hold, because of a storefront bug, not the platform.**
-  `setQueryParameters()` replaces the whole variable set on every call, and
-  `CesMessengerWidget.tsx` was calling it once per key, so only the
-  last-set variable (`snowplow_user_id`) reached the agent and
-  `getUserContext` ran with an empty input. Fixed by sending all ids in one
-  call and resending the full set with each turn id; (a) still needs
-  re-checking once the fix is deployed to the duplicate storefront.
-- **(b) did not hold for the current widget timing.** The conversation hook
-  sets `snowplow_turn_id` only after the widget has already opened its
-  stream (console order: `Initializing WebStream...`, then
-  `Setting query parameters: {snowplow_turn_id: ...}`), and the
-  `runSession` body carried no turn id. No code change here: issue #18's
-  fallback applies -- browser `message_sent`/`message_received` events carry
-  the turn id and turns are reconstructed downstream by ordering within
-  the chat session.
+A per-turn id set at send time does not reach the tool call. By the time the
+widget dispatches its send event it has already opened the stream, so the
+`runSession` request carries no turn id: the tool events'
+`conversation.turn_id` stays null and `invocation_id` falls back to a random
+UUID. The conversation hook therefore arms each turn's id ahead of time (once
+at mount, then again after every send), but tool events are not relied on to
+carry it. Turns are reconstructed downstream instead: the browser
+`message_sent` / `message_received` events carry the turn id, and ordering
+the tool events within the chat session places each one in its turn.
