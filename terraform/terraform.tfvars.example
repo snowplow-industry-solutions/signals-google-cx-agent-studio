@@ -4,8 +4,8 @@
 # - Importing the original console-built app (README.md "Import, plan, and
 #   re-apply"): every ID below must be the *existing* live resource's ID,
 #   read from the console / apps.exportApp / the CES REST API.
-# - Greenfield-creating a duplicate app in its own workspace (README.md
-#   "Creating a duplicate app in a new workspace", issue 24): every ID
+# - Greenfield-creating a new app in its own workspace (README.md
+#   "Creating a new app in its own workspace"): every ID
 #   below is instead a *new* ID of your own choosing (letters/digits/hyphens
 #   -- CES doesn't require it to mean anything), assigned to the resource
 #   on first apply. Never reuse the original app's IDs, secret, or tfvars
@@ -39,9 +39,9 @@ deployment_display_name = "<PLACEHOLDER: existing deployment's display name (imp
 # deployment's allowed_origins (deployment.tf), which rejects the widget
 # everywhere else, and as the servers[0].url rendered into the three
 # OpenAPI tool schemas (toolsets.tf replaces the committed placeholder at
-# plan time, so agent/tools/*.openapi.yaml never needs editing). For the
-# duplicate-app workspace (issue 24/28) this must be the *second*
-# storefront deployment's origin, never the production one.
+# plan time, so agent/tools/*.openapi.yaml never needs editing). For a
+# new app in its own workspace this must be that app's own storefront
+# deployment's origin, never the original app's.
 storefront_url  = "<PLACEHOLDER: e.g. https://your-storefront.example.com>"
 allowed_origins = ["<PLACEHOLDER: e.g. https://your-storefront.example.com>"]
 

@@ -1,8 +1,8 @@
 # Every output here is a *full* resource name
 # (projects/<project>/locations/<location>/apps/<app>/...). On provider
 # v7.41.0 that is the resource's `id`; `.name` is only the last path segment
-# (verified against live state 2026-09-21, when a `.name`-based
-# deployment_name handed the widget a bare UUID and it refused to start).
+# (a `.name`-based deployment_name hands the widget a bare UUID and it
+# refuses to start).
 
 output "app_name" {
   description = "Full resource name of the CES app."

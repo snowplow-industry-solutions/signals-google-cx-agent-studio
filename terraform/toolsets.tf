@@ -3,7 +3,7 @@
 # agent/tools/. context and catalog mirror the console-built toolsets on the
 # original app (named after the OpenAPI operationIds at import); self_tracking
 # has no console-built counterpart to mirror -- it's created fresh by this
-# config (issue 24) -- so its display name follows the same operationId
+# config -- so its display name follows the same operationId
 # convention for consistency. The console sets no descriptions on any of
 # these, so none are set here.
 #

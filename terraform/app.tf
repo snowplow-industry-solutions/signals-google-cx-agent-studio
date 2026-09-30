@@ -51,7 +51,7 @@ resource "google_ces_app" "this" {
   }
 
   # Same rationale as snowplow_session_id above. Minted per turn by the
-  # widget (issue 22) rather than read from the tracker, so tool calls and
+  # widget rather than read from the tracker, so tool calls and
   # self-tracking events issued during the same turn share an id.
   variable_declarations {
     name        = "snowplow_turn_id"

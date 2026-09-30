@@ -7,14 +7,13 @@ the `google_ces_*` resource family (`hashicorp/google >= 7.31.0`). This config
 serves two paths against the same `.tf` files: it **adopts** the original
 console-built app via `terraform import`, so that demo survives console drift
 and can be re-created after a trial expires, and it can also **greenfield
-create** a whole new app from scratch -- used to stand up the duplicate agent
-app for issue #24/#28 in its own workspace, without an import step, while the
-original stays reserved for a colleague's demo. Import, `plan`,
+create** a whole new app from scratch in its own workspace, without an
+import step, leaving any imported app untouched. Import, `plan`,
 `apps.exportApp`, and live labelling all run against the real project, by a
 human. The full import command sequence is in ["Import, plan, and
 re-apply"](#import-plan-and-re-apply) below; the greenfield path is in
-["Creating a duplicate app in a new
-workspace"](#creating-a-duplicate-app-in-a-new-workspace).
+["Creating a new app in its own
+workspace"](#creating-a-new-app-in-its-own-workspace).
 
 ## Layout
 
@@ -39,7 +38,7 @@ read it.
 - `app.tf`, `agent.tf`, `toolsets.tf`, `deployment.tf` -- the app, root
 agent + app/root-agent association, the three OpenAPI toolsets (sourced
 from `agent/tools/*.openapi.yaml`: `getUserContext`, `searchCatalog`, and
-the self-tracking toolset added in issue 24), the app version, and the
+the self-tracking toolset), the app version, and the
 web-widget deployment (public access, origin check, recaptcha off).
 - `tools.tf` -- the two typed widget tools
 (`productCarousel`/`productDetails`), adopted after the console build added
@@ -327,8 +326,8 @@ gcloud projects update "${PROJECT_ID}" --update-labels=<key>=<value>,...
 
 1. Re-run the two setup guides against the fresh org/project to get new
   console-built resources (this import path doesn't create them; for a
-  from-scratch app with no console step at all, see ["Creating a duplicate
-  app in a new workspace"](#creating-a-duplicate-app-in-a-new-workspace)
+  from-scratch app with no console step at all, see ["Creating a new app in
+  its own workspace"](#creating-a-new-app-in-its-own-workspace)
   instead).
 2. Update `terraform.tfvars` with the new IDs and re-run steps 2–3 against the
   new project.
@@ -343,13 +342,13 @@ gcloud projects update "${PROJECT_ID}" --update-labels=<key>=<value>,...
 > `terraform import` of the live version** — editing tfvars alone won't move it,
 > because `app_version_id` sits in the version resource's `ignore_changes`.
 
-## Creating a duplicate app in a new workspace
+## Creating a new app in its own workspace
 
-Issues #24/#28: the original app and the production storefront deployment are
-reserved for a colleague's demo (week of 21 September 2026), so this ticket's
-work runs against a **duplicate agent app** and a second storefront
-deployment instead. Unlike everything above, there is nothing to import here
-— this config creates the duplicate app, its three toolsets, both widget
+Use this path to stand up a second agent app, with its own storefront
+deployment, alongside an app this config already manages (the "original"
+below), or to create the first app with no console build at all. Unlike
+everything above, there is nothing to import here
+— this config creates the new app, its three toolsets, both widget
 tools, the agent, the first app version, the web-widget deployment, and the
 backing secret from scratch, in one `apply`.
 
@@ -366,14 +365,14 @@ cd terraform
 terraform workspace new duplicate    # or: terraform workspace select duplicate
 ```
 
-A Terraform workspace gives the duplicate its own state
+A Terraform workspace gives the new app its own state
 (`terraform.tfstate.d/duplicate/terraform.tfstate`, already covered by the
 `*.tfstate.*` rule in the repo's `.gitignore`) without touching the
 original's `terraform.tfstate`. Workspaces do **not** isolate variable
 files, though — `terraform.tfvars` and any `*.auto.tfvars` are loaded
-regardless of which workspace is selected. To stop the duplicate's IDs from
+regardless of which workspace is selected. To stop the new app's IDs from
 colliding with (or silently overriding) the original's `terraform.tfvars` in
-the same directory, give the duplicate its own file that Terraform never
+the same directory, give the new app its own file that Terraform never
 auto-loads, and pass it explicitly on every command:
 
 ```bash
@@ -386,7 +385,7 @@ your own choosing for `app_id`, `agent_id`, `context_toolset_id`,
 `self_tracking_toolset_id`'s greenfield default), display names of your
 choosing for `app_display_name`, `app_version_display_name`, and
 `deployment_display_name`, and `storefront_url`/`allowed_origins` pointed at
-the **second** storefront deployment from #28 — never the production one.
+the new app's own storefront deployment — never the original's.
 Leave `agent_shared_secret_id` unset so a new secret is created rather than
 adopting the original's. `storefront_url` also becomes the server URL inside
 the three tool schemas — you do not edit anything under `agent/tools/` (see
@@ -470,8 +469,7 @@ pinned version; only the widget is affected, which is why this is easy to
 miss in testing and only shows up when a demo watches the widget specifically.
 
 The first such bump is in the config already: `google_ces_app_version.v2_text_with_widgets`
-in `deployment.tf` (added 21 September 2026 after PRs #38 and #40), which the
-web-widget deployment now serves. `current` stays as the retained v1 snapshot.
+in `deployment.tf`, which the web-widget deployment now serves. `current` stays as the retained v1 snapshot.
 To publish the next change, copy that resource block with a new
 `app_version_id` and display name, repoint `google_ces_deployment.web_widget.app_version`
 and the `app_version_name` output at it, and apply. Expect the plan to show

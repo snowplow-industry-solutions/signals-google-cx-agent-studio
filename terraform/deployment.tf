@@ -35,10 +35,10 @@ resource "google_ces_app_version" "current" {
   deletion_policy = local.ces_deletion_policy
 }
 
-# Second published version (2026-09-21): snapshots the agent draft after PR #38
-# (real storefront origin rendered into the instruction and tool schemas) and
-# PR #40 (one decision call per turn, in the searchCatalog step, so the model
-# writes reply text alongside widgets again). The deployment below serves this
+# Second published version: snapshots the agent draft once the real
+# storefront origin is rendered into the instruction and tool schemas, and
+# the decision tracking call moved into the searchCatalog step (one per turn)
+# so the model writes reply text alongside widgets again. The deployment below serves this
 # one; `current` above stays as the retained v1 snapshot.
 resource "google_ces_app_version" "v2_text_with_widgets" {
   app_version_id = "v2-text-with-widgets"
