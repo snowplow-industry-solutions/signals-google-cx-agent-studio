@@ -1,15 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Post-deploy smoke test for the agent-facing tool endpoints and the
- * ces-messenger widget embed.
+ * Post-deploy smoke test for the agent-facing tool endpoints, the three
+ * self-tracking endpoints, and the ces-messenger widget embed.
  *
  * A human runs this after triggering the Vercel deploy, against the public
  * HTTPS URL Vercel assigns, to confirm the site is reachable, that
  * /api/agent/context + /api/agent/catalog enforce the shared-secret header
- * and return the expected payload shape, and that the homepage HTML embeds
- * the ces-messenger script and element. It does not replace the browser
- * walkthrough (browse -> context reflects that session, widget delivers the
- * session id to a live agent turn) from docs/setup-cx-agent-studio.md.
+ * and return the expected payload shape, that /api/agent/track-intent +
+ * /track-decision + /track-constraint enforce the same shared-secret header
+ * and accept a well-formed body, and that the homepage HTML embeds the
+ * ces-messenger script and element. The three self-tracking checks always
+ * send `x-agent-tracking-dry-run: 1` so the probe validates the deployment
+ * without sending a real event to the collector. It does not replace the
+ * browser walkthrough (browse -> context reflects that session, widget
+ * delivers the session id to a live agent turn) from
+ * docs/setup-cx-agent-studio.md.
  *
  * Usage: AGENT_SHARED_SECRET=<secret> npm run verify:deploy -- <base-url> [session_id]
  */
@@ -18,11 +23,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const AUTH_HEADER = "x-agent-api-key";
+const DRY_RUN_HEADER = "x-agent-tracking-dry-run";
+
+// Bodies drawn from the enums in agent/tools/self-tracking.openapi.yaml so a
+// probe always satisfies validation.
+const TRACK_INTENT_BODY = { intent_category: "browse_inspiration", confidence: 0.5 };
+const TRACK_DECISION_BODY = { decision_type: "tool_selection", reasoning: "verify-deploy smoke test." };
+const TRACK_CONSTRAINT_BODY = {
+  constraint_type: "budget",
+  requirement: "verify-deploy smoke test.",
+  reason_not_met: "verify-deploy smoke test.",
+};
 
 export interface Check {
   name: string;
   path: string;
+  method?: "GET" | "POST";
   headers?: Record<string, string>;
+  body?: unknown;
   expectedStatus: number;
   bodyFormat?: "json" | "text";
   validateBody?: (body: unknown) => string | null;
@@ -57,6 +75,52 @@ function hasKeys(body: unknown, keys: readonly string[]): string | null {
   const payload = body as Record<string, unknown>;
   const missing = keys.filter((key) => !(key in payload));
   return missing.length > 0 ? `missing key(s) in response body: ${missing.join(", ")}` : null;
+}
+
+interface SelfTrackingEndpoint {
+  name: string;
+  path: string;
+  body: Record<string, unknown>;
+  confirmationKey: string;
+}
+
+const SELF_TRACKING_ENDPOINTS: readonly SelfTrackingEndpoint[] = [
+  { name: "track-intent", path: "/api/agent/track-intent", body: TRACK_INTENT_BODY, confirmationKey: "intent_id" },
+  {
+    name: "track-decision",
+    path: "/api/agent/track-decision",
+    body: TRACK_DECISION_BODY,
+    confirmationKey: "decision_id",
+  },
+  {
+    name: "track-constraint",
+    path: "/api/agent/track-constraint",
+    body: TRACK_CONSTRAINT_BODY,
+    confirmationKey: "violation_id",
+  },
+];
+
+function buildSelfTrackingChecks(apiKey: string): Check[] {
+  const checks: Check[] = [];
+  for (const endpoint of SELF_TRACKING_ENDPOINTS) {
+    checks.push({
+      name: `${endpoint.name} endpoint rejects requests without the shared secret`,
+      path: endpoint.path,
+      method: "POST",
+      body: endpoint.body,
+      expectedStatus: 401,
+    });
+    checks.push({
+      name: `${endpoint.name} endpoint responds for an authorized dry-run request`,
+      path: endpoint.path,
+      method: "POST",
+      headers: { [AUTH_HEADER]: apiKey, [DRY_RUN_HEADER]: "1" },
+      body: endpoint.body,
+      expectedStatus: 200,
+      validateBody: (body) => hasKeys(body, [endpoint.confirmationKey]),
+    });
+  }
+  return checks;
 }
 
 export function buildChecks(apiKey: string, sessionId: string): Check[] {
@@ -103,6 +167,7 @@ export function buildChecks(apiKey: string, sessionId: string): Check[] {
         return Array.isArray((body as Record<string, unknown>).results) ? null : '"results" is not an array';
       },
     },
+    ...buildSelfTrackingChecks(apiKey),
   ];
 }
 
@@ -120,7 +185,11 @@ export function evaluateResult(check: Check, status: number, body: unknown): Che
 }
 
 async function runCheck(baseUrl: string, check: Check): Promise<CheckResult> {
-  const response = await fetch(new URL(check.path, baseUrl), { headers: check.headers });
+  const response = await fetch(new URL(check.path, baseUrl), {
+    method: check.method ?? "GET",
+    headers: check.body !== undefined ? { "Content-Type": "application/json", ...check.headers } : check.headers,
+    body: check.body !== undefined ? JSON.stringify(check.body) : undefined,
+  });
   let body: unknown = null;
   try {
     body = check.bodyFormat === "text" ? await response.text() : await response.json();

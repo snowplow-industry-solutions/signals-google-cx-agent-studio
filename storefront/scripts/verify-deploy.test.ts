@@ -12,7 +12,9 @@ describe("buildChecks", () => {
 
   it("builds unauthorized checks for context and catalog with no auth header", () => {
     const checks = buildChecks("secret", "session-1");
-    const unauthorized = checks.filter((check) => check.expectedStatus === 401);
+    const unauthorized = checks.filter(
+      (check) => check.expectedStatus === 401 && (check.path === "/api/agent/catalog" || check.path.startsWith("/api/agent/context")),
+    );
     expect(unauthorized).toHaveLength(2);
     for (const check of unauthorized) {
       expect(check.headers).toBeUndefined();
@@ -29,7 +31,11 @@ describe("buildChecks", () => {
 
   it("builds authorized checks for context and catalog carrying the shared-secret header", () => {
     const checks = buildChecks("my-secret", "session-1");
-    const authorized = checks.filter((check) => check.headers?.["x-agent-api-key"] === "my-secret");
+    const authorized = checks.filter(
+      (check) =>
+        check.headers?.["x-agent-api-key"] === "my-secret" &&
+        (check.path === "/api/agent/catalog" || check.path.startsWith("/api/agent/context")),
+    );
     expect(authorized).toHaveLength(2);
     expect(authorized.map((check) => check.path)).toEqual([
       "/api/agent/context?session_id=session-1",
@@ -113,5 +119,67 @@ describe("evaluateResult", () => {
       '<ces-messenger deployment-id="projects/p/locations/l/apps/a/deployments/d"></ces-messenger>';
     const result = evaluateResult(widgetCheck, 200, html);
     expect(result.pass).toBe(true);
+  });
+});
+
+describe("self-tracking checks", () => {
+  const selfTrackingChecks = buildChecks("my-secret", "session-1").filter((check) =>
+    check.path.startsWith("/api/agent/track-"),
+  );
+
+  it("builds a pair of checks for each of the three self-tracking endpoints", () => {
+    expect(selfTrackingChecks).toHaveLength(6);
+    const paths = new Set(selfTrackingChecks.map((check) => check.path));
+    expect(paths).toEqual(
+      new Set(["/api/agent/track-intent", "/api/agent/track-decision", "/api/agent/track-constraint"]),
+    );
+  });
+
+  it("sends a POST with a well-formed body for every self-tracking check", () => {
+    for (const check of selfTrackingChecks) {
+      expect(check.method).toBe("POST");
+      expect(check.body).toBeTruthy();
+    }
+  });
+
+  it("builds an unauthorized check with no headers and a 401 expectation for each endpoint", () => {
+    const unauthorized = selfTrackingChecks.filter((check) => check.expectedStatus === 401);
+    expect(unauthorized).toHaveLength(3);
+    for (const check of unauthorized) {
+      expect(check.headers).toBeUndefined();
+    }
+  });
+
+  it("sends the shared secret and the dry-run header on every authorized probe", () => {
+    const authorized = selfTrackingChecks.filter((check) => check.expectedStatus === 200);
+    expect(authorized).toHaveLength(3);
+    for (const check of authorized) {
+      expect(check.headers?.["x-agent-api-key"]).toBe("my-secret");
+      expect(check.headers?.["x-agent-tracking-dry-run"]).toBe("1");
+    }
+  });
+
+  it("validates the track-intent confirmation shape", () => {
+    const check = selfTrackingChecks.find(
+      (c) => c.path === "/api/agent/track-intent" && c.expectedStatus === 200,
+    )!;
+    expect(evaluateResult(check, 200, { intent_id: "abc-123" }).pass).toBe(true);
+    expect(evaluateResult(check, 200, {}).pass).toBe(false);
+  });
+
+  it("validates the track-decision confirmation shape", () => {
+    const check = selfTrackingChecks.find(
+      (c) => c.path === "/api/agent/track-decision" && c.expectedStatus === 200,
+    )!;
+    expect(evaluateResult(check, 200, { decision_id: "abc-123" }).pass).toBe(true);
+    expect(evaluateResult(check, 200, {}).pass).toBe(false);
+  });
+
+  it("validates the track-constraint confirmation shape", () => {
+    const check = selfTrackingChecks.find(
+      (c) => c.path === "/api/agent/track-constraint" && c.expectedStatus === 200,
+    )!;
+    expect(evaluateResult(check, 200, { violation_id: "abc-123" }).pass).toBe(true);
+    expect(evaluateResult(check, 200, {}).pass).toBe(false);
   });
 });
