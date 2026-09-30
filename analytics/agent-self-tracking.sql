@@ -64,12 +64,12 @@
 --   * Server-side agent events set the shopper's domain_sessionid and
 --     domain_userid in the atomic columns, so agent and shopper events join on
 --     domain_sessionid with no lookup table.
---   * agent_context.invocation_id is the widget's per-turn id when that id
---     reaches the tool call, shared by every tool call and self-tracking event
---     in the same turn. When it does not arrive in time, each event gets a
---     random UUID instead and conversation.turn_id is null, so a turn has to
---     be rebuilt by ordering events within the chat session (see
---     agent/README.md "Identity headers and per-turn ids").
+--   * agent_context.invocation_id is the widget's per-turn id, shared by every
+--     tool call and self-tracking event in the same turn (and equal to
+--     conversation.turn_id). Group on it to rebuild "what the agent did this
+--     turn". An event that arrived without a turn id has a random UUID here
+--     and a null conversation.turn_id; place it by ordering within the chat
+--     session (see agent/README.md "Identity headers and per-turn ids").
 --   * agent_context.session_id is the CX Agent Studio chat session id. Group
 --     on it to rebuild a conversation.
 --   * Agent events are identified by event_vendor = 'com.snowplow.agent.tracking'

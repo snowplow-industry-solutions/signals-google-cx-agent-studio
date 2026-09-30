@@ -102,12 +102,14 @@ full set whenever it adds a turn id. With that in place the tool events carry
 `domain_sessionid`, `domain_userid`, the `agent_context` user id and the
 `conversation` entity's chat session id.
 
-A per-turn id set at send time does not reach the tool call. By the time the
-widget dispatches its send event it has already opened the stream, so the
-`runSession` request carries no turn id: the tool events'
-`conversation.turn_id` stays null and `invocation_id` falls back to a random
-UUID. The conversation hook therefore arms each turn's id ahead of time (once
-at mount, then again after every send), but tool events are not relied on to
-carry it. Turns are reconstructed downstream instead: the browser
-`message_sent` / `message_received` events carry the turn id, and ordering
-the tool events within the chat session places each one in its turn.
+The per-turn id has to be in place before the shopper sends. The widget
+dispatches its send event only after the request has gone, so an id set in
+that handler would ride on the following turn's request instead. The
+conversation hook therefore arms each turn's id ahead of time: once at
+mount, then again right after every send. With that in place the tool and
+self-tracking events carry the turn's id as both `conversation.turn_id` and
+`agent_context.invocation_id`, matching the `turn_id` on the browser
+`message_sent` / `message_received` events for the same turn, so agent and
+shopper events join per turn. When no turn id arrives, `conversation.turn_id`
+is null and `invocation_id` falls back to a random UUID; place those events
+in a turn by ordering them within the chat session.
