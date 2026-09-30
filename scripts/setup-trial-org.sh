@@ -530,9 +530,9 @@ pause
 fi
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
-if begin "Storefront-side values (app ID, agent shared secret)" 2; then
-say "Two values belong to the storefront rather than the Snowplow org, so they"
-say "survive an org change. Only set here if missing."
+if begin "Storefront-side values (app ID, agent shared secret, agent tracking)" 2; then
+say "These values belong to the storefront and the agent rather than the"
+say "Snowplow org, so they survive an org change. Only set here if missing."
 if [[ -z "$(_env_value NEXT_PUBLIC_SNOWPLOW_APP_ID)" ]]; then
   write_env NEXT_PUBLIC_SNOWPLOW_APP_ID "atelier-storefront-dev"
   note "NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront-dev (local); production uses atelier-storefront"
@@ -544,6 +544,23 @@ if [[ -z "$(_env_value AGENT_SHARED_SECRET)" ]]; then
 else
   note "AGENT_SHARED_SECRET already set — kept"
 fi
+if [[ -z "$(_env_value NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED)" ]]; then
+  say "Whether shopper/concierge message text reaches the warehouse is a privacy"
+  say "choice, not a default this wizard can make for you. A capped excerpt is"
+  say "recorded unless you turn it off; the message length is tracked either way."
+  if confirm "Turn off message previews?"; then
+    write_env NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED "false"
+  else
+    note "previews stay enabled (the default) — nothing written"
+  fi
+else
+  note "NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED already set — kept"
+fi
+note "AGENT_SNOWPLOW_APP_ID defaults to NEXT_PUBLIC_SNOWPLOW_APP_ID plus \"-agent\" and"
+note "  is left unset here — override only if the CX Agent Studio app id differs."
+note "AGENT_MODEL_NAME defaults to the model in terraform/terraform.tfvars.example"
+note "  (gemini-3.0-flash-001) and is left unset here — set it once the agent"
+note "  exists if it runs a different model."
 pause
 fi
 
@@ -709,6 +726,18 @@ if (( VERCEL_OK )); then
     done
     printf '%s' "atelier-storefront" | vercel env add NEXT_PUBLIC_SNOWPLOW_APP_ID production --force --cwd storefront >/dev/null 2>&1 || warn "failed to set NEXT_PUBLIC_SNOWPLOW_APP_ID"
     note "production NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront (no -dev)"
+    # Optional agent tracking overrides — copy only what's set locally; an unset
+    # one means the code's own default is correct in production too.
+    for key in AGENT_SNOWPLOW_APP_ID AGENT_MODEL_NAME NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED; do
+      value=$(_env_value "$key")
+      [[ -z "$value" ]] && continue
+      if printf '%s' "$value" | vercel env add "$key" production --force --cwd storefront >/dev/null 2>&1; then
+        printf '  %s✓%s set %s (production)\n' "$GREEN" "$RESET" "$key"
+      else
+        warn "failed to set $key — set it in the dashboard"
+        SKIPPED+=("Vercel production env $key")
+      fi
+    done
   else
     SKIPPED+=("Vercel production env vars — not updated")
   fi
@@ -721,6 +750,8 @@ else
     note "  - $key   (value is in $ENV_FILE)"
   done
   note "  - NEXT_PUBLIC_SNOWPLOW_APP_ID   (set to atelier-storefront, not the -dev value)"
+  note "  - AGENT_SNOWPLOW_APP_ID, AGENT_MODEL_NAME, NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED"
+  note "    (optional — only if set in $ENV_FILE)"
   step "Mark the three SNOWPLOW_CONSOLE_* vars, SIGNALS_DEPLOYED_URL and"
   step "AGENT_SHARED_SECRET Sensitive."
   SKIPPED+=("Vercel production env vars set by hand — confirm every production value before deploying")
