@@ -26,14 +26,14 @@ Real credentials never live in git — they go in `storefront/.env.local`
 
 ## 2. Capture credentials
 
-From BDP Console (Settings → API Keys, and Signals → API access):
+From BDP Console (Manage organization → API keys, and Signals → Overview):
 
 | Value | Where to find it | Env var |
 |---|---|---|
-| Console API key | Console → API keys → create/copy | `SNOWPLOW_CONSOLE_API_KEY` |
+| Console API key | Manage organization → API keys → Create API key (scope: see below) | `SNOWPLOW_CONSOLE_API_KEY` |
 | Console API key ID | Same screen, paired with the key | `SNOWPLOW_CONSOLE_API_KEY_ID` |
 | Organization ID | Console URL or org settings | `SNOWPLOW_CONSOLE_ORG_ID` |
-| Signals API base URL | Signals → API access | `SIGNALS_DEPLOYED_URL` |
+| Signals API base URL | Signals → Overview | `SIGNALS_DEPLOYED_URL` |
 | Collector URL | Pipeline → collector endpoint | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` |
 | Owner email (optional) | your address | `SNOWPLOW_OWNER_EMAIL` |
 
@@ -44,6 +44,13 @@ SNOWPLOW_CONSOLE_ORG_ID=<PLACEHOLDER>
 SIGNALS_DEPLOYED_URL=<PLACEHOLDER, e.g. https://signals.<org>.snowplowanalytics.com>
 NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=<PLACEHOLDER, e.g. https://collector.<org>.snowplowanalytics.com>
 ```
+
+**API key scope.** Console API keys are scoped to the features you tick when
+you create them. Tick every feature at its highest level for this guide:
+Data structures and Tracking plans cover the seeding and Snowtype in §4,
+Signals covers §5. A key without Signals still gets a Console token but is
+rejected by the Signals publish in §5 with `401 Unauthorized`. The wizard
+checks the key against the Signals API in stage 5, before any seeding.
 
 ## 3. Local env setup
 
@@ -128,7 +135,8 @@ From `storefront/`, with `.env.local` populated:
    set -a; . ./.env.local; set +a; npm run signals:publish
    ```
 4. Confirm the command prints the published object names/versions with no
-   error.
+   error. A `[Signals API] 401` here means the key's scope is wrong (§2);
+   a `404` means the schemas aren't in production yet (§4).
 
 ## 6. End-to-end verification
 
@@ -196,6 +204,13 @@ Once the storefront is deployed and verified, continue to
 
 ## Troubleshooting
 
+- **Signals publish fails with `[Signals API] 401: {'detail':
+  'Unauthorized'}`** even though Console issued a token for the key — the key
+  is valid but not scoped for Signals. Create a new key with every feature
+  ticked at its highest level (§2), put it in `.env.local` and re-run
+  (`--from 4` in the wizard). If a key with Signals ticked still gets 401,
+  check `SIGNALS_DEPLOYED_URL` is this org's URL from Signals → Overview and
+  not one copied from another org.
 - **Signals publish fails with 404 "Schema for event ... was not found or
   not in production"** — the org's schema registry is missing the tracking
   plan, or the structures were only published to dev. Run step 4, including

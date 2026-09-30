@@ -320,6 +320,73 @@ run() {
   fi
 }
 
+# run_logged LOGFILE "description" cmd... — run, but also copy the output to
+# LOGFILE so the caller can read the actual error after a failure instead of
+# guessing at it. Relies on `set -o pipefail` so the tee doesn't mask the exit.
+run_logged() {
+  local log="$1" desc="$2"; shift 2
+  printf '  %s$%s %s\n' "$DIM" "$RESET" "$*"
+  if "$@" 2>&1 | tee "$log"; then
+    printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$desc"
+    return 0
+  else
+    local rc=$?
+    warn "$desc failed (exit $rc)"
+    return 1
+  fi
+}
+
+# console_token — mint a short-lived Console bearer token from the API key in
+# ENV_FILE, exactly as the Signals SDKs do. Prints the token; prints nothing
+# and returns 1 if Console rejects the key, key ID or organization ID.
+console_token() {
+  local org kid key
+  org=$(_env_value SNOWPLOW_CONSOLE_ORG_ID)
+  kid=$(_env_value SNOWPLOW_CONSOLE_API_KEY_ID)
+  key=$(_env_value SNOWPLOW_CONSOLE_API_KEY)
+  [[ -n "$org" && -n "$kid" && -n "$key" ]] || return 1
+  curl -sS --fail --max-time 20 \
+    -H "X-API-Key-Id: $kid" -H "X-API-Key: $key" \
+    "https://console.snowplowanalytics.com/api/msc/v1/organizations/$org/credentials/v3/token" 2>/dev/null \
+    | sed -n 's/.*"accessToken" *: *"\([^"]*\)".*/\1/p' | grep .
+}
+
+# explain_key_scope — why Signals answers 401 for a key Console happily issued.
+# Console API keys are scoped to the features ticked at creation, so a key
+# without Signals gets a token but is refused by the Signals API. A Signals
+# URL copied from another org fails the same way.
+explain_key_scope() {
+  warn "Signals rejected the Console API key (401 Unauthorized)."
+  say  "Console issued a token, so the key is valid but Signals won't accept it."
+  step "Check the key was created with every feature ticked, Signals included,"
+  step "and that the Signals API URL is this org's (Console → Signals → Overview)."
+  step "Then create a new key if needed and re-enter it in stage 4:"
+  note "  ./scripts/setup-trial-org.sh --from 4"
+}
+
+# signals_preflight — prove the captured credentials work end to end before
+# later stages spend time on them: mint a Console token, then make one
+# read-only call to the Signals API with it. Returns 0 only when both succeed.
+signals_preflight() {
+  local url token code
+  url=$(_env_value SIGNALS_DEPLOYED_URL)
+  [[ -n "$url" ]] || { warn "SIGNALS_DEPLOYED_URL is empty — skipping the Signals check"; return 1; }
+  if ! token=$(console_token); then
+    warn "Console refused to issue a token for this API key — recheck the key, key"
+    warn "ID and organization ID (stage 4)."
+    return 1
+  fi
+  note "✓ Console issued a token for the API key"
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+    -H "Authorization: Bearer $token" "$url/api/v1/registry/services/" 2>/dev/null || printf '000')
+  case "$code" in
+    200) note "✓ Signals API at $url accepts the key"; return 0 ;;
+    401) explain_key_scope; return 1 ;;
+    000) warn "couldn't reach $url — check the Signals API URL (Console → Signals → Overview)"; return 1 ;;
+    *)   warn "Signals API answered HTTP $code — is $url the Signals API base URL?"; return 1 ;;
+  esac
+}
+
 banner "Snowplow trial org → seeded pipeline → live storefront"
 note "Mistyped something? Every capture stage shows what you entered and lets you"
 note "redo it before moving on. To restart later, ./scripts/setup-trial-org.sh --from N"
@@ -395,7 +462,8 @@ open_url "https://console.snowplowanalytics.com"
 while true; do
   step "The organization ID is the UUID in the console URL, right after the host."
   ask SNOWPLOW_CONSOLE_ORG_ID "Organization ID (UUID):"
-  step "Settings → API keys → create a new key. The value shows once; copy it now."
+  step "Manage organization → API keys → Create API key. The value shows once; copy it now."
+  warn "Keys are scoped to the features you tick — tick everything at its top level."
   ask SNOWPLOW_CONSOLE_API_KEY_ID "API key ID (the visible identifier):"
   ask_secret SNOWPLOW_CONSOLE_API_KEY "API key (hidden input):"
 
@@ -409,7 +477,14 @@ while true; do
   note "organization ID : $SNOWPLOW_CONSOLE_ORG_ID"
   note "API key ID      : $SNOWPLOW_CONSOLE_API_KEY_ID"
   note "API key         : $(mask "$SNOWPLOW_CONSOLE_API_KEY")"
-  confirm "All three correct?" && break
+  if confirm "All three correct?"; then
+    if console_token >/dev/null; then
+      note "✓ Console accepted the key and issued a token"
+      break
+    fi
+    warn "Console refused to issue a token for these values — one of them is wrong."
+    confirm "Keep them anyway?" && break
+  fi
   warn "re-entering — press Enter at any prompt to keep the value shown"
 done
 pause
@@ -426,7 +501,7 @@ while true; do
   ask NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "Collector URL:"
   NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=$(normalise_url "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL")
 
-  step "Signals → API access: the Signals API base URL."
+  step "Signals → Overview: the Signals API URL."
   note "  e.g. https://<hash>.signals.snowplowanalytics.com"
   ask SIGNALS_DEPLOYED_URL "Signals API base URL:"
   SIGNALS_DEPLOYED_URL=$(normalise_url "$SIGNALS_DEPLOYED_URL")
@@ -444,6 +519,13 @@ done
 # The interventions endpoint is the same host as the Signals API — the browser
 # plugin just needs it under a NEXT_PUBLIC_ name to reach the client bundle.
 write_env NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT "$SIGNALS_DEPLOYED_URL"
+
+say ""
+say "Checking the API key and Signals URL together before going further:"
+signals_preflight || {
+  SKIPPED+=("Signals credential check failed — stage 9 fails the same way until fixed")
+  confirm "Continue anyway?" || exit 1
+}
 pause
 fi
 
@@ -523,11 +605,21 @@ run "signals dry run" npm --prefix storefront run signals:publish -- --dry-run |
 step "Confirm the printed objects name attribute group fashion_ecommerce_session_attributes"
 step "and service fashion_ecommerce_demo."
 if confirm "Publish the Signals config to this org?"; then
-  run "signals publish" npm --prefix storefront run signals:publish || {
-    warn "publish failed. A 404 'schema ... not in production' means stage 7"
-    warn "didn't complete its prod promotion — re-run with --from 7."
+  PUBLISH_LOG=$(mktemp)
+  run_logged "$PUBLISH_LOG" "signals publish" npm --prefix storefront run signals:publish || {
+    if grep -q 'Signals API\] 401' "$PUBLISH_LOG"; then
+      explain_key_scope
+    elif grep -qi 'not in production\|Signals API\] 404' "$PUBLISH_LOG"; then
+      warn "publish failed. A 404 'schema ... not in production' means stage 7"
+      warn "didn't complete its prod promotion — re-run with --from 7."
+    else
+      warn "publish failed — read the error above. Missing env vars point back at"
+      warn "stages 4-5; anything else, re-run the --dry-run to check the config."
+    fi
+    rm -f "$PUBLISH_LOG"
     confirm "Continue anyway?" || exit 1
   }
+  rm -f "$PUBLISH_LOG"
 else
   SKIPPED+=("Signals publish: npm --prefix storefront run signals:publish")
 fi
