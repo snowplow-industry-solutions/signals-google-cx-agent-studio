@@ -113,3 +113,23 @@ self-tracking events carry the turn's id as both `conversation.turn_id` and
 shopper events join per turn. When no turn id arrives, `conversation.turn_id`
 is null and `invocation_id` falls back to a random UUID; place those events
 in a turn by ordering them within the chat session.
+
+## Verification and analytics
+
+None of the events this agent emits are exercised from this directory — the
+implementation lives in the storefront, and the queries live at the repo
+root:
+
+- Server-side tracking: `storefront/src/utils/agentTracking.ts` (tool
+  executions) and `storefront/src/utils/agentSelfTracking.ts` (the three
+  self-tracking bodies this directory's OpenAPI schema validates).
+- Browser-side tracking: `storefront/src/components/Widget/useWidgetConversationTracking.ts`.
+- Local, pre-org verification against [Snowplow
+  Micro](https://docs.snowplow.io/docs/testing-debugging/snowplow-micro/):
+  `storefront/scripts/render-iglu-schemas.ts` and
+  `storefront/scripts/verify-micro.ts` — see
+  [`storefront/README.md`](../storefront/README.md) "Local Agent Tracking
+  Verification (Snowplow Micro)".
+- Post-deploy smoke test: `storefront/scripts/verify-deploy.ts`.
+- BigQuery queries over the events these tools and this protocol produce:
+  [`../analytics/agent-self-tracking.sql`](../analytics/agent-self-tracking.sql).

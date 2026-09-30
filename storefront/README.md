@@ -152,7 +152,7 @@ resolve from a generated local directory, and the `com.snowplow.agent.tracking` 
 Central vendor still resolves over the network.
 
 ```bash
-npm run micro:schemas   # render tracking-assets/data-structures into micro/iglu-client-embedded/ (gitignored)
+npm run micro:schemas   # scripts/render-iglu-schemas.ts: render tracking-assets/data-structures into micro/iglu-client-embedded/ (gitignored)
 npm run micro:up        # start Micro on http://localhost:9090 (requires Docker)
 ```
 
@@ -178,7 +178,15 @@ AGENT_SHARED_SECRET=<same value as .env.local> npm run verify:micro
 `micro:schemas` must be re-run (and Micro restarted) whenever a data structure under
 `tracking-assets/data-structures` changes. `verify:micro`'s endpoint list
 (`scripts/verify-micro.ts`) is written to be extended as more agent endpoints are
-instrumented.
+instrumented. `scripts/verify-deploy.ts` runs the equivalent shared-secret and
+shape checks against a deployed storefront (`npm run verify:deploy`) rather
+than Micro — see [`../docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md) §7.
+
+Once agent events are flowing into a real pipeline and loaded into BigQuery,
+[`../analytics/agent-self-tracking.sql`](../analytics/agent-self-tracking.sql)
+has ready-made queries over them (tool usage, detected intents, decisions,
+constraint violations); [`../analytics/ecommerce-web-analytics.sql`](../analytics/ecommerce-web-analytics.sql)
+covers the storefront's own web and ecommerce events.
 
 ## Signals Configuration In Python
 

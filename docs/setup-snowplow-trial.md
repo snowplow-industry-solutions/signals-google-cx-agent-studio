@@ -62,9 +62,22 @@ checks the key against the Signals API in stage 5, before any seeding.
      `storefront/tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`).
    - `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` — Signals interventions
      endpoint, if your org exposes one (Signals → API access).
-3. Install deps and run locally:
+   - `AGENT_SHARED_SECRET` — any local value; only real agent tool calls (and
+     the CX Agent Studio side, §7) need it to match a real secret.
+   - `NEXT_PUBLIC_CES_DEPLOYMENT_ID` — leave unset for now; it's only known
+     once the agent's web-widget deployment exists, see
+     [`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md) §6.
+3. Optional agent-tracking overrides — every one has a code default, so only
+   set these if you need to deviate from it:
+
+   | Env var | Default | Notes |
+   |---|---|---|
+   | `AGENT_SNOWPLOW_APP_ID` | `${NEXT_PUBLIC_SNOWPLOW_APP_ID}-agent` | App id the server-side agent tracking module (`src/utils/agentTracking.ts`) sends on every `tool_execution`/self-tracking event, so agent traffic (`platform=srv`) filters from browser traffic (`platform=web`) in Console with one predicate. |
+   | `AGENT_MODEL_NAME` | the model in `terraform/terraform.tfvars.example` (`gemini-3.0-flash-001`) | Recorded in the `agent_context` entity's `model_name` field on every server-side agent event. Update if the live agent's model changes. |
+   | `NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED` | enabled (unset) | Whether the widget's `message_sent`/`message_received` tracking includes a capped (100 char) preview of the shopper's/concierge's message text. Set to `false` to omit previews entirely — message length is still tracked either way. Read client-side. |
+4. Install deps and run locally:
    `npm --prefix storefront install && npm --prefix storefront run dev`.
-4. Browse a few product pages and add something to cart, so the pipeline has
+5. Browse a few product pages and add something to cart, so the pipeline has
    traffic to publish against.
 
 ## 4. Seed the org with the tracking plan
@@ -93,7 +106,17 @@ From `storefront/`, with `.env.local` populated:
    ```
    This publishes data structures (dev, then prod — Signals only accepts
    schemas that are **in production**), then publishes the tracking plan from a
-   derived-ID build tree, stopping on first failure.
+   derived-ID build tree, stopping on first failure. Among the data structures
+   are the repo's three own-schema agent entities (`conversation`,
+   `catalog_search`, `context_lookup`); the tracking plan includes event
+   specifications for both the storefront's events and the seven agent
+   events, and a second source application
+   (`fashion_storefront_agent.yml`) registers the server-side agent app ids
+   alongside the browser storefront's. The agent event and entity schemas
+   themselves (`com.snowplow.agent.tracking`) are never published — they
+   resolve from Iglu Central. See
+   [`storefront/README.md`](../storefront/README.md) ("Agent event
+   specifications") for the full list.
 
 3. Generate the Snowtype tracking helpers against the org you just seeded:
    ```
@@ -176,6 +199,10 @@ HTTPS, which the CX Agent Studio OpenAPI tools require.
    | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` | Yes, by design | from step 2 |
    | `NEXT_PUBLIC_SNOWPLOW_APP_ID` | Yes, by design | use `atelier-storefront` (not `-dev`) so the deployed site is the "live" demo app |
    | `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` | Yes, by design | from step 2, if set |
+   | `AGENT_SNOWPLOW_APP_ID` | No — not sensitive, but not client-exposed either | optional; only set if you need agent traffic under an app id other than the `${NEXT_PUBLIC_SNOWPLOW_APP_ID}-agent` default (§3) |
+   | `AGENT_MODEL_NAME` | No — not sensitive, but not client-exposed either | optional; only set if the live agent's model differs from the `terraform/terraform.tfvars.example` default (§3) |
+   | `NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED` | Yes, by design | optional; not sensitive, but it is a privacy choice — set to `false` to turn off message-text previews in production (§3) |
+   | `NEXT_PUBLIC_CES_DEPLOYMENT_ID` | Yes, by design | set once the agent's web-widget deployment exists — see [`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md) §6, not this guide |
 
    Only `NEXT_PUBLIC_*`-prefixed vars reach the browser bundle (Next.js's own
    build-time convention). Everything else is read with `process.env.*` only
@@ -190,10 +217,14 @@ HTTPS, which the CX Agent Studio OpenAPI tools require.
    cd storefront
    AGENT_SHARED_SECRET=<the value set in Vercel> npm run verify:deploy -- https://<your-storefront-url>
    ```
-   Checks site reachability, that both agent endpoints reject requests with no
-   shared-secret header (401), and that authorized requests return the expected
-   payload shape (200 with `profile` / `recent_activity` / `agent_instructions`,
-   or `results`).
+   Checks site reachability, that the business and self-tracking agent
+   endpoints reject requests with no shared-secret header (401), and that
+   authorized requests return the expected payload shape (200 with `profile`
+   / `recent_activity` / `agent_instructions`, or `results`, for the business
+   tools; 200 with a minted confirmation id for each self-tracking endpoint).
+   Every authorized self-tracking probe sends
+   `x-agent-tracking-dry-run: 1`, so it never sends a real event to the
+   collector.
 
    Then repeat the browser walkthrough from step 6 against the deployed URL:
    browse, add to cart, grab `domain_sessionid`, and confirm
@@ -202,6 +233,15 @@ HTTPS, which the CX Agent Studio OpenAPI tools require.
 
 Once the storefront is deployed and verified, continue to
 [`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md).
+
+## Verify locally with Snowplow Micro
+
+Before seeding a real org, or any time you're changing agent tracking code,
+[`storefront/README.md`](../storefront/README.md) ("Local Agent Tracking
+Verification (Snowplow Micro)") covers running the whole agent tracking
+surface — business tool calls and the three self-tracking calls — against a
+local Snowplow Micro instance, so every payload is schema-validated before
+any of it reaches a real pipeline.
 
 ## Troubleshooting
 

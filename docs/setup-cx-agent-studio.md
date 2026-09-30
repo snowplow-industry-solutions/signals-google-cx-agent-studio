@@ -1,9 +1,9 @@
 # Setup: CX Agent Studio agent, tools, and widget
 
 Builds the customer-facing concierge agent in Google Gemini Enterprise for CX
-(CX Agent Studio), wires it to the storefront's two tool endpoints, and embeds
-the chat widget so a visitor's live Snowplow session flows into the
-conversation automatically.
+(CX Agent Studio), wires it to the storefront's business and self-tracking
+tool endpoints, and embeds the chat widget so a visitor's live Snowplow
+session flows into the conversation automatically.
 
 Prerequisites: the storefront deployed and verified over public HTTPS with a
 minted `AGENT_SHARED_SECRET` — see
@@ -50,24 +50,33 @@ own values.
    for the same contract; edit there first and mirror changes into the
    console copy.
 
-## 3. Import the two OpenAPI tools
+## 3. Import the OpenAPI tools and the self-tracking toolset
 
 For each schema file, create a new OpenAPI tool in the agent and import the file
 directly (the console supports upload or paste):
 
-| Tool | Schema file | Operation |
+| Tool / toolset | Schema file | Operation(s) |
 |---|---|---|
 | `getUserContext` | `agent/tools/get-user-context.openapi.yaml` | `GET /api/agent/context` |
 | `searchCatalog` | `agent/tools/search-catalog.openapi.yaml` | `GET /api/agent/catalog` |
+| `selfTracking` | `agent/tools/self-tracking.openapi.yaml` | `POST /api/agent/track-intent`, `/track-decision`, `/track-constraint` |
 
-Both schemas declare `servers[0].url` as your deployed storefront URL and an
-`apiKey` security scheme on the `x-agent-api-key` header. The committed files
-carry a placeholder (`https://your-storefront.example.com`), so for a console
-import replace it with your real URL in a local copy first. If the deployed URL
-changes, update `servers[0].url` in both files and re-import rather than
-overriding it only in the console. (The Terraform path needs none of this: it
-renders the URL from its `storefront_url` variable at plan time, see
-[`terraform/README.md`](../terraform/README.md).)
+The first two import as single-operation tools. `self-tracking.openapi.yaml`
+defines three operations (`trackUserIntent`, `trackAgentDecision`,
+`trackConstraintViolation`) in one file — importing it creates one toolset;
+name it `selfTracking` so the toolset-qualified tool references the
+instructions use (`selfTracking_trackUserIntent`,
+`selfTracking_trackAgentDecision`, `selfTracking_trackConstraintViolation` —
+see [`agent/README.md`](../agent/README.md)) resolve.
+
+All three schemas declare `servers[0].url` as your deployed storefront URL and
+an `apiKey` security scheme on the `x-agent-api-key` header. The committed
+files carry a placeholder (`https://your-storefront.example.com`), so for a
+console import replace it with your real URL in a local copy first. If the
+deployed URL changes, update `servers[0].url` in all three files and re-import
+rather than overriding it only in the console. (The Terraform path needs none
+of this: it renders the URL from its `storefront_url` variable at plan time,
+see [`terraform/README.md`](../terraform/README.md).)
 
 For each tool's authentication config, choose **API key** auth and set:
 - Header name: `x-agent-api-key`
@@ -85,40 +94,60 @@ the contract. Without these two tools the `{@Widget: ...}` references from §2
 won't resolve.
 
 Confirm each tool calls the deployed endpoint successfully (the console's
-try-it affordance, or a test turn in the simulator) before moving on.
+try-it affordance, or a test turn in the simulator) before moving on. After
+importing the `selfTracking` toolset, re-open the Root Agent node's
+instructions and use the editor's **`@` picker** to confirm all three
+`selfTracking_*` references resolve — the same check already done for the two
+business-tool references. If the editor flags one, delete it and re-insert it
+with the picker rather than hand-typing.
 
-## 4. Wire the session-context variable
+## 4. Wire the session variables
 
-There is **no console UI setting** for this — the binding lives in the tool's
-OpenAPI schema, via the `x-ces-session-context` extension on the parameter
+There is **no console UI setting** for this — the binding lives in the tools'
+OpenAPI schemas, via the `x-ces-session-context` extension on the parameter
 ([OpenAPI tools docs](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/open-api)).
 
 **Do not bind to the built-in `$context.session_id`** — that is CX Agent
 Studio's own conversation session id, not the Snowplow `domain_sessionid`; it
-would always produce degraded payloads. Use a custom agent variable referenced
+would always produce degraded payloads. Use custom agent variables referenced
 as `$context.variables.<name>`.
 
-1. In the agent's Variables section, declare a variable `snowplow_session_id`,
-   type Text.
-2. The `session_id` parameter in `agent/tools/get-user-context.openapi.yaml`
-   already carries the binding (re-paste the schema if the console copy
-   predates it):
+1. In the agent's Variables section, declare three Text variables:
+   `snowplow_session_id`, `snowplow_user_id`, and `snowplow_turn_id` — the
+   shopper's domain session id, domain user id, and the widget's per-turn id.
+   See [`agent/README.md`](../agent/README.md) "Identity headers and
+   per-turn ids" for what threads the turn id through and why it has to be
+   set before the shopper sends.
+2. Every operation across `get-user-context.openapi.yaml`,
+   `search-catalog.openapi.yaml`, and `self-tracking.openapi.yaml` already
+   carries these bindings (re-paste a schema if the console copy predates
+   them): the `session_id` query parameter on `getUserContext` carries
    ```yaml
    x-ces-session-context: $context.variables.snowplow_session_id
    ```
-   With the extension present, the model no longer produces the value; it is
-   injected from the variable at call time.
-3. **Check**: in the simulator, set `snowplow_session_id` to a real,
-   freshly-browsed session id (see §5) and confirm the tool actually receives it
-   — inspect the tool's request in the console's execution trace, not just the
-   agent's reply.
+   as a fallback for an agent still running the old schema, and every
+   operation also declares four platform-injected headers — the built-in
+   chat session id plus the three Snowplow variables — each bound the same
+   way, e.g.:
+   ```yaml
+   x-ces-session-context: $context.variables.snowplow_session_id  # x-snowplow-session-id
+   x-ces-session-context: $context.variables.snowplow_user_id     # x-snowplow-user-id
+   x-ces-session-context: $context.variables.snowplow_turn_id     # x-snowplow-turn-id
+   ```
+   With the extension present, the model never produces these values; the
+   platform injects them from the variables at call time.
+3. **Check**: in the simulator, set all three variables to a real,
+   freshly-browsed session (see §5) and confirm the tools actually receive
+   them — inspect the tool's request in the console's execution trace, not
+   just the agent's reply.
 
 ## 5. Verify in the simulator
 
 1. Browse the deployed storefront to get a real, freshly-browsed
    `domain_sessionid`.
-2. In the simulator, set the `snowplow_session_id` variable to that session id,
-   then open the chat.
+2. In the simulator, set the `snowplow_session_id` variable to that session id
+   (and, optionally, `snowplow_user_id` / `snowplow_turn_id` — see §4), then
+   open the chat.
 3. Confirm the agent's first response reflects that session's real context
    (correct favourite designer, cart contents) without the user stating
    anything, and any recommendation is a real, matching catalog item.
@@ -126,6 +155,15 @@ as `$context.variables.<name>`.
    the agent falls back to generic warm concierge behaviour per
    `agent/instructions.md` — no mention of errors, missing data, or anything
    technical.
+5. **Self-tracking check**: send one more turn and inspect the execution
+   trace for the tool calls the self-tracking protocol
+   (`agent/instructions.md` "Self-tracking protocol") requires that turn —
+   at minimum a `selfTracking_trackUserIntent` call, and a
+   `selfTracking_trackAgentDecision` call alongside any `searchCatalog` call.
+   Confirm the request body matches what you said in chat (e.g. the intent
+   category), and that the reply still arrived with no visible delay — the
+   simulator only proves the calls happened, not that an event reached
+   Snowplow; that needs the end-to-end check in §6.
 
 > Two setup gotchas worth pre-empting: the CES service agent needs
 > `secretmanager.secretAccessor` on the shared secret, and re-importing an
@@ -225,6 +263,14 @@ visitor; in that case the component leaves `snowplow_session_id` unset rather
 than passing an empty value, so the agent's degraded-session instructions apply
 — the graceful cookieless fallback.
 
+`snowplow_turn_id` is armed separately by
+`useWidgetConversationTracking.ts` (the same hook that tracks
+`message_sent`/`message_received`): once at mount, and again right after
+every send, because `setQueryParameters` replaces the whole variable set and
+the widget's own send event fires only after the request is already gone.
+See [`agent/README.md`](../agent/README.md) "Identity headers and per-turn
+ids" for the full mechanism.
+
 ### Verify end-to-end
 
 1. Confirm `verify:deploy` passes the widget-embed check (script/element served
@@ -239,6 +285,18 @@ than passing an empty value, so the agent's degraded-session instructions apply
 6. In a fresh incognito window (no `_sp_id` cookie), open chat before browsing.
    Confirm generic warm concierge behaviour — the cookieless-visitor path,
    end-to-end.
+7. **Find the agent events in Console**: in BDP Console's event explorer (or
+   your own warehouse query), filter to the turn you just sent — agent events
+   are identified by app id (the `-agent` suffix on `AGENT_SNOWPLOW_APP_ID`,
+   default `${NEXT_PUBLIC_SNOWPLOW_APP_ID}-agent`) or by platform `srv`
+   (shopper browser events are `web`). Confirm you see a `tool_execution`
+   event per business tool call, the `user_intent_detected` /
+   `agent_decision_logged` events from the self-tracking check in §5, and
+   that `agent_context.invocation_id` on those events matches the `turn_id`
+   on the `message_sent`/`message_received` events for the same turn — see
+   [`agent/README.md`](../agent/README.md) "Identity headers and per-turn
+   ids". `analytics/agent-self-tracking.sql` in the repo has ready-made
+   BigQuery queries once events are loaded into the warehouse.
 
 ## Troubleshooting
 
@@ -262,10 +320,10 @@ than passing an empty value, so the agent's degraded-session instructions apply
   with placeholder args, then the conversation silently ends** — the
   OpenAPI tools are no longer attached to the Root agent node (re-importing
   a tool schema can detach them, leaving only the built-in `end_session`).
-  On the agent canvas, re-attach `getUserContext` and `searchCatalog` via
-  the node's **+** (§3); if the re-import created duplicate tool entries,
-  attach the copy whose schema carries the `x-ces-session-context` line and
-  delete the orphan.
+  On the agent canvas, re-attach `getUserContext`, `searchCatalog`, and the
+  `selfTracking` toolset via the node's **+** (§3); if the re-import created
+  duplicate tool entries, attach the copy whose schema carries the
+  `x-ces-session-context` line and delete the orphan.
 - **Tool tester returns the blank/degraded payload despite a session id in
   the test input** — the tester only feeds model-produced parameters; with
   `x-ces-session-context` present, `session_id` is context-injected and the
@@ -321,3 +379,29 @@ than passing an empty value, so the agent's degraded-session instructions apply
   after you add a new version and point the channel at it. The simulator
   (§5) tests the draft, the widget (§6) tests the pinned version — they can
   disagree.
+
+## Handover checklist
+
+The human-run steps this integration needs, in order, from a clean org to a
+verified end-to-end turn. Every step links back to where it's covered in
+detail.
+
+1. Seed the tracking plan and publish the data structures —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §4.
+2. Regenerate the Snowtype helpers —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §4.
+3. Deploy the storefront —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §7.
+4. Import the OpenAPI tools and the `selfTracking` toolset — §3.
+5. Declare the session variables (`snowplow_session_id`, `snowplow_user_id`,
+   `snowplow_turn_id`) — §4.
+6. Paste the updated instructions and confirm every `selfTracking_*`
+   reference resolves with the `@` picker — §2, §3.
+7. Apply Terraform, if you're using it, to codify the console build —
+   [`../terraform/README.md`](../terraform/README.md).
+8. Publish a new app version so the pinned web-widget deployment actually
+   serves the change — §6 ("Agent Version must postdate any console edits"
+   in Troubleshooting above).
+9. Run the simulator check, including the self-tracking check — §5.
+10. Run the end-to-end check in Console, confirming both the personalised
+    reply and the agent events for that turn — §6 ("Verify end-to-end").

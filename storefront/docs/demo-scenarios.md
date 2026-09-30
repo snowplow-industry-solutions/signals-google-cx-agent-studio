@@ -94,6 +94,46 @@ For a quieter before/after comparison, open `http://localhost:3000/?demo=plain` 
 - The displayed cart value band if available
 - The fact that the checkout panel still reads live attributes and active workflows
 
+## Agent Analytics
+
+A separate walkthrough from the personalisation scenarios above: instead of
+showing what the shopper sees, this shows what the concierge itself records
+as it works. Needs the concierge agent deployed and reachable (the chat
+widget on the live storefront), plus access to BDP Console.
+
+**What to do**
+
+1. Open the chat widget and hold a short conversation — ask something that
+   triggers a recommendation (e.g. "I'm looking for something for a dinner
+   party") so the turn exercises intent detection, a catalog search, and a
+   decision, not just a context lookup.
+2. In BDP Console's event explorer, find that conversation's events in the
+   same domain session: filter to the shopper's session id (or the app id
+   ending `-agent` / platform `srv` for just the agent's side), and look for
+   `tool_execution`, `user_intent_detected`, and `agent_decision_logged`
+   events alongside the browser's own `message_sent` / `message_received`.
+3. Point out that `agent_context.invocation_id` on the agent events matches
+   the `turn_id` on the browser message events for the same turn — the same
+   conversation, two tracked perspectives.
+4. Run one query from `analytics/agent-self-tracking.sql` (query 2a, detected
+   intent distribution, reads well live) against the warehouse, once events
+   have loaded, to show the conversation becoming an aggregate answer rather
+   than a one-off trace.
+
+**What to say**
+
+- "Every recommendation the concierge makes is backed by a real catalog
+  search — and now we can see that search, and why the agent made it."
+- "The conversation itself is invisible to the shopper, but nothing the
+  concierge does is invisible to the business."
+
+**What to point out**
+
+- The self-tracking events never affected the reply — the conversation you
+  just had reads identically with or without instrumentation.
+- The shared `invocation_id`/`turn_id` ties the agent's reasoning to the
+  exact shopper turn that produced it.
+
 ## Before/After Presentation Pattern
 
 Use this sequence when you want the personalization to feel especially legible:

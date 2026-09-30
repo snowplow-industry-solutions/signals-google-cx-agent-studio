@@ -28,6 +28,15 @@
   `message_sent`/`message_received` per turn and fires the product-list-click
   event for concierge card clicks.
 
+- `src/utils/agentTracking.ts` / `src/utils/agentSelfTracking.ts`
+  The server-side agent tracking module: `agentTracking.ts` builds the Node
+  tracker and emits `tool_execution` events from `/api/agent/context` and
+  `/api/agent/catalog`; `agentSelfTracking.ts` validates the bodies for the
+  three self-tracking endpoints (`/api/agent/track-intent`,
+  `/track-decision`, `/track-constraint`) before `agentTracking.ts` emits
+  their events. `src/utils/agentAuth.ts` holds the shared-secret check both
+  endpoint families use.
+
 ## Where To Change Things
 
 - Product catalog: `src/data/products.ts`
@@ -54,6 +63,23 @@
   - `snowtype.config.example.json` — the committed template; edit this one
   - `snowtype.config.json` and `snowtype/` — generated per-org and gitignored,
     written by `npm run snowtype:generate`. Never edit by hand.
+
+## Agent Analytics
+
+- Local, pre-org verification: `scripts/render-iglu-schemas.ts`
+  (`npm run micro:schemas`) renders this repo's data structures for Snowplow
+  Micro; `scripts/verify-micro.ts` (`npm run verify:micro`) then fires every
+  agent endpoint against a dev server and checks Micro's good/bad counts.
+  Both need a live dev server (and Micro) running, so neither is run from
+  here — see `../README.md` "Local Agent Tracking Verification (Snowplow
+  Micro)".
+- Post-deploy smoke test: `scripts/verify-deploy.ts` (`npm run
+  verify:deploy`) — checks the same endpoints' auth and shape against a
+  deployed storefront. Needs a live deployment; not run from here either.
+- BigQuery queries over the events these endpoints emit:
+  `../../analytics/agent-self-tracking.sql` (agent tool/reasoning events) and
+  `../../analytics/ecommerce-web-analytics.sql` (storefront web/ecommerce
+  events, including the concierge card placement).
 
 ## Verification Commands
 

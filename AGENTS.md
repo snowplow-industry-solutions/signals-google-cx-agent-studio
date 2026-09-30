@@ -5,10 +5,13 @@ Guide for agents and contributors working in this repo. Start with the
 
 ## Repo layout
 
-- `storefront/` — the Next.js app: tracking, Signals proxies, the
-  `/api/agent/*` tool endpoints, and the chat-widget embed. Has its own
-  [README](./storefront/README.md), `package.json`, and test/lint/build
-  scripts. **This is the app.**
+- `storefront/` — the Next.js app: tracking (`src/utils/agentTracking.ts`,
+  `src/components/Widget/useWidgetConversationTracking.ts`), Signals proxies,
+  the `/api/agent/*` business and self-tracking tool endpoints, and the
+  chat-widget embed. Local/deploy verification scripts live under
+  `storefront/scripts/` (`render-iglu-schemas.ts`, `verify-micro.ts`,
+  `verify-deploy.ts`). Has its own [README](./storefront/README.md),
+  `package.json`, and test/lint/build scripts. **This is the app.**
 - `agent/` — source of truth for the CX Agent Studio agent: persona
   instructions (`instructions.md` is human-readable; `instructions.console*.txt`
   are the console-format copies) and the OpenAPI tool schemas

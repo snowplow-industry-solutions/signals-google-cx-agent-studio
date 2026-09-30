@@ -1,33 +1,54 @@
 # Signals × Google CX Agent Studio
 
-A reference integration: a customer-facing concierge agent built in **Google
-Gemini Enterprise for CX** (CX Agent Studio) that pulls **real-time behavioural
-context from Snowplow Signals** to personalise a live conversation.
+A reference integration between **Google Gemini Enterprise for CX** (CX Agent
+Studio) and **Snowplow**, combining two halves:
 
-A visitor browses a luxury-fashion storefront; their in-session behaviour is
-tracked into a Snowplow pipeline and computed into Signals attributes keyed by
-`domain_sessionid`. When they open the embedded chat widget, the agent reads
-those attributes through a tool endpoint and greets them already knowing their
-taste — favourite designer, browsed categories, cart contents — with no
-prompting, degrading gracefully to a generic concierge for unknown or
-cookieless visitors.
+- **Agentic personalisation** — a customer-facing concierge agent reads
+  **real-time behavioural context from Snowplow Signals** to personalise a
+  live conversation. A visitor browses a luxury-fashion storefront; their
+  in-session behaviour is tracked into a Snowplow pipeline and computed into
+  Signals attributes keyed by `domain_sessionid`. When they open the embedded
+  chat widget, the agent reads those attributes through a tool endpoint and
+  greets them already knowing their taste — favourite designer, browsed
+  categories, cart contents — with no prompting, degrading gracefully to a
+  generic concierge for unknown or cookieless visitors.
+- **Agentic analytics** — the agent's own tool calls, reasoning, and the
+  conversation itself are tracked back into the same Snowplow pipeline, as
+  events: what the agent called, what it decided and why, what intent it
+  detected, and when the catalog couldn't satisfy a shopper's request. The
+  BigQuery queries in [`analytics/`](./analytics/) turn that into answers —
+  which intents shoppers bring, how often the catalog fails a request, how
+  long tool calls take, whether shoppers click what the agent recommended.
 
 ## How it fits together
 
 ```
-Storefront (Next.js)  ──tracking──▶  Snowplow pipeline  ──▶  Signals (attributes)
-       │                                                          │
-       │  /api/agent/context, /api/agent/catalog  ◀──── reads ────┘
-       ▼
-  ces-messenger widget  ──setQueryParameters(session + user id)──▶  CX Agent Studio agent
-                                                                        │
-                                              getUserContext / searchCatalog (OpenAPI tools)
+                          ┌─────────────────────────────────────────────┐
+                          │              Snowplow pipeline               │
+                          └─────────────────────────────────────────────┘
+                             ▲        ▲                    │
+             browsing events │        │ tool + reasoning   │ Signals reads
+             message_sent/   │        │ + conversation      │ (attributes)
+             received        │        │ events (server)     │
+                             │        │                     ▼
+    Storefront (Next.js) ────┘        └──── /api/agent/context, /api/agent/catalog,
+    ces-messenger widget                    /track-intent, /track-decision, /track-constraint
+          │                                                        ▲
+          │ setQueryParameters(session + user + turn id)           │ OpenAPI tools:
+          ▼                                                        │ getUserContext, searchCatalog,
+    CX Agent Studio agent ─────────────────────────────────────────┘ selfTracking_*
 ```
 
-The storefront exposes two shared-secret-protected tool endpoints
-(`/api/agent/context`, `/api/agent/catalog`); the agent calls them as OpenAPI
-tools, and the chat widget injects the visitor's live `domain_sessionid` into
-the agent session so the context lookup is keyed to the right person.
+The storefront exposes two shared-secret-protected business tool endpoints
+(`/api/agent/context`, `/api/agent/catalog`) and three self-tracking endpoints
+(`/api/agent/track-intent`, `/track-decision`, `/track-constraint`); the agent
+calls all five as OpenAPI tools, and every call emits a Snowplow event from
+the server. The chat widget injects the visitor's live `domain_sessionid`,
+`domain_userid`, and a per-turn id into the agent session, so every tool call
+and self-tracking event is keyed to the right person and turn, and also
+tracks the conversation itself (`message_sent` / `message_received`) from the
+browser. See [`agent/README.md`](./agent/README.md) ("Identity headers and
+per-turn ids") for how that id threading works.
 
 ## Repository layout
 
@@ -64,8 +85,9 @@ Two guides, run in order:
    the live pipeline: capture credentials, seed the tracking plan, publish the
    Signals config, verify end-to-end, and deploy the storefront to Vercel.
 2. **[docs/setup-cx-agent-studio.md](./docs/setup-cx-agent-studio.md)** — build
-   the agent in CX Agent Studio, import the two OpenAPI tools, wire the
-   session-context variable, and embed the chat widget.
+   the agent in CX Agent Studio, import the OpenAPI tools (the two business
+   tools and the `selfTracking` toolset), wire the session variables, and
+   embed the chat widget.
 
 Then, optionally, back the console build with Terraform:
 **[terraform/README.md](./terraform/README.md)**.
