@@ -37,7 +37,7 @@ the agent session so the context lookup is keyed to the right person.
 | [`agent/`](./agent/) | Repo-side source of truth for the CX Agent Studio agent — persona instructions and the OpenAPI tool schemas you import into the console. See its [README](./agent/README.md). |
 | [`terraform/`](./terraform/) | Optional Terraform to codify the console-built agent/tools/deployment with the `google_ces_*` resources. See its [README](./terraform/README.md). |
 | [`docs/`](./docs/) | Setup guides (below). |
-| [`scripts/`](./scripts/) | `setup-trial-org.sh` (interactive setup) and `verification/` (end-to-end checks against a live deployment). |
+| [`scripts/`](./scripts/) | `setup-trial-org.sh` (interactive setup), `get-info-from-signals.sh` (prints what Signals holds for one shopper session) and `verification/` (end-to-end checks against a live deployment). |
 
 ## Quick start
 
