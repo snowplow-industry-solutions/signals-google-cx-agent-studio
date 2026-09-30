@@ -30,8 +30,8 @@ catalog_toolset_id = "<PLACEHOLDER: existing searchCatalog toolset ID (import) o
 # only set it here if importing an existing toolset under a different ID.
 # self_tracking_toolset_id = "<PLACEHOLDER: existing self-tracking toolset ID>"
 
-app_version_id           = "<PLACEHOLDER: existing app version ID live on the deployment (import), or a new one for the first version (greenfield)>"
-app_version_display_name = "<PLACEHOLDER: the version's display name, e.g. the console's deployment-version-... string, or one of your choosing>"
+app_version_id           = "<PLACEHOLDER: a new ID of your choosing for the first version (greenfield), or the existing app version ID live on the deployment (import)>"
+app_version_display_name = "<PLACEHOLDER: the version's display name, one of your choosing, or the console's deployment-version-... string (import)>"
 
 deployment_display_name = "<PLACEHOLDER: existing deployment's display name (import), or one of your choosing (greenfield)>"
 

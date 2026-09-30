@@ -1,11 +1,10 @@
-# App versions are immutable snapshots -- `current` manages whichever version
-# app_version_id names (the first one this workspace created, or the one the
-# imported deployment served, for a clean initial plan). Publishing a change
-# to the agent means adding a *new* google_ces_app_version resource below with
-# a new app_version_id and repointing google_ces_deployment.web_widget at it
-# -- see README.md "Re-apply after trial expiry / re-publish". Old version
-# resources stay in config: deletion_policy is PREVENT, and a version the
-# deployment has ever served is not worth destroying anyway.
+# App versions are immutable snapshots: app_version_id and description are
+# ForceNew, and deletion_policy = "PREVENT" (local.ces_deletion_policy) blocks
+# any replacement. Publishing an agent change means picking a new
+# app_version_id in tfvars, which is exactly such a replacement -- see
+# README.md "Publishing an agent change" for the procedure (remove this
+# resource from state, then apply the new id so the deployment below
+# repoints in place).
 resource "google_ces_app_version" "current" {
   app_version_id = var.app_version_id
   location       = var.location
@@ -35,35 +34,6 @@ resource "google_ces_app_version" "current" {
   deletion_policy = local.ces_deletion_policy
 }
 
-# Second published version: snapshots the agent draft once the real
-# storefront origin is rendered into the instruction and tool schemas, and
-# the decision tracking call moved into the searchCatalog step (one per turn)
-# so the model writes reply text alongside widgets again. The deployment
-# below serves this one; `current` above stays as the retained v1 snapshot.
-resource "google_ces_app_version" "v2_text_with_widgets" {
-  app_version_id = "v2-text-with-widgets"
-  location       = var.location
-  app            = google_ces_app.this.name
-  project        = var.project_id
-  display_name   = "v2 - reply text alongside widgets"
-  description    = "Real storefront origin in schemas and instruction; single decision call per turn so replies keep their text."
-
-  depends_on = [
-    google_ces_app_root_agent_association.this,
-    google_ces_toolset.context,
-    google_ces_toolset.catalog,
-    google_ces_toolset.self_tracking,
-  ]
-
-  lifecycle {
-    # ForceNew: a version created before this text was reworded keeps its
-    # original description rather than being replaced.
-    ignore_changes = [description]
-  }
-
-  deletion_policy = local.ces_deletion_policy
-}
-
 # Widget channel + public-access/token-broker settings (the
 # ces-messenger wiring, docs/setup-cx-agent-studio.md §6). Recaptcha stays off: the
 # ces-messenger component has no reCAPTCHA support, and turning the
@@ -75,7 +45,7 @@ resource "google_ces_deployment" "web_widget" {
   app          = google_ces_app.this.name
   project      = var.project_id
   display_name = var.deployment_display_name
-  app_version  = google_ces_app_version.v2_text_with_widgets.id
+  app_version  = google_ces_app_version.current.id
 
   channel_profile {
     channel_type = "WEB_UI"

@@ -65,17 +65,20 @@ variable "self_tracking_toolset_id" {
 variable "app_version_id" {
   type        = string
   description = <<-EOT
-    ID of the app version to manage as google_ces_app_version.current. App
-    versions are immutable snapshots: if this ID matches the version the
-    live deployment currently serves, it will be imported; publishing a
-    future change means picking a *new* ID here and repointing the
-    deployment at it (see README.md re-apply steps), not editing this one.
+    ID for the app version to manage as google_ces_app_version.current. For
+    a greenfield create, pick any ID of your choosing (letters, digits,
+    hyphens). To adopt a console-built app instead, set this to the version
+    ID the live deployment currently serves, so it imports cleanly. Either
+    way, app versions are immutable snapshots: publishing a future change
+    means picking a *new* ID here, which replaces this resource -- see
+    README.md "Publishing an agent change" for the procedure, not editing
+    this one in place.
   EOT
 }
 
 variable "app_version_display_name" {
   type        = string
-  description = "Display name for the app version identified by app_version_id."
+  description = "Display name for the app version identified by app_version_id -- one of your choosing (greenfield), or the console-built version's existing display name (import)."
 }
 
 variable "deployment_display_name" {
