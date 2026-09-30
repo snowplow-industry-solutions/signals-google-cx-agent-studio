@@ -16,6 +16,7 @@ Guide for agents and contributors working in this repo. Start with the
 - `terraform/` — `google_ces_*` config codifying the console-built agent. See
   [`terraform/README.md`](./terraform/README.md).
 - `docs/` — the two setup guides.
+- `analytics/` — BigQuery queries for the agent and web analytics.
 - `scripts/verification/` — probes that validate a live deployment.
 
 ## Setup
