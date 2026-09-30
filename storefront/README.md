@@ -95,11 +95,11 @@ Local tracking assets live under `tracking-assets/`.
 - Data structures: `tracking-assets/data-structures`
 - Source applications:
   - `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
-    — the browser-tracked storefront (`signals-workshop-fashion-demo[-dev]`),
+    — the browser-tracked storefront (`atelier-storefront[-dev]`),
     requiring the `WebPage` and `user` entities on every event.
   - `tracking-assets/tracking-plans/source-applications/fashion_storefront_agent.yml`
     — the server-side agent tool endpoints (`/api/agent/*`,
-    `signals-workshop-fashion-demo-agent` / `-dev-agent`). No required
+    `atelier-storefront-agent` / `-dev-agent`). No required
     entities: server events carry neither the web page nor the shopper user
     entity the storefront application requires.
 - Tracking plan: `tracking-assets/tracking-plans/fashion_ecommerce.yml`
@@ -172,7 +172,7 @@ Point the dev server at Micro (`.env.local`) and start it in another terminal:
 
 ```bash
 NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=http://localhost:9090
-NEXT_PUBLIC_SNOWPLOW_APP_ID=signals-workshop-fashion-demo-dev
+NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront-dev
 AGENT_SHARED_SECRET=<any local value>
 ```
 

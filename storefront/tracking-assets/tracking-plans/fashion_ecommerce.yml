@@ -174,8 +174,8 @@ data:
         - id: d68d1f31-aa8b-49b5-a8b8-dfc81d0548d2
           description: Trigger on every searchCatalog tool endpoint call.
           appIds:
-            - signals-workshop-fashion-demo-agent
-            - signals-workshop-fashion-demo-dev-agent
+            - atelier-storefront-agent
+            - atelier-storefront-dev-agent
       event:
         source: iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0
       entities:
@@ -203,8 +203,8 @@ data:
         - id: 7643b030-d782-448f-af5d-e8bb27f1e00f
           description: Trigger on every getUserContext tool endpoint call.
           appIds:
-            - signals-workshop-fashion-demo-agent
-            - signals-workshop-fashion-demo-dev-agent
+            - atelier-storefront-agent
+            - atelier-storefront-dev-agent
       event:
         source: iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0
       entities:
@@ -231,8 +231,8 @@ data:
         - id: 458800e9-4bf2-418e-9a56-8b92b87d7e4c
           description: Trigger on every trackUserIntent self-tracking tool call.
           appIds:
-            - signals-workshop-fashion-demo-agent
-            - signals-workshop-fashion-demo-dev-agent
+            - atelier-storefront-agent
+            - atelier-storefront-dev-agent
       event:
         source: iglu:com.snowplow.agent.tracking/user_intent_detected/jsonschema/1-0-0
       entities:
@@ -257,8 +257,8 @@ data:
         - id: b0b1a2e7-3bb9-48c4-b79c-f1a388f03b32
           description: Trigger on every trackAgentDecision self-tracking tool call.
           appIds:
-            - signals-workshop-fashion-demo-agent
-            - signals-workshop-fashion-demo-dev-agent
+            - atelier-storefront-agent
+            - atelier-storefront-dev-agent
       event:
         source: iglu:com.snowplow.agent.tracking/agent_decision_logged/jsonschema/1-0-0
       entities:
@@ -282,8 +282,8 @@ data:
         - id: d0f8cffd-0b4f-4892-ba7b-fe7d9f87f576
           description: Trigger on every trackConstraintViolation self-tracking tool call.
           appIds:
-            - signals-workshop-fashion-demo-agent
-            - signals-workshop-fashion-demo-dev-agent
+            - atelier-storefront-agent
+            - atelier-storefront-dev-agent
       event:
         source: iglu:com.snowplow.agent.tracking/constraint_violation/jsonschema/1-0-0
       entities:
@@ -307,8 +307,8 @@ data:
         - id: 80ea7a76-6c7c-4613-8eb1-9ebbef97cc24
           description: Trigger on every ces-user-input-entered widget event.
           appIds:
-            - signals-workshop-fashion-demo
-            - signals-workshop-fashion-demo-dev
+            - atelier-storefront
+            - atelier-storefront-dev
       event:
         source: iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0
       entities:
@@ -331,8 +331,8 @@ data:
             Trigger on the first ces-text-received or ces-payload-received
             widget event for a turn.
           appIds:
-            - signals-workshop-fashion-demo
-            - signals-workshop-fashion-demo-dev
+            - atelier-storefront
+            - atelier-storefront-dev
       event:
         source: iglu:com.snowplow.agent.tracking/message_received/jsonschema/1-0-0
       entities:

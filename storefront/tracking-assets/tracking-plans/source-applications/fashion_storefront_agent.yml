@@ -10,10 +10,10 @@ data:
     srv) rather than by the storefront's browser tracker, so they carry
     neither the web page entity nor the shopper user entity the storefront
     source application requires.
-  owner: signals-demo@snowplowanalytics.com
+  owner: demo-owner@example.com
   appIds:
-    - signals-workshop-fashion-demo-agent
-    - signals-workshop-fashion-demo-dev-agent
+    - atelier-storefront-agent
+    - atelier-storefront-dev-agent
   entities:
     tracked: []
     enriched: []
