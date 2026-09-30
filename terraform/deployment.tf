@@ -38,15 +38,15 @@ resource "google_ces_app_version" "current" {
 # Second published version: snapshots the agent draft once the real
 # storefront origin is rendered into the instruction and tool schemas, and
 # the decision tracking call moved into the searchCatalog step (one per turn)
-# so the model writes reply text alongside widgets again. The deployment below serves this
-# one; `current` above stays as the retained v1 snapshot.
+# so the model writes reply text alongside widgets again. The deployment
+# below serves this one; `current` above stays as the retained v1 snapshot.
 resource "google_ces_app_version" "v2_text_with_widgets" {
   app_version_id = "v2-text-with-widgets"
   location       = var.location
   app            = google_ces_app.this.name
   project        = var.project_id
   display_name   = "v2 - reply text alongside widgets"
-  description    = "Agent draft after PRs #38 and #40: real storefront origin in schemas and instruction; single decision call per turn so replies keep their text."
+  description    = "Real storefront origin in schemas and instruction; single decision call per turn so replies keep their text."
 
   depends_on = [
     google_ces_app_root_agent_association.this,
@@ -54,6 +54,12 @@ resource "google_ces_app_version" "v2_text_with_widgets" {
     google_ces_toolset.catalog,
     google_ces_toolset.self_tracking,
   ]
+
+  lifecycle {
+    # ForceNew: a version created before this text was reworded keeps its
+    # original description rather than being replaced.
+    ignore_changes = [description]
+  }
 
   deletion_policy = local.ces_deletion_policy
 }

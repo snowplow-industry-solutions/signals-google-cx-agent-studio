@@ -60,7 +60,7 @@ const MAX_RESPONSE_TIME_MS = 300_000;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Off only when explicitly disabled; on by default (spec #18/#25). */
+/** Off only when explicitly disabled; on by default. */
 function previewsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED !== "false";
 }
@@ -145,7 +145,7 @@ function joinTexts(candidates: unknown[]): string {
  * appends the user's message, before the network send, so it is already
  * present when `ces-user-input-entered` fires for the very first turn.
  * Anything missing or malformed degrades to the documented null fallback
- * (spec #18: "if unavailable, the conversation entity's field is null").
+ * (when unavailable, the conversation entity's field is null).
  */
 const CHAT_SESSION_STORAGE_KEY = "bidi-widget-session";
 

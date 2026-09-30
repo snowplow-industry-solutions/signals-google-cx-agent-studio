@@ -79,7 +79,7 @@ export interface AgentIdentity {
 }
 
 /**
- * Identity fallback rules (spec #18, "Identity threading"): headers are the
+ * Identity fallback rules: headers are the
  * platform-injected source of truth; `fallbackSessionId` is the context
  * endpoint's pre-existing `session_id` query parameter, kept as a fallback
  * for the shopper's domain session id so an agent running the old tool

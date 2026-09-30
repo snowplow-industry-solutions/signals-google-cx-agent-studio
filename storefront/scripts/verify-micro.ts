@@ -187,7 +187,7 @@ export function diffSchemaCounts(
   return mismatches;
 }
 
-/** Every server-side agent event should carry the shopper's identity (spec #18), not just tool_execution. */
+/** Every server-side agent event should carry the shopper's identity, not just tool_execution. */
 export function findIdentityMismatches(goodEvents: readonly MicroGoodEvent[], identity: AgentIdentity): string[] {
   const problems: string[] = [];
 
