@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { Signals } from "@snowplow/signals-node";
 
 import { isAuthorizedAgentRequest } from "@/utils/agentAuth";
+import {
+  resolveAgentIdentity,
+  trackContextLookupToolExecution,
+  type ContextLookupDegradedReason,
+} from "@/utils/agentTracking";
 
 const SERVICE_NAME = "fashion_ecommerce_demo";
 const EVENT_LOG_NAME = "fashion_session_activity";
@@ -107,51 +112,89 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("session_id");
+  const identity = resolveAgentIdentity(request, sessionId);
 
-  if (!sessionId) {
-    return NextResponse.json(DEGRADED_PAYLOAD);
+  const startedAt = performance.now();
+  let success = true;
+  let degradedReason: ContextLookupDegradedReason = "none";
+  let profileAttributeCount = 0;
+  let activityEventCount = 0;
+  let activityReturned = false;
+  let signalsRoundTripMs = 0;
+  let responsePayload: ContextPayload = DEGRADED_PAYLOAD;
+
+  try {
+    if (!sessionId) {
+      degradedReason = "missing_session";
+    } else {
+      const signals = getSignalsClient();
+      if (!signals) {
+        degradedReason = "no_credentials";
+      } else {
+        const signalsStartedAt = performance.now();
+        const [profileResult, contextResult] = await Promise.allSettled([
+          signals.getServiceAttributes({
+            name: SERVICE_NAME,
+            attribute_key: ATTRIBUTE_KEY,
+            identifier: sessionId,
+          }),
+          signals.getAgenticContext({
+            name: EVENT_LOG_NAME,
+            identifier: sessionId,
+            format: "json",
+          }),
+        ]);
+        signalsRoundTripMs = performance.now() - signalsStartedAt;
+
+        let profile: FlatProfile = {};
+        if (profileResult.status === "fulfilled") {
+          profile = flattenProfile(profileResult.value);
+        } else {
+          console.error("[Signals Demo] Failed to fetch profile attributes", profileResult.reason);
+          degradedReason = "upstream_error";
+        }
+
+        let recentActivity = "";
+        let agentInstructions = "";
+        if (contextResult.status === "fulfilled") {
+          const context = contextResult.value as AgenticContextJson;
+          activityEventCount = context.events?.length ?? 0;
+          recentActivity = [context.summary ?? "", ...renderEventLines(context.events ?? [])]
+            .filter(Boolean)
+            .join("\n");
+          agentInstructions = context.prompt ?? "";
+        } else {
+          console.error("[Signals Demo] Failed to fetch agentic context", contextResult.reason);
+          degradedReason = "upstream_error";
+        }
+
+        profileAttributeCount = Object.keys(profile).length;
+        activityReturned = recentActivity !== "";
+        responsePayload = {
+          profile,
+          recent_activity: recentActivity,
+          agent_instructions: agentInstructions,
+        };
+      }
+    }
+  } catch (error) {
+    success = false;
+    throw error;
+  } finally {
+    await trackContextLookupToolExecution({
+      identity,
+      success,
+      durationMs: performance.now() - startedAt,
+      contextLookup: {
+        profileReturned: profileAttributeCount > 0,
+        activityReturned,
+        profileAttributeCount,
+        activityEventCount,
+        signalsRoundTripMs,
+        degradedReason,
+      },
+    });
   }
 
-  const signals = getSignalsClient();
-  if (!signals) {
-    return NextResponse.json(DEGRADED_PAYLOAD);
-  }
-
-  const [profileResult, contextResult] = await Promise.allSettled([
-    signals.getServiceAttributes({
-      name: SERVICE_NAME,
-      attribute_key: ATTRIBUTE_KEY,
-      identifier: sessionId,
-    }),
-    signals.getAgenticContext({
-      name: EVENT_LOG_NAME,
-      identifier: sessionId,
-      format: "json",
-    }),
-  ]);
-
-  let profile: FlatProfile = {};
-  if (profileResult.status === "fulfilled") {
-    profile = flattenProfile(profileResult.value);
-  } else {
-    console.error("[Signals Demo] Failed to fetch profile attributes", profileResult.reason);
-  }
-
-  let recentActivity = "";
-  let agentInstructions = "";
-  if (contextResult.status === "fulfilled") {
-    const context = contextResult.value as AgenticContextJson;
-    recentActivity = [context.summary ?? "", ...renderEventLines(context.events ?? [])]
-      .filter(Boolean)
-      .join("\n");
-    agentInstructions = context.prompt ?? "";
-  } else {
-    console.error("[Signals Demo] Failed to fetch agentic context", contextResult.reason);
-  }
-
-  return NextResponse.json({
-    profile,
-    recent_activity: recentActivity,
-    agent_instructions: agentInstructions,
-  });
+  return NextResponse.json(responsePayload);
 }

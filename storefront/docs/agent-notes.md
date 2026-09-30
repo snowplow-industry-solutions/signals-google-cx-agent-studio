@@ -24,7 +24,9 @@
   Embeds the ces-messenger chat element; `useWidgetTokenRenderer.ts` renders
   its CX Agent Studio rich-response widget tokens/payloads as product cards
   (`widgetCards.ts`) and hides still-streaming partial tokens
-  (`widgetTokenVisibility.ts`).
+  (`widgetTokenVisibility.ts`). `useWidgetConversationTracking.ts` tracks
+  `message_sent`/`message_received` per turn and fires the product-list-click
+  event for concierge card clicks.
 
 ## Where To Change Things
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { products } from "@/data/products";
 import type { ColorFamily, Product, ProductCategory, ProductOccasion } from "@/types/commerce";
 import { isAuthorizedAgentRequest } from "@/utils/agentAuth";
+import { resolveAgentIdentity, trackCatalogSearchToolExecution } from "@/utils/agentTracking";
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 25;
@@ -48,32 +49,61 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  const identity = resolveAgentIdentity(request);
+
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
   const designer = searchParams.get("designer");
   const occasion = searchParams.get("occasion");
   const color = searchParams.get("color");
   const maxPriceParam = searchParams.get("max_price");
-  const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+  const rawQuery = searchParams.get("query");
+  const query = rawQuery?.trim().toLowerCase() ?? "";
   const limit = parseLimit(searchParams.get("limit"));
 
   const maxPrice = maxPriceParam === null ? null : Number(maxPriceParam);
   const hasMaxPrice = maxPrice !== null && Number.isFinite(maxPrice);
 
-  const filtered = products.filter((product) => {
-    if (category && !equalsIgnoreCase(product.category, category)) return false;
-    if (designer && !equalsIgnoreCase(product.designer, designer)) return false;
-    if (occasion && !equalsIgnoreCase(product.occasion, occasion)) return false;
-    if (color && !equalsIgnoreCase(product.colorFamily, color)) return false;
-    if (hasMaxPrice && product.price > (maxPrice as number)) return false;
-    if (query) {
-      const haystack = `${product.name} ${product.description}`.toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
+  const startedAt = performance.now();
+  let success = true;
+  let results: Product[] = [];
 
-  const results = filtered.slice(0, limit).map(toCatalogResult);
+  try {
+    const filtered = products.filter((product) => {
+      if (category && !equalsIgnoreCase(product.category, category)) return false;
+      if (designer && !equalsIgnoreCase(product.designer, designer)) return false;
+      if (occasion && !equalsIgnoreCase(product.occasion, occasion)) return false;
+      if (color && !equalsIgnoreCase(product.colorFamily, color)) return false;
+      if (hasMaxPrice && product.price > (maxPrice as number)) return false;
+      if (query) {
+        const haystack = `${product.name} ${product.description}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
 
-  return NextResponse.json({ results });
+    results = filtered.slice(0, limit);
+  } catch (error) {
+    success = false;
+    throw error;
+  } finally {
+    await trackCatalogSearchToolExecution({
+      identity,
+      success,
+      durationMs: performance.now() - startedAt,
+      catalogSearch: {
+        category,
+        designer,
+        occasion,
+        color,
+        maxPrice: hasMaxPrice ? maxPrice : null,
+        query: rawQuery,
+        limit,
+        resultCount: results.length,
+        productIds: results.map((product) => product.id),
+      },
+    });
+  }
+
+  return NextResponse.json({ results: results.map(toCatalogResult) });
 }

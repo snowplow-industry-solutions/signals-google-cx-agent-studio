@@ -4,10 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, type RefObject } from "react";
 
 import {
+  trackConciergeCardClick,
+  trackConciergeCardsShown,
+} from "@/components/Widget/useWidgetConversationTracking";
+import {
   makeWidgetTemplate,
   normalizeWidgetPayload,
   replaceWidgetTokensIn,
   safeCardUrl,
+  type WidgetCardContext,
 } from "@/components/Widget/widgetCards";
 import { createPartialTokenVisibility } from "@/components/Widget/widgetTokenVisibility";
 import type { CesMessengerElement } from "@/types/ces-messenger";
@@ -49,6 +54,13 @@ const TEMPLATE_ID = "atelier_product_cards";
  * Card clicks stay inside the SPA via router.push: a full page load
  * remounts ces-messenger and loses the conversation, so same-origin
  * navigations must not follow the default full-load path.
+ *
+ * Rendering cards on either path counts as an impression of the concierge
+ * list (trackConciergeCardsShown), pairing with the card-click tracking so
+ * the placement reports views as well as clicks like every other product
+ * list on the storefront. Each path already fires exactly once per widget
+ * (a token is replaced once; the payload hook runs once per payload), so no
+ * extra dedupe is needed here.
  */
 export function useWidgetTokenRenderer(
   ref: RefObject<CesMessengerElement | null>
@@ -70,12 +82,17 @@ export function useWidgetTokenRenderer(
         url.origin === window.location.origin ||
         /^\/(products|collections)\//.test(url.pathname);
       if (!internal) return false;
+      trackConciergeCardClick(url);
       router.push(url.pathname + url.search + url.hash);
       return true;
     };
 
+    const onCardsRendered = (context: WidgetCardContext) => {
+      trackConciergeCardsShown(context.items);
+    };
+
     const replaceTokensUnder = (root: Node) => {
-      const replaced = replaceWidgetTokensIn(root, navigate);
+      const replaced = replaceWidgetTokensIn(root, navigate, onCardsRendered);
       // Runs after the replace pass so a token that just completed is
       // already a card by the time visibility re-checks for a partial.
       partialVisibility.process(root);
@@ -151,6 +168,9 @@ export function useWidgetTokenRenderer(
         }
         p.template_id = TEMPLATE_ID;
         p.context = context;
+        // The template renders these items straight after this hook returns,
+        // so the impression is counted here where the payload is seen once.
+        onCardsRendered(context);
         logSignalsDemo("Rewrote widget payload to rich-message template", {
           kind: context.kind,
           items: context.items.length,

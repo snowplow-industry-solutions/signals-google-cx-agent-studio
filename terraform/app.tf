@@ -37,6 +37,30 @@ resource "google_ces_app" "this" {
     }
   }
 
+  # Same rationale as snowplow_session_id above: no default, so a missing
+  # value errors instead of silently reusing another shopper's identity or
+  # turn. Populated by the ces-messenger widget alongside the session id
+  # (docs/setup-cx-agent-studio.md §6) and consumed by the self-tracking
+  # toolset's identity headers (agent/tools/self-tracking.openapi.yaml).
+  variable_declarations {
+    name        = "snowplow_user_id"
+    description = ""
+    schema {
+      type = "STRING"
+    }
+  }
+
+  # Same rationale as snowplow_session_id above. Minted per turn by the
+  # widget (issue 22) rather than read from the tracker, so tool calls and
+  # self-tracking events issued during the same turn share an id.
+  variable_declarations {
+    name        = "snowplow_turn_id"
+    description = ""
+    schema {
+      type = "STRING"
+    }
+  }
+
   lifecycle {
     ignore_changes = [
       # Provider v7.41.0 import gap: terraform import populates `name` but

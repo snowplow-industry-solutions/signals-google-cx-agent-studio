@@ -5,12 +5,20 @@ import { useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { logSignalsDemoMock } = vi.hoisted(() => ({
-  logSignalsDemoMock: vi.fn(),
-}));
+const { logSignalsDemoMock, trackConciergeCardClickMock, trackConciergeCardsShownMock } =
+  vi.hoisted(() => ({
+    logSignalsDemoMock: vi.fn(),
+    trackConciergeCardClickMock: vi.fn(),
+    trackConciergeCardsShownMock: vi.fn(),
+  }));
 
 vi.mock("@/utils/demo", () => ({
   logSignalsDemo: logSignalsDemoMock,
+}));
+
+vi.mock("@/components/Widget/useWidgetConversationTracking", () => ({
+  trackConciergeCardClick: trackConciergeCardClickMock,
+  trackConciergeCardsShown: trackConciergeCardsShownMock,
 }));
 
 // useWidgetTokenRenderer calls next/navigation's useRouter, which requires a
@@ -25,9 +33,10 @@ import type { CesMessengerElement } from "@/types/ces-messenger";
 import { useWidgetTokenRenderer } from "./useWidgetTokenRenderer";
 
 /**
- * Bare harness: no real <ces-messenger> custom element, no shadow root —
- * only the payload-registration path (attachPayloadPath) is under test
- * here, so a plain div stands in for the element.
+ * Bare harness: a plain div stands in for the <ces-messenger> custom
+ * element. Tests attach whatever the path under test needs -- the
+ * registration methods for the payload path, an open shadow root for the
+ * in-band token path -- via onElement.
  */
 function Harness({
   onElement,
@@ -54,7 +63,15 @@ function Harness({
 
 const mounted: { root: Root; container: HTMLDivElement }[] = [];
 
-function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
+/**
+ * Mounts the hook against a stand-in element carrying `methods`; `prepare`
+ * runs first, before the hook's effect, for anything else the element
+ * needs (e.g. a shadow root with existing chat content).
+ */
+function mount(
+  methods: Partial<CesMessengerElement>,
+  prepare?: (element: HTMLElement) => void
+): CesMessengerElement {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -65,6 +82,7 @@ function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
     root.render(
       <Harness
         onElement={(el) => {
+          prepare?.(el as unknown as HTMLElement);
           Object.assign(el, methods);
           element = el;
         }}
@@ -73,6 +91,21 @@ function mount(methods: Partial<CesMessengerElement>): CesMessengerElement {
   });
   return element;
 }
+
+beforeEach(() => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  while (mounted.length) {
+    const { root, container } = mounted.pop()!;
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  }
+});
 
 function normalizedContext() {
   return {
@@ -90,21 +123,6 @@ function normalizedContext() {
 }
 
 describe("useWidgetTokenRenderer — payload-mode registration", () => {
-  beforeEach(() => {
-    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    while (mounted.length) {
-      const { root, container } = mounted.pop()!;
-      act(() => {
-        root.unmount();
-      });
-      container.remove();
-    }
-  });
-
   it("falls back to anchor cards and skips the rich-message handler when the build lacks registerRichMessageHandler", () => {
     const registerTemplate = vi.fn();
     const registerHook = vi.fn();
@@ -167,6 +185,86 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
     );
   });
 
+  it("tracks a concierge card click when a rich-message card navigates internally", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    const registerRichMessageHandler = vi.fn();
+    mount({ registerTemplate, registerHook, registerRichMessageHandler });
+
+    const clickHandler = registerRichMessageHandler.mock.calls[0][1] as (
+      message: unknown,
+      clicked: Element
+    ) => unknown;
+
+    const card = document.createElement("div");
+    card.setAttribute("data-uri", "/products/noir-double-breasted-blazer");
+    document.body.appendChild(card);
+
+    clickHandler({}, card);
+
+    expect(trackConciergeCardClickMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardClickMock.mock.calls[0][0]).toBeInstanceOf(URL);
+    expect(
+      (trackConciergeCardClickMock.mock.calls[0][0] as URL).pathname
+    ).toBe("/products/noir-double-breasted-blazer");
+
+    card.remove();
+  });
+
+  it("counts the cards of a widget-shaped payload as a concierge impression once, with the normalised items", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    mount({ registerTemplate, registerHook });
+
+    const hookCallback = registerHook.mock.calls[0][1] as (
+      payload: unknown
+    ) => boolean;
+
+    // Shape captured live 2026-07-29 for PRODUCT_CAROUSEL.
+    hookCallback({
+      type: "product_detail_carousel",
+      productDetails: [
+        { title: "Silk Twill Square Scarf", uri: "https://example.com/products/scarf" },
+        { title: "Felt Cloche Hat", uri: "https://example.com/products/hat" },
+      ],
+    });
+
+    expect(trackConciergeCardsShownMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardsShownMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        title: "Silk Twill Square Scarf",
+        uri: "https://example.com/products/scarf",
+      }),
+      expect.objectContaining({
+        title: "Felt Cloche Hat",
+        uri: "https://example.com/products/hat",
+      }),
+    ]);
+  });
+
+  it("does not count an impression for a payload it leaves alone or cannot render", () => {
+    const registerTemplate = vi.fn();
+    const registerHook = vi.fn();
+    mount({ registerTemplate, registerHook });
+
+    const hookCallback = registerHook.mock.calls[0][1] as (
+      payload: unknown
+    ) => boolean;
+
+    // Already targets a template: not ours to claim.
+    hookCallback({
+      template_id: "someone_elses_template",
+      type: "product_detail_carousel",
+      productDetails: [{ title: "Scarf", uri: "https://example.com/products/scarf" }],
+    });
+    // Not a widget shape at all.
+    hookCallback({ type: "some_other_widget" });
+    // Claimed but unrenderable (no title).
+    hookCallback({ type: "product_detail_carousel" });
+
+    expect(trackConciergeCardsShownMock).not.toHaveBeenCalled();
+  });
+
   it("does not log for a payload it never claims", () => {
     const registerTemplate = vi.fn();
     const registerHook = vi.fn();
@@ -178,5 +276,29 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
 
     expect(hookCallback({ type: "some_other_widget" })).toBe(true);
     expect(logSignalsDemoMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useWidgetTokenRenderer — in-band token path", () => {
+  const TOKEN =
+    '{@Widget: productCarousel(payload: {productDetails: [{title: "Silk Twill Square Scarf", uri: "https://example.com/products/scarf"}, {title: "Felt Cloche Hat", uri: "https://example.com/products/hat"}]})}';
+
+  it("counts the cards rendered in place of a chat token as one concierge impression", () => {
+    const element = mount({ registerTemplate: vi.fn(), registerHook: vi.fn() }, (el) => {
+      // Stand in for the upgraded <ces-messenger>: an open shadow root
+      // already holding a bot message with a complete widget token.
+      const shadow = el.attachShadow({ mode: "open" });
+      const message = document.createElement("span");
+      message.textContent = `Take a look: ${TOKEN}`;
+      shadow.appendChild(message);
+    });
+
+    const shadow = (element as unknown as HTMLElement).shadowRoot!;
+    expect(shadow.querySelector("[data-widget-card=productCarousel]")).not.toBeNull();
+    expect(trackConciergeCardsShownMock).toHaveBeenCalledTimes(1);
+    expect(trackConciergeCardsShownMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ uri: "https://example.com/products/scarf" }),
+      expect.objectContaining({ uri: "https://example.com/products/hat" }),
+    ]);
   });
 });

@@ -16,10 +16,15 @@
     "snowtype:generate": "sh -ac 'set -a; [ -f ./.env.local ] && . ./.env.local; set +a; snowtype generate --config snowtype.config.json'",
     "signals:publish": "sh -ac 'set -a; [ -f ./.env.local ] && . ./.env.local; set +a; .venv/bin/python -m signals.config.publish \"$@\"' --",
     "seed:tracking-plans": "tsx scripts/seed-tracking-plans.ts",
-    "verify:deploy": "tsx scripts/verify-deploy.ts"
+    "verify:deploy": "tsx scripts/verify-deploy.ts",
+    "micro:schemas": "tsx scripts/render-iglu-schemas.ts",
+    "micro:up": "docker compose -f micro/docker-compose.yml up",
+    "verify:micro": "tsx scripts/verify-micro.ts"
   },
   "dependencies": {
     "@snowplow/browser-tracker": "^4.10.0",
+    "@snowplow/browser-tracker-core": "^4.10.0",
+    "@snowplow/node-tracker": "^4.10.2",
     "@snowplow/signals-browser-plugin": "^0.2.2",
     "@snowplow/signals-node": "^0.4.0",
     "next": "16.1.7",
@@ -29,11 +34,14 @@
   "devDependencies": {
     "@snowplow/snowtype": "^0.15.1",
     "@tailwindcss/postcss": "^4",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ajv": "^6.15.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
+    "js-yaml": "^5.4.2",
     "jsdom": "^29.0.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",

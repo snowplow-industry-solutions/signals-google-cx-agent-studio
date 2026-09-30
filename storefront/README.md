@@ -93,7 +93,15 @@ These logs call out:
 Local tracking assets live under `tracking-assets/`.
 
 - Data structures: `tracking-assets/data-structures`
-- Source application: `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
+- Source applications:
+  - `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
+    — the browser-tracked storefront (`signals-workshop-fashion-demo[-dev]`),
+    requiring the `WebPage` and `user` entities on every event.
+  - `tracking-assets/tracking-plans/source-applications/fashion_storefront_agent.yml`
+    — the server-side agent tool endpoints (`/api/agent/*`,
+    `signals-workshop-fashion-demo-agent` / `-dev-agent`). No required
+    entities: server events carry neither the web page nor the shopper user
+    entity the storefront application requires.
 - Tracking plan: `tracking-assets/tracking-plans/fashion_ecommerce.yml`
 
 To validate them with the Snowplow MCP/CLI, see Snowplow's own docs for the
@@ -102,6 +110,91 @@ validation workflow. The implementation in this repo was validated against:
 - `tracking-assets/data-structures`
 - `tracking-assets/tracking-plans/fashion_ecommerce.yml`
 - `tracking-assets/tracking-plans/source-applications/fashion_storefront.yml`
+- `tracking-assets/tracking-plans/source-applications/fashion_storefront_agent.yml`
+
+### Agent event specifications
+
+The tracking plan's event specifications describe the agent events already
+emitted in code (`src/utils/agentTracking.ts`, `src/utils/agentSelfTracking.ts`,
+`src/components/Widget/useWidgetConversationTracking.ts`) so Console shows
+them as part of the data product and Snowtype can generate typed helpers for
+them:
+
+| Event | Source application | Schema | Entities |
+|---|---|---|---|
+| Tool execution: search catalog | agent | `iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0` | `tool_context`, `agent_context`, `conversation`, `catalog_search` |
+| Tool execution: get user context | agent | `iglu:com.snowplow.agent.tracking/tool_execution/jsonschema/1-0-0` | `tool_context`, `agent_context`, `conversation`, `context_lookup` |
+| User intent detected | agent | `iglu:com.snowplow.agent.tracking/user_intent_detected/jsonschema/1-0-0` | `tool_context`, `agent_context`, `conversation` |
+| Agent decision logged | agent | `iglu:com.snowplow.agent.tracking/agent_decision_logged/jsonschema/1-0-0` | `tool_context`, `agent_context`, `conversation` |
+| Constraint violation | agent | `iglu:com.snowplow.agent.tracking/constraint_violation/jsonschema/1-0-0` | `tool_context`, `agent_context`, `conversation` |
+| Message sent | storefront | `iglu:com.snowplow.agent.tracking/message_sent/jsonschema/1-0-0` | `message_context`, `conversation` |
+| Message received | storefront | `iglu:com.snowplow.agent.tracking/message_received/jsonschema/1-0-0` | `message_context`, `conversation` |
+
+The event schemas resolve from Iglu Central (`com.snowplow.agent.tracking`,
+unchanged, never published to the org); the entity schemas are the repo's
+own `com.snowplow_demo.fashion` data structures alongside the Iglu Central
+`agent_context`/`tool_context`/`message_context` entities. A new trigger was
+also added to the existing "Product list clicked" event specification for
+clicks on concierge-rendered product cards (list id
+`concierge_recommendations`).
+
+**Known risk, not yet resolved:** publishing event specifications that
+reference Iglu Central event/entity schemas (rather than only this repo's
+own `com.snowplow_demo.fashion` ones) has not been tried against a live
+tracking-plan API from this repo. `npm run seed:tracking-plans -- --dry-run`
+validates the YAML and UUID derivation but cannot exercise the publish call
+itself (no credentials in this sandbox). If a real seed
+(`npm run seed:tracking-plans`) rejects the tracking plan specifically
+because of the Iglu Central references, the fallback is:
+
+1. Keep both source applications and the new "Product list clicked" trigger
+   — those only reference this repo's own schemas and are not implicated.
+2. Delete the seven event specifications above from
+   `tracking-assets/tracking-plans/fashion_ecommerce.yml` (search for the
+   "Agent self-tracking" comment marking the block).
+3. This table then becomes the sole record of the agent event vocabulary —
+   keep it up to date by hand instead of relying on Console/Snowtype for it.
+
+Record the outcome (real seed succeeded as-is, or the fallback above was
+applied) once the human checkpoint has run.
+
+## Local Agent Tracking Verification (Snowplow Micro)
+
+[Snowplow Micro](https://docs.snowplow.io/docs/testing-debugging/snowplow-micro/) is a
+local pipeline that validates every tracked payload against its schema, so agent
+events can be checked before any traffic reaches a live org. `micro/` holds a pinned
+compose file and an Iglu resolver; the repo's own `com.snowplow_demo.fashion` schemas
+resolve from a generated local directory, and the `com.snowplow.agent.tracking` Iglu
+Central vendor still resolves over the network.
+
+```bash
+npm run micro:schemas   # render tracking-assets/data-structures into micro/iglu-client-embedded/ (gitignored)
+npm run micro:up        # start Micro on http://localhost:9090 (requires Docker)
+```
+
+Point the dev server at Micro (`.env.local`) and start it in another terminal:
+
+```bash
+NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=http://localhost:9090
+NEXT_PUBLIC_SNOWPLOW_APP_ID=signals-workshop-fashion-demo-dev
+AGENT_SHARED_SECRET=<any local value>
+```
+
+```bash
+npm run dev
+```
+
+Then, with both running, fire the agent tool endpoints and check Micro's good/bad
+counts in one command:
+
+```bash
+AGENT_SHARED_SECRET=<same value as .env.local> npm run verify:micro
+```
+
+`micro:schemas` must be re-run (and Micro restarted) whenever a data structure under
+`tracking-assets/data-structures` changes. `verify:micro`'s endpoint list
+(`scripts/verify-micro.ts`) is written to be extended as more agent endpoints are
+instrumented.
 
 ## Signals Configuration In Python
 
@@ -155,6 +248,19 @@ seeded (see [`docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md)
 §4) or generation has no data product to read.
 
 Do not edit `snowtype/` or `snowtype.config.json` by hand — regenerate instead.
+
+**Agent events (human checkpoint):** once the tracking plan's new agent
+event specifications (see "Agent event specifications" above) are seeded to
+an org, re-run `npm run snowtype:generate` and check whether it produces
+wrappers for `message_sent`/`message_received`. If it does, switch
+`src/components/Widget/useWidgetConversationTracking.ts` off its hardcoded
+`MESSAGE_SENT_SCHEMA` / `MESSAGE_RECEIVED_SCHEMA` / `MESSAGE_CONTEXT_SCHEMA`
+constants and onto the generated helpers (mirroring how it already uses
+`trackProductListClickedSpec` for card clicks), then confirm
+`npm test`, `npm run lint`, and `npm run build` still pass. The server-side
+module (`src/utils/agentTracking.ts`, `src/utils/agentSelfTracking.ts`)
+keeps its own Iglu Central schema constants either way — Snowtype only
+generates browser-tracker helpers.
 
 ## Personalization Workflows
 
