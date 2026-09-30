@@ -320,7 +320,7 @@ export async function waitForExpectedCount(
 
 async function main(): Promise<void> {
   const [devServerUrlArg, microUrlArg] = process.argv.slice(2);
-  const devServerUrl = devServerUrlArg ?? "http://localhost:3001";
+  const devServerUrl = devServerUrlArg ?? "http://localhost:3000";
   const microUrl = microUrlArg ?? "http://localhost:9090";
 
   const apiKey = process.env.AGENT_SHARED_SECRET;

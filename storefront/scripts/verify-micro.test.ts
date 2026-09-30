@@ -40,9 +40,9 @@ function goodEvent(schema: string, overrides: Record<string, unknown> = {}): Mic
 describe("AGENT_ENDPOINTS request construction", () => {
   it("builds the context endpoint request with the shared secret and all four identity headers", () => {
     const [contextSpec] = AGENT_ENDPOINTS;
-    const { url, init } = contextSpec.request("http://localhost:3001", "my-secret", IDENTITY);
+    const { url, init } = contextSpec.request("http://localhost:3000", "my-secret", IDENTITY);
 
-    expect(url).toBe("http://localhost:3001/api/agent/context?session_id=session-1");
+    expect(url).toBe("http://localhost:3000/api/agent/context?session_id=session-1");
     expect(init.headers).toEqual({
       "x-agent-api-key": "my-secret",
       "x-ces-session-id": "chat-1",
@@ -54,19 +54,19 @@ describe("AGENT_ENDPOINTS request construction", () => {
 
   it("builds the catalog endpoint request against the catalog path", () => {
     const catalogSpec = AGENT_ENDPOINTS.find((spec) => spec.name.includes("searchCatalog"));
-    const { url } = catalogSpec!.request("http://localhost:3001", "my-secret", IDENTITY);
+    const { url } = catalogSpec!.request("http://localhost:3000", "my-secret", IDENTITY);
 
-    expect(url).toBe("http://localhost:3001/api/agent/catalog?category=dresses");
+    expect(url).toBe("http://localhost:3000/api/agent/catalog?category=dresses");
   });
 
   it("URL-encodes the session id in the context request", () => {
     const [contextSpec] = AGENT_ENDPOINTS;
     const { url } = contextSpec.request(
-      "http://localhost:3001",
+      "http://localhost:3000",
       "secret",
       { ...IDENTITY, domainSessionId: "session with spaces" },
     );
-    expect(url).toBe("http://localhost:3001/api/agent/context?session_id=session%20with%20spaces");
+    expect(url).toBe("http://localhost:3000/api/agent/context?session_id=session%20with%20spaces");
   });
 
   it("declares exactly one expected good event per endpoint", () => {
@@ -87,7 +87,7 @@ describe("AGENT_ENDPOINTS request construction", () => {
     expect(selfTrackingSpecs).toHaveLength(3);
 
     for (const spec of selfTrackingSpecs) {
-      const { init } = spec.request("http://localhost:3001", "my-secret", IDENTITY);
+      const { init } = spec.request("http://localhost:3000", "my-secret", IDENTITY);
       expect(init.method).toBe("POST");
       expect(init.headers).toMatchObject({
         "x-agent-api-key": "my-secret",
@@ -246,21 +246,21 @@ describe("fireEndpoints", () => {
 
   it("returns no failures when every request responds ok", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
-    const failures = await fireEndpoints("http://localhost:3001", "secret", IDENTITY, AGENT_ENDPOINTS);
+    const failures = await fireEndpoints("http://localhost:3000", "secret", IDENTITY, AGENT_ENDPOINTS);
     expect(failures).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(AGENT_ENDPOINTS.length);
   });
 
   it("records a failure with the status code for a non-ok response", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));
-    const failures = await fireEndpoints("http://localhost:3001", "secret", IDENTITY, AGENT_ENDPOINTS);
+    const failures = await fireEndpoints("http://localhost:3000", "secret", IDENTITY, AGENT_ENDPOINTS);
     expect(failures).toHaveLength(AGENT_ENDPOINTS.length);
     expect(failures[0]).toContain("401");
   });
 
   it("records a failure with the error message when the request throws", async () => {
     fetchMock.mockRejectedValue(new Error("connection refused"));
-    const failures = await fireEndpoints("http://localhost:3001", "secret", IDENTITY, AGENT_ENDPOINTS);
+    const failures = await fireEndpoints("http://localhost:3000", "secret", IDENTITY, AGENT_ENDPOINTS);
     expect(failures[0]).toContain("connection refused");
   });
 });
