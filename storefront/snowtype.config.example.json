@@ -4,10 +4,10 @@
   "repositories": [
     "./tracking-assets/data-structures"
   ],
-  "eventSpecificationIds": [],
-  "dataProductIds": [
-    "<derived-data-product-id>"
+  "eventSpecificationIds": [
+    "<derived-event-specification-id>"
   ],
+  "dataProductIds": [],
   "organizationId": "<your-snowplow-org-id>",
   "tracker": "@snowplow/browser-tracker",
   "language": "typescript",
