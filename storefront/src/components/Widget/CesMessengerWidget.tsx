@@ -27,7 +27,7 @@ const SESSION_CONTEXT_VARIABLE = "snowplow_session_id";
 // three OpenAPI tool schemas (agent/tools/*.openapi.yaml).
 const USER_ID_CONTEXT_VARIABLE = "snowplow_user_id";
 
-// Armed by the conversation hook (issue 25) at mount and re-armed after every
+// Armed by the conversation hook at mount and re-armed after every
 // send, so each turn's request carries the id the browser's message events
 // use; matches the TurnIdHeader binding shared by all three OpenAPI tool
 // schemas.
@@ -74,7 +74,7 @@ function mergeAndPushQueryParameters(element: CesMessengerElement, params: Recor
 export function sendIdentityVariables(element: CesMessengerElement) {
   // Both ids go in ONE call: setQueryParameters replaces the whole variable
   // set, so setting them one key at a time left the agent with only the
-  // last one (the getUserContext-called-with-{} regression from issue 22).
+  // last one, and getUserContext was called with an empty input.
   const params: Record<string, string> = {};
 
   const sessionId = getDomainSessionId();
@@ -113,7 +113,7 @@ export function CesMessengerWidget() {
   // Typing/"still working" indicator — upstream ships none.
   useWidgetLoadingIndicator(elementRef);
 
-  // Issue 25: message_sent/message_received conversation tracking, plus
+  // message_sent/message_received conversation tracking, plus
   // concierge card-click tracking wired into useWidgetTokenRenderer's navigate.
   useWidgetConversationTracking(elementRef);
 
@@ -177,7 +177,7 @@ export function CesMessengerWidget() {
   );
 }
 
-// Called by the conversation hook (issue 25): once at mount to arm the first
+// Called by the conversation hook: once at mount to arm the first
 // turn's id, then again right after each send to arm the next one (the widget
 // dispatches its user-input event only after the request has gone, so an id
 // set at send time would ride on the following turn). Unlike the identity

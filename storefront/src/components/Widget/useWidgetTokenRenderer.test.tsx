@@ -220,7 +220,7 @@ describe("useWidgetTokenRenderer — payload-mode registration", () => {
       payload: unknown
     ) => boolean;
 
-    // Shape captured live 2026-07-29 for PRODUCT_CAROUSEL.
+    // Shape captured from the live widget for PRODUCT_CAROUSEL.
     hookCallback({
       type: "product_detail_carousel",
       productDetails: [

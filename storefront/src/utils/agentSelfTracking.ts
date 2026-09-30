@@ -2,10 +2,9 @@ import { capFreeTextQuery } from "@/utils/agentTracking";
 
 /**
  * Request-body validation for the three self-tracking tool endpoints
- * (issue #21). The Iglu Central `com.snowplow.agent.tracking` schemas leave
+ * The Iglu Central `com.snowplow.agent.tracking` schemas leave
  * category/type fields as free-form strings; the vocabularies below are the
- * app's own constraint on top, per spec #18's "permissive schemas, strict
- * code" rule. Enum and range violations are rejected (400); free-text
+ * app's own constraint on top ("permissive schemas, strict code"). Enum and range violations are rejected (400); free-text
  * fields are capped to the Iglu schemas' maxLength rather than rejected.
  */
 

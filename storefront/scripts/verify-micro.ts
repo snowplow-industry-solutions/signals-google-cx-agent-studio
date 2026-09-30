@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Local tracking smoke test (issue #20): fires the agent tool endpoints
+ * Local tracking smoke test: fires the agent tool endpoints
  * against a running dev server pointed at Snowplow Micro, then reads
  * Micro's good/bad event store and asserts that the expected events landed,
  * with the right schema and the shopper's identity attached.

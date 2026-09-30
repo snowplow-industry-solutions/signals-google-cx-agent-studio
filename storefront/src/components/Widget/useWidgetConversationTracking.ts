@@ -17,7 +17,7 @@ import {
 } from "@/utils/snowtypeTracking";
 
 /**
- * Issue 25's conversation-tracking hook: browser-side `message_sent` /
+ * Conversation-tracking hook: browser-side `message_sent` /
  * `message_received` events (Iglu Central `com.snowplow.agent.tracking`)
  * plus concierge card click and impression tracking, following the defensive
  * window-and-element listener pattern already used by
@@ -26,12 +26,11 @@ import {
  * a message fired before tracker init is deferred, not dropped.
  *
  * Schema URIs are declared as constants here rather than resolved through
- * generated Snowtype helpers. Issue #26 added the message_sent/message_received
- * event specifications to the tracking plan; switching this hook to generated
- * helpers is a human checkpoint (needs a real seed + `snowtype:generate`
- * against an org -- see storefront/README.md's Snowtype section), mirroring
- * how the server-side module (src/utils/agentTracking.ts) keeps its own Iglu
- * Central constants regardless.
+ * generated Snowtype helpers. The tracking plan declares message_sent /
+ * message_received event specifications, but switching this hook to generated
+ * helpers needs a real seed + `snowtype:generate` against an org (see
+ * storefront/README.md's Snowtype section). The server-side module
+ * (src/utils/agentTracking.ts) likewise keeps its own Iglu Central constants.
  *
  * Payload field names follow the published 1-0-0 schemas exactly. All three
  * set `additionalProperties: false`, so a misnamed or extra key makes
@@ -73,9 +72,9 @@ export function capMessagePreview(text: string): string | null {
 
 /**
  * ces-messenger dispatches `ces-user-input-entered` on window with
- * `detail: { input: <the typed text> }` (verified against the served
- * gstatic ces-messenger.js on 2026-09-23; the script is unversioned, so this
- * is the observed shape, not a contract). Falls back to an empty string
+ * `detail: { input: <the typed text> }` (read from the served gstatic
+ * ces-messenger.js; the script is unversioned, so this is the observed shape,
+ * not a contract). Falls back to an empty string
  * rather than throwing -- the message is still tracked, just with a zero
  * length/empty preview.
  */
@@ -92,8 +91,8 @@ function extractUserInputText(detail: unknown): string {
 /**
  * ces-messenger dispatches `ces-text-received` / `ces-payload-received` with
  * `detail` = the raw backend message, not the text. Its own unmarshallers
- * accept three wire shapes, tried here in the same order; the deployment
- * observed on 2026-09-23 sends the first, `{ outputs: [{ text, turnIndex },
+ * accept three wire shapes, tried here in the same order; the live widget
+ * sends the first, `{ outputs: [{ text, turnIndex },
  * { turnCompleted, payload }] }`. Every text output of one message is joined
  * with a newline.
  */
@@ -139,7 +138,7 @@ function joinTexts(candidates: unknown[]): string {
 /**
  * ces-messenger persists its chat state under one sessionStorage entry,
  * `bidi-widget-session`, as JSON `{ messages, sessionId, chatUiStatus,
- * toolMessageQueue }` (verified against the served script on 2026-09-23).
+ * toolMessageQueue }` (read from the served script).
  * `sessionId` is the CES session UUID: the tail of the `config.session`
  * resource name on the wire and the value the server-side tool endpoints
  * emit as `agent_context.session_id`. The widget saves this entry when it
@@ -335,7 +334,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
 
     /**
      * Mints the id for the shopper's NEXT turn and hands it to the widget
-     * (issue #22's exported setter) so that turn's request carries it as
+     * (CesMessengerWidget's setSnowplowTurnId) so that turn's request carries it as
      * `snowplow_turn_id`. ces-messenger dispatches `ces-user-input-entered`
      * only after awaiting the network send, so an id set inside that handler
      * arrived one turn late (turn N+1's request carried turn N's id and the
@@ -402,7 +401,7 @@ export function useWidgetConversationTracking(ref: RefObject<CesMessengerElement
       })();
     };
 
-    // Records the FIRST receive event of a turn only. Live on 2026-09-23 the
+    // Records the FIRST receive event of a turn only. On the live widget the
     // first backend message already carried the full text plus the payload,
     // so this is adequate for now; if the agent ever streams partials, or
     // sends a payload-only message ahead of the text, the text would need

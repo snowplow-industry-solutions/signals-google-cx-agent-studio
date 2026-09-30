@@ -158,7 +158,7 @@ data:
           - source: iglu:com.snowplow_demo.fashion/product/jsonschema/1-0-0
             minCardinality: 0
         enriched: []
-    # Agent self-tracking (issue #18/#26). Event schemas resolve from Iglu
+    # Agent self-tracking. Event schemas resolve from Iglu
     # Central (com.snowplow.agent.tracking, unpublished to this org); entity
     # schemas are the repo's own com.snowplow_demo.fashion data structures.
     # Risk: publishing event specifications that reference Iglu Central

@@ -133,30 +133,26 @@ them:
 The event schemas resolve from Iglu Central (`com.snowplow.agent.tracking`,
 unchanged, never published to the org); the entity schemas are the repo's
 own `com.snowplow_demo.fashion` data structures alongside the Iglu Central
-`agent_context`/`tool_context`/`message_context` entities. A new trigger was
-also added to the existing "Product list clicked" event specification for
-clicks on concierge-rendered product cards (list id
-`concierge_recommendations`).
+`agent_context`/`tool_context`/`message_context` entities. The "Product list
+clicked" event specification also has a trigger for clicks on
+concierge-rendered product cards (list id `concierge_recommendations`).
 
 **Known risk, not yet resolved:** publishing event specifications that
 reference Iglu Central event/entity schemas (rather than only this repo's
 own `com.snowplow_demo.fashion` ones) has not been tried against a live
 tracking-plan API from this repo. `npm run seed:tracking-plans -- --dry-run`
 validates the YAML and UUID derivation but cannot exercise the publish call
-itself (no credentials in this sandbox). If a real seed
+itself. If a real seed
 (`npm run seed:tracking-plans`) rejects the tracking plan specifically
 because of the Iglu Central references, the fallback is:
 
-1. Keep both source applications and the new "Product list clicked" trigger
+1. Keep both source applications and the concierge "Product list clicked" trigger
    — those only reference this repo's own schemas and are not implicated.
 2. Delete the seven event specifications above from
    `tracking-assets/tracking-plans/fashion_ecommerce.yml` (search for the
    "Agent self-tracking" comment marking the block).
 3. This table then becomes the sole record of the agent event vocabulary —
    keep it up to date by hand instead of relying on Console/Snowtype for it.
-
-Record the outcome (real seed succeeded as-is, or the fallback above was
-applied) once the human checkpoint has run.
 
 ## Local Agent Tracking Verification (Snowplow Micro)
 
@@ -249,7 +245,7 @@ seeded (see [`docs/setup-snowplow-trial.md`](../docs/setup-snowplow-trial.md)
 
 Do not edit `snowtype/` or `snowtype.config.json` by hand — regenerate instead.
 
-**Agent events (human checkpoint):** once the tracking plan's new agent
+**Agent events:** once the tracking plan's agent
 event specifications (see "Agent event specifications" above) are seeded to
 an org, re-run `npm run snowtype:generate` and check whether it produces
 wrappers for `message_sent`/`message_received`. If it does, switch

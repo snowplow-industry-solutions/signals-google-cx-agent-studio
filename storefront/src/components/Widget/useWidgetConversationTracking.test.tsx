@@ -381,7 +381,7 @@ describe("useWidgetConversationTracking", () => {
     );
   });
 
-  describe("ces-messenger event detail shapes (captured from the live widget, 2026-09-23)", () => {
+  describe("ces-messenger event detail shapes (captured from the live widget)", () => {
     it("reads the user's message from the {input} detail of ces-user-input-entered", async () => {
       mount();
 

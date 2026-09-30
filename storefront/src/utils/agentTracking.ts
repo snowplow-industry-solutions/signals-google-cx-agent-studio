@@ -31,7 +31,7 @@ const CONSTRAINT_VIOLATION_SCHEMA = "iglu:com.snowplow.agent.tracking/constraint
 const HEADER_DRY_RUN = "x-agent-tracking-dry-run";
 
 /**
- * Self-tracking endpoints (issue #21) honour this header so deploy
+ * Self-tracking endpoints honour this header so deploy
  * verification can probe production without creating events: the request is
  * still validated and answered normally, it just skips the emit step.
  */
@@ -306,7 +306,7 @@ export async function trackCatalogSearchToolExecution(args: {
 }
 
 /**
- * Self-tracking events (issue #21): unlike `emitToolExecution`, these track
+ * Self-tracking events: unlike `emitToolExecution`, these track
  * the model's own reported thinking as the event itself, under the
  * `self_tracking` tool category, with no domain entity of their own.
  */
