@@ -548,10 +548,10 @@ if [[ -z "$(_env_value NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED)" ]]; then
   say "Whether shopper/concierge message text reaches the warehouse is a privacy"
   say "choice, not a default this wizard can make for you. A capped excerpt is"
   say "recorded unless you turn it off; the message length is tracked either way."
-  if confirm "Record message previews?"; then
-    note "previews stay enabled (the default) — nothing written"
-  else
+  if confirm "Turn off message previews?"; then
     write_env NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED "false"
+  else
+    note "previews stay enabled (the default) — nothing written"
   fi
 else
   note "NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED already set — kept"
