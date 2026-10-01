@@ -245,6 +245,7 @@ ORG_SCOPED_KEYS=(
   SNOWPLOW_CONSOLE_API_KEY_ID
   SNOWPLOW_CONSOLE_ORG_ID
   NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL
+  NEXT_PUBLIC_SNOWPLOW_POST_PATH
   NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT
   SIGNALS_DEPLOYED_URL
 )
@@ -501,18 +502,27 @@ while true; do
   ask NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "Collector URL:"
   NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=$(normalise_url "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL")
 
+  step "Tracker request path (optional): Pipelines → (your pipeline) → Tracker"
+  step "request paths. Content blockers that match the tracker's default path"
+  step "(/com.snowplowanalytics.snowplow/) drop every tracking request; a"
+  step "pipeline's own custom path avoids that rule. Leave blank to use the"
+  step "tracker's default path."
+  ask NEXT_PUBLIC_SNOWPLOW_POST_PATH "Tracker request path (blank = default):"
+
   step "Signals → Overview: the Signals API URL."
   note "  e.g. https://<hash>.signals.snowplowanalytics.com"
   ask SIGNALS_DEPLOYED_URL "Signals API base URL:"
   SIGNALS_DEPLOYED_URL=$(normalise_url "$SIGNALS_DEPLOYED_URL")
 
   write_env NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL "$NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
+  write_env NEXT_PUBLIC_SNOWPLOW_POST_PATH "$NEXT_PUBLIC_SNOWPLOW_POST_PATH"
   write_env SIGNALS_DEPLOYED_URL "$SIGNALS_DEPLOYED_URL"
 
   printf '\n'
-  note "collector : $NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
-  note "Signals   : $SIGNALS_DEPLOYED_URL"
-  confirm "Both correct?" && break
+  note "collector     : $NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL"
+  note "request path  : ${NEXT_PUBLIC_SNOWPLOW_POST_PATH:-(tracker default)}"
+  note "Signals       : $SIGNALS_DEPLOYED_URL"
+  confirm "All correct?" && break
   warn "re-entering — press Enter at any prompt to keep the value shown"
 done
 
@@ -731,7 +741,7 @@ if (( VERCEL_OK )); then
     note "production NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront (no -dev)"
     # Optional agent tracking overrides — copy only what's set locally; an unset
     # one means the code's own default is correct in production too.
-    for key in AGENT_SNOWPLOW_APP_ID AGENT_MODEL_NAME NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED; do
+    for key in NEXT_PUBLIC_SNOWPLOW_POST_PATH AGENT_SNOWPLOW_APP_ID AGENT_MODEL_NAME NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED; do
       value=$(_env_value "$key")
       [[ -z "$value" ]] && continue
       if printf '%s' "$value" | vercel env add "$key" production --force --cwd storefront >/dev/null 2>&1; then
@@ -753,8 +763,8 @@ else
     note "  - $key   (value is in $ENV_FILE)"
   done
   note "  - NEXT_PUBLIC_SNOWPLOW_APP_ID   (set to atelier-storefront, not the -dev value)"
-  note "  - AGENT_SNOWPLOW_APP_ID, AGENT_MODEL_NAME, NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED"
-  note "    (optional — only if set in $ENV_FILE)"
+  note "  - NEXT_PUBLIC_SNOWPLOW_POST_PATH, AGENT_SNOWPLOW_APP_ID, AGENT_MODEL_NAME,"
+  note "    NEXT_PUBLIC_WIDGET_MESSAGE_PREVIEWS_ENABLED (optional — only if set in $ENV_FILE)"
   step "Mark the three SNOWPLOW_CONSOLE_* vars, SIGNALS_DEPLOYED_URL and"
   step "AGENT_SHARED_SECRET Sensitive."
   SKIPPED+=("Vercel production env vars set by hand — confirm every production value before deploying")
@@ -797,6 +807,12 @@ fi
 pause
 fi
 
+POST_PATH_IN_USE=$(_env_value NEXT_PUBLIC_SNOWPLOW_POST_PATH)
+note "Collector in use     : $(_env_value NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL)"
+note "Tracker request path : ${POST_PATH_IN_USE:-(tracker default)}"
+note "  a custom path only defeats content blockers' path-based rules, not"
+note "  domain-level blocking (e.g. Firefox Strict mode / private windows),"
+note "  which needs a custom collector hostname instead — out of scope here."
 note "Next: build the agent — docs/setup-cx-agent-studio.md. It needs the storefront"
 note "URL and AGENT_SHARED_SECRET from $ENV_FILE."
 note "Expect no git diff from any of this: .env.local, snowtype.config.json and"

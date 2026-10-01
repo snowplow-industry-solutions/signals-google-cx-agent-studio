@@ -35,6 +35,7 @@ From BDP Console (Manage organization → API keys, and Signals → Overview):
 | Organization ID | Console URL or org settings | `SNOWPLOW_CONSOLE_ORG_ID` |
 | Signals API base URL | Signals → Overview | `SIGNALS_DEPLOYED_URL` |
 | Collector URL | Pipeline → collector endpoint | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` |
+| Tracker request path (optional) | Pipelines → (your pipeline) → Tracker request paths | `NEXT_PUBLIC_SNOWPLOW_POST_PATH` |
 | Owner email (optional) | your address | `SNOWPLOW_OWNER_EMAIL` |
 
 ```
@@ -43,7 +44,26 @@ SNOWPLOW_CONSOLE_API_KEY_ID=<PLACEHOLDER>
 SNOWPLOW_CONSOLE_ORG_ID=<PLACEHOLDER>
 SIGNALS_DEPLOYED_URL=<PLACEHOLDER, e.g. https://signals.<org>.snowplowanalytics.com>
 NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=<PLACEHOLDER, e.g. https://collector.<org>.snowplowanalytics.com>
+NEXT_PUBLIC_SNOWPLOW_POST_PATH=<PLACEHOLDER, optional>
 ```
+
+**Tracker request path.** Both the browser tracker and the server-side agent
+tracking module send events to the collector on this path; left unset, they
+use the tracker's own default (`/com.snowplowanalytics.snowplow/tp2`). Some
+content blockers (for example uBlock Origin's default EasyPrivacy list) block
+any request whose path contains `/com.snowplowanalytics.snowplow/`, so a
+shopper with one installed never sees their events reach the collector — the
+demo looks broken even though the pipeline is fine. Every trial pipeline is
+provisioned with its own custom paths that avoid that pattern; using one
+defeats that specific rule.
+
+A custom path only defeats path-based blocking. It does nothing against
+domain-level blocking: Firefox's built-in tracking protection (the Disconnect
+list) blocks the collector's hostname itself in Strict mode and in private
+windows regardless of path, and the only way around that is a custom
+collector hostname, which is out of scope for a trial pipeline. If events are
+still missing after setting a custom path, check whether the browser's
+hostname-level protection is the cause before assuming the path is wrong.
 
 **API key scope.** Console API keys are scoped to the features you tick when
 you create them. Tick every feature at its highest level for this guide:
@@ -56,6 +76,8 @@ checks the key against the Signals API in stage 5, before any seeding.
 
 1. `cp storefront/.env.example storefront/.env.local`
 2. Fill in the credentials from step 2, plus:
+   - `NEXT_PUBLIC_SNOWPLOW_POST_PATH` — optional; leave unset to use the
+     tracker's default path, or paste the pipeline's custom path from step 2.
    - `NEXT_PUBLIC_SNOWPLOW_APP_ID` — use `atelier-storefront-dev`
      for local runs, `atelier-storefront` for anything the pipeline
      should treat as the "live" demo app (both are pre-registered in
@@ -197,6 +219,7 @@ HTTPS, which the CX Agent Studio OpenAPI tools require.
    | `SIGNALS_DEPLOYED_URL` | No — mark Sensitive | from step 2 |
    | `AGENT_SHARED_SECRET` | No — mark Sensitive | mint a fresh long random value for the deployed environment (don't reuse a local one); you mirror this exact value into the CX Agent Studio OpenAPI tool's API-key auth ([`setup-cx-agent-studio.md`](./setup-cx-agent-studio.md) §3) |
    | `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` | Yes, by design | from step 2 |
+   | `NEXT_PUBLIC_SNOWPLOW_POST_PATH` | Yes, by design | optional; only set if you captured a custom tracker request path in step 2 |
    | `NEXT_PUBLIC_SNOWPLOW_APP_ID` | Yes, by design | use `atelier-storefront` (not `-dev`) so the deployed site is the "live" demo app |
    | `NEXT_PUBLIC_SIGNALS_INTERVENTIONS_ENDPOINT` | Yes, by design | from step 2, if set |
    | `AGENT_SNOWPLOW_APP_ID` | No — not sensitive, but not client-exposed either | optional; only set if you need agent traffic under an app id other than the `${NEXT_PUBLIC_SNOWPLOW_APP_ID}-agent` default (§3) |
@@ -265,6 +288,16 @@ any of it reaches a real pipeline.
   storefront tracker silently disables itself (logs a console note) if
   either `NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL` or `NEXT_PUBLIC_SNOWPLOW_APP_ID`
   is unset (§2–§3).
+- **Events never reach the collector, but only for some shoppers (often
+  Firefox + an ad blocker)** — the browser's Network tab is the reliable
+  check for whether a tracking request was actually blocked; a request
+  status, not the presence of a request in a tracker-inspection extension, is
+  the source of truth. If the request never fires, set
+  `NEXT_PUBLIC_SNOWPLOW_POST_PATH` to the pipeline's custom path (§2) so
+  path-based content-blocker rules don't match it. If it still doesn't fire
+  with a custom path set, that shopper's browser is blocking the collector's
+  hostname itself (Firefox Strict mode, private windows), which a custom
+  path can't fix — see the note in §2.
 - **Trial expired mid-project** — re-run this whole guide against a fresh
   trial org; nothing here depends on the previous org's identifiers.
 - **Vercel build fails or serves the wrong app** — confirm the Vercel
