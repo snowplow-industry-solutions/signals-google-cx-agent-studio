@@ -297,7 +297,9 @@ any of it reaches a real pipeline.
   path-based content-blocker rules don't match it. If it still doesn't fire
   with a custom path set, that shopper's browser is blocking the collector's
   hostname itself (Firefox Strict mode, private windows), which a custom
-  path can't fix — see the note in §2.
+  path can't fix — see the note in §2. When verifying locally against
+  Snowplow Micro, leave `NEXT_PUBLIC_SNOWPLOW_POST_PATH` unset — Micro only
+  serves the tracker's default path.
 - **Trial expired mid-project** — re-run this whole guide against a fresh
   trial org; nothing here depends on the previous org's identifiers.
 - **Vercel build fails or serves the wrong app** — confirm the Vercel

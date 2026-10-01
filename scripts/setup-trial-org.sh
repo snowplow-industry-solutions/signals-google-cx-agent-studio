@@ -280,6 +280,19 @@ normalise_url() {
   esac
 }
 
+# normalise_path PATH — trim whitespace and ensure a leading slash.
+#
+# The emitted request URL is the collector URL and this path concatenated
+# directly, so a pasted value without a leading slash or with stray
+# whitespace silently produces a malformed URL and every event is dropped.
+normalise_path() {
+  local path="${1#"${1%%[![:space:]]*}"}"   # ltrim
+  path="${path%"${path##*[![:space:]]}"}"   # rtrim
+  [[ -z "$path" ]] && { printf ''; return; }
+  [[ "$path" != /* ]] && path="/$path"
+  printf '%s' "$path"
+}
+
 # mask SECRET — show enough to spot a paste error, not enough to leak.
 mask() {
   local s="$1" n=${#1}
@@ -508,6 +521,7 @@ while true; do
   step "pipeline's own custom path avoids that rule. Leave blank to use the"
   step "tracker's default path."
   ask NEXT_PUBLIC_SNOWPLOW_POST_PATH "Tracker request path (blank = default):"
+  NEXT_PUBLIC_SNOWPLOW_POST_PATH=$(normalise_path "$NEXT_PUBLIC_SNOWPLOW_POST_PATH")
 
   step "Signals → Overview: the Signals API URL."
   note "  e.g. https://<hash>.signals.snowplowanalytics.com"

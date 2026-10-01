@@ -164,6 +164,11 @@ NEXT_PUBLIC_SNOWPLOW_APP_ID=atelier-storefront-dev
 AGENT_SHARED_SECRET=<any local value>
 ```
 
+Leave `NEXT_PUBLIC_SNOWPLOW_POST_PATH` unset (or commented out) while the
+collector URL points at Micro — Micro only serves the tracker's default path,
+so a custom path causes requests to 404 or land as bad rows with no adapter
+for the custom vendor/version, and `verify:micro` fails with no explanation.
+
 ```bash
 npm run dev
 ```
