@@ -101,6 +101,7 @@ export function SnowplowProvider({ children }: { children: React.ReactNode }) {
     newTracker(TRACKER_NAME, collectorUrl, {
       appId,
       platform: "web",
+      postPath: process.env.NEXT_PUBLIC_SNOWPLOW_POST_PATH || undefined,
       contexts: {
         webPage: true,
       },

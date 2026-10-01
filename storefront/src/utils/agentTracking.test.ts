@@ -205,4 +205,30 @@ describe("trackCatalogSearchToolExecution", () => {
     expect((catalogSearch?.data.designer as string).length).toBe(128);
     expect((catalogSearch?.data.category as string).length).toBe(64);
   });
+
+  it("sends events to the tracker's default path when NEXT_PUBLIC_SNOWPLOW_POST_PATH is unset", async () => {
+    await trackCatalogSearchToolExecution({
+      identity: { chatSessionId: null, domainSessionId: null, domainUserId: null, turnId: null },
+      success: true,
+      durationMs: 10,
+      catalogSearch: baseCatalogSearch,
+    });
+
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(new URL(request.url).pathname).toBe("/com.snowplowanalytics.snowplow/tp2");
+  });
+
+  it("sends events to the configured custom path when NEXT_PUBLIC_SNOWPLOW_POST_PATH is set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_POST_PATH", "/custom/tracker/path");
+
+    await trackCatalogSearchToolExecution({
+      identity: { chatSessionId: null, domainSessionId: null, domainUserId: null, turnId: null },
+      success: true,
+      durationMs: 10,
+      catalogSearch: baseCatalogSearch,
+    });
+
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(new URL(request.url).pathname).toBe("/custom/tracker/path");
+  });
 });
