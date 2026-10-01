@@ -31,11 +31,6 @@ output "self_tracking_toolset_name" {
 
 output "app_version_name" {
   description = "Full resource name of the app version the web-widget deployment serves."
-  value       = google_ces_app_version.v2_text_with_widgets.id
-}
-
-output "initial_app_version_name" {
-  description = "Full resource name of the retained first app version (google_ces_app_version.current)."
   value       = google_ces_app_version.current.id
 }
 
