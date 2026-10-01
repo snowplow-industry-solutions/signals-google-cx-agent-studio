@@ -100,6 +100,7 @@ export function resolveAgentIdentity(
 interface TrackingConfig {
   collectorUrl: string;
   appId: string;
+  postPath?: string;
 }
 
 let warnedMissingConfig = false;
@@ -108,6 +109,7 @@ function getTrackingConfig(): TrackingConfig | null {
   const collectorUrl = normalizeCollectorUrl(process.env.NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL);
   const publicAppId = process.env.NEXT_PUBLIC_SNOWPLOW_APP_ID;
   const appId = process.env.AGENT_SNOWPLOW_APP_ID || (publicAppId ? `${publicAppId}-agent` : "");
+  const postPath = process.env.NEXT_PUBLIC_SNOWPLOW_POST_PATH || undefined;
 
   if (!collectorUrl || !appId) {
     if (!warnedMissingConfig) {
@@ -119,7 +121,7 @@ function getTrackingConfig(): TrackingConfig | null {
     return null;
   }
 
-  return { collectorUrl, appId };
+  return { collectorUrl, appId, postPath };
 }
 
 function buildAgentContext(identity: AgentIdentity, invocationId: string) {
@@ -188,7 +190,7 @@ async function emitToolExecution({
 
   const tracker = newTracker(
     { namespace: TRACKER_NAMESPACE, appId: config.appId, encodeBase64: false },
-    { endpoint: config.collectorUrl, bufferSize: 1, eventMethod: "post" }
+    { endpoint: config.collectorUrl, bufferSize: 1, eventMethod: "post", postPath: config.postPath }
   );
 
   if (identity.domainSessionId) {
@@ -338,7 +340,7 @@ async function emitSelfTrackingEvent({
 
   const tracker = newTracker(
     { namespace: TRACKER_NAMESPACE, appId: config.appId, encodeBase64: false },
-    { endpoint: config.collectorUrl, bufferSize: 1, eventMethod: "post" }
+    { endpoint: config.collectorUrl, bufferSize: 1, eventMethod: "post", postPath: config.postPath }
   );
 
   if (identity.domainSessionId) {

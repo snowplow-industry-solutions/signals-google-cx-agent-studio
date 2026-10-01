@@ -152,6 +152,35 @@ describe("SnowplowProvider", () => {
     );
   });
 
+  it("passes the custom tracker request path to the browser tracker when set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_POST_PATH", "/custom/tracker/path");
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SnowplowProvider>ready</SnowplowProvider>);
+    });
+
+    expect(newTrackerMock).toHaveBeenCalledWith(
+      "fashion_demo",
+      "https://collector.example.test",
+      expect.objectContaining({ postPath: "/custom/tracker/path" })
+    );
+  });
+
+  it("omits the tracker request path when unset, so the tracker uses its own default", async () => {
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SnowplowProvider>ready</SnowplowProvider>);
+    });
+
+    expect(newTrackerMock).toHaveBeenCalledWith(
+      "fashion_demo",
+      "https://collector.example.test",
+      expect.objectContaining({ postPath: undefined })
+    );
+  });
+
   it("disables tracking when the app ID env var is not set", async () => {
     vi.stubEnv("NEXT_PUBLIC_SNOWPLOW_APP_ID", "");
     root = createRoot(container);
