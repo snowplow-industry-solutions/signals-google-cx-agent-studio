@@ -269,6 +269,9 @@ any of it reaches a real pipeline.
   trial org; nothing here depends on the previous org's identifiers.
 - **Vercel build fails or serves the wrong app** — confirm the Vercel
   project's Root Directory is set to `storefront` (§7).
+- **A Vercel step looks stuck with no output** — the Vercel CLI asks once a
+  day, in any interactive terminal, whether to install a Claude Code plugin;
+  press `n` then Enter to answer it and continue.
 - **`verify:deploy` reports FAIL on the authorized context/catalog checks
   only** (unauthorized checks still pass) — the `AGENT_SHARED_SECRET` value
   passed to the script doesn't match the one set in Vercel's environment

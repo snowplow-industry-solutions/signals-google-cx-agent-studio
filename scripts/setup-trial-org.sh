@@ -684,6 +684,9 @@ else
 say "Production needs every value from .env.local except the -dev app ID."
 say "NEXT_PUBLIC_CES_DEPLOYMENT_ID is set later, once the agent exists"
 say "(docs/setup-cx-agent-studio.md §6)."
+note "If a 'vercel' command below ever looks stuck with no output, the CLI may"
+note "be waiting on a once-a-day hidden prompt about a Claude Code plugin;"
+note "press n then Enter to answer it and carry on."
 VERCEL_OK=0
 if command -v vercel >/dev/null 2>&1; then
   if [[ ! -f storefront/.vercel/project.json ]]; then
@@ -691,7 +694,7 @@ if command -v vercel >/dev/null 2>&1; then
     step "project and set Root Directory to storefront when asked."
     run "vercel link" vercel link --cwd storefront || true
   fi
-  if vercel env ls production --cwd storefront >/dev/null 2>&1; then
+  if vercel env ls production --cwd storefront </dev/null >/dev/null 2>&1; then
     VERCEL_OK=1
     note "CLI can reach the linked project"
   else
@@ -700,7 +703,7 @@ if command -v vercel >/dev/null 2>&1; then
     step "Run 'vercel login' with the account that owns the deployment, then"
     step "re-run with --from 11, or paste the values into the dashboard instead."
     if confirm "Have you fixed the login and want to retry the check?"; then
-      vercel env ls production --cwd storefront >/dev/null 2>&1 && VERCEL_OK=1
+      vercel env ls production --cwd storefront </dev/null >/dev/null 2>&1 && VERCEL_OK=1
     fi
   fi
 fi
