@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Snowplow docs
+    url: https://docs.snowplow.io
+    about: Product documentation for Snowplow and Signals.
+  - name: Snowplow free trial
+    url: https://snowplow.io/get-started/snowplow-free-trial
+    about: Get the trial org this demo is built for.

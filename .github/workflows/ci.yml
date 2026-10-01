@@ -1,0 +1,85 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Dependabot PRs run with no repo secrets, so the storefront job skips
+# test/lint/build and only `npm ci` executes. Merge dependency bumps only
+# after running the storefront checks locally or via a manual
+# workflow_dispatch run on the PR branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  storefront:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: storefront
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+      - run: npm ci
+      - name: Generate snowtype helpers
+        id: snowtype
+        # Secrets scoped to this step so `npm ci` postinstall scripts never
+        # see them.
+        env:
+          SNOWPLOW_CONSOLE_ORG_ID: ${{ secrets.SNOWPLOW_CONSOLE_ORG_ID }}
+          SNOWPLOW_CONSOLE_API_KEY_ID: ${{ secrets.SNOWPLOW_CONSOLE_API_KEY_ID }}
+          SNOWPLOW_CONSOLE_API_KEY: ${{ secrets.SNOWPLOW_CONSOLE_API_KEY }}
+        run: |
+          if [[ -z "$SNOWPLOW_CONSOLE_ORG_ID" ]]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npm run snowtype:generate
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+      - name: Explain the skip on forks
+        if: steps.snowtype.outputs.ok != 'true'
+        run: echo "::notice::Snowplow credentials not available (fork or unset secrets); skipping test/lint/build, which need generated snowtype helpers."
+      - if: steps.snowtype.outputs.ok == 'true'
+        run: npm test
+      - if: steps.snowtype.outputs.ok == 'true'
+        run: npm run lint
+      - if: steps.snowtype.outputs.ok == 'true'
+        run: npm run build
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v4.0.1
+      - run: terraform fmt -check
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -sSfL -o gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks git --redact --exit-code 1 .

@@ -1,0 +1,407 @@
+# Setup: CX Agent Studio agent, tools, and widget
+
+Builds the customer-facing concierge agent in Google Gemini Enterprise for CX
+(CX Agent Studio), wires it to the storefront's business and self-tracking
+tool endpoints, and embeds the chat widget so a visitor's live Snowplow
+session flows into the conversation automatically.
+
+Prerequisites: the storefront deployed and verified over public HTTPS with a
+minted `AGENT_SHARED_SECRET` — see
+[`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §7. The repo-side
+artifacts (`agent/instructions*.txt`, `agent/tools/*.openapi.yaml`) are the
+source of truth; you paste/import them into the console. To back the console
+build with Terraform afterwards, see [`../terraform/README.md`](../terraform/README.md).
+
+Throughout, replace `<your-gcp-project>` and `<your-storefront-url>` with your
+own values.
+
+## 1. Enable APIs and label resources
+
+1. In your GCP project, confirm CX Agent Studio (Gemini Enterprise for CX) is
+   available/allowlisted for the project's region. If the console doesn't offer
+   agent creation, check enabled APIs / region settings first.
+2. Enable any APIs the console prompts for during agent creation (Gemini
+   Enterprise / Discovery Engine / Dialogflow CX-family APIs, depending on what
+   the console calls the product at the time).
+3. Label the resources this creates (agent, associated app/data store) per your
+   own tagging policy, where the resource type supports labels. Note that
+   neither `google_ces_app` nor `google_ces_agent` exposes a `labels` field —
+   see [`../terraform/README.md`](../terraform/README.md).
+
+## 2. Create the agent
+
+1. In CX Agent Studio, create a new customer-facing agent in your project.
+2. Paste the full contents of `agent/instructions.console.widgets.txt` into
+   the **Root Agent node's own instructions field** (on the canvas),
+   verbatim — it defines the concierge persona, the one-call-per-turn tool
+   contract, the rich-response widgets, and the degraded-session fallback,
+   in the console's structured format with `{@TOOL: ...}` and
+   `{@Widget: ...}` references. Do **not** use Settings → Advanced: that is
+   the app-wide `globalInstruction`, which would leak the persona into any
+   later-added agent. (`agent/instructions.console.txt` is the text-only
+   revert target if you skip the widget tools in §3.)
+
+   The `{@TOOL: ...}` and `{@Widget: ...}` references must resolve against
+   the attached tools (do §3 first). If the editor flags "tool not found",
+   delete the reference and re-insert it with the editor's `@` picker — the
+   resolvable names are toolset-qualified (`getUserContext_getUserContext`,
+   `searchCatalog_searchCatalog`) or the widget names (`productCarousel`,
+   `productDetails`). `agent/instructions.md` is the human-readable source
+   for the same contract; edit there first and mirror changes into the
+   console copy.
+
+## 3. Import the OpenAPI tools and the self-tracking toolset
+
+For each schema file, create a new OpenAPI tool in the agent and import the file
+directly (the console supports upload or paste):
+
+| Tool / toolset | Schema file | Operation(s) |
+|---|---|---|
+| `getUserContext` | `agent/tools/get-user-context.openapi.yaml` | `GET /api/agent/context` |
+| `searchCatalog` | `agent/tools/search-catalog.openapi.yaml` | `GET /api/agent/catalog` |
+| `selfTracking` | `agent/tools/self-tracking.openapi.yaml` | `POST /api/agent/track-intent`, `/track-decision`, `/track-constraint` |
+
+The first two import as single-operation tools. `self-tracking.openapi.yaml`
+defines three operations (`trackUserIntent`, `trackAgentDecision`,
+`trackConstraintViolation`) in one file — importing it creates one toolset;
+name it `selfTracking` so the toolset-qualified tool references the
+instructions use (`selfTracking_trackUserIntent`,
+`selfTracking_trackAgentDecision`, `selfTracking_trackConstraintViolation` —
+see [`agent/README.md`](../agent/README.md)) resolve.
+
+All three schemas declare `servers[0].url` as your deployed storefront URL and
+an `apiKey` security scheme on the `x-agent-api-key` header. The committed
+files carry a placeholder (`https://your-storefront.example.com`), so for a
+console import replace it with your real URL in a local copy first. If the
+deployed URL changes, update `servers[0].url` in all three files and re-import
+rather than overriding it only in the console. (The Terraform path needs none
+of this: it renders the URL from its `storefront_url` variable at plan time,
+see [`terraform/README.md`](../terraform/README.md).)
+
+For each tool's authentication config, choose **API key** auth and set:
+- Header name: `x-agent-api-key`
+- Value: the exact `AGENT_SHARED_SECRET` value configured on the Vercel
+  deployment (not a local value — they may differ).
+
+Then add the two **rich response widget tools** on the same agent: create a
+widget tool from the console's template, once with type `PRODUCT_CAROUSEL`
+named `productCarousel` and once with type `PRODUCT_DETAILS` named
+`productDetails`. The template auto-fills the (read-only) parameter schema,
+so there is nothing to import — `agent/tools/*.widget.json` are captured
+copies of those fixed schemas, checked in so
+`scripts/verification/verify_widgets.py` and `terraform/tools.tf` can verify
+the contract. Without these two tools the `{@Widget: ...}` references from §2
+won't resolve.
+
+Confirm each tool calls the deployed endpoint successfully (the console's
+try-it affordance, or a test turn in the simulator) before moving on. After
+importing the `selfTracking` toolset, re-open the Root Agent node's
+instructions and use the editor's **`@` picker** to confirm all three
+`selfTracking_*` references resolve — the same check already done for the two
+business-tool references. If the editor flags one, delete it and re-insert it
+with the picker rather than hand-typing.
+
+## 4. Wire the session variables
+
+There is **no console UI setting** for this — the binding lives in the tools'
+OpenAPI schemas, via the `x-ces-session-context` extension on the parameter
+([OpenAPI tools docs](https://docs.cloud.google.com/gemini-enterprise-cx/cx-agent-studio/tool/open-api)).
+
+**Do not bind to the built-in `$context.session_id`** — that is CX Agent
+Studio's own conversation session id, not the Snowplow `domain_sessionid`; it
+would always produce degraded payloads. Use custom agent variables referenced
+as `$context.variables.<name>`.
+
+1. In the agent's Variables section, declare three Text variables:
+   `snowplow_session_id`, `snowplow_user_id`, and `snowplow_turn_id` — the
+   shopper's domain session id, domain user id, and the widget's per-turn id.
+   See [`agent/README.md`](../agent/README.md) "Identity headers and
+   per-turn ids" for what threads the turn id through and why it has to be
+   set before the shopper sends.
+2. Every operation across `get-user-context.openapi.yaml`,
+   `search-catalog.openapi.yaml`, and `self-tracking.openapi.yaml` already
+   carries these bindings (re-paste a schema if the console copy predates
+   them): the `session_id` query parameter on `getUserContext` carries
+   ```yaml
+   x-ces-session-context: $context.variables.snowplow_session_id
+   ```
+   as a fallback for an agent still running the old schema, and every
+   operation also declares four platform-injected headers — the built-in
+   chat session id plus the three Snowplow variables — each bound the same
+   way, e.g.:
+   ```yaml
+   x-ces-session-context: $context.variables.snowplow_session_id  # x-snowplow-session-id
+   x-ces-session-context: $context.variables.snowplow_user_id     # x-snowplow-user-id
+   x-ces-session-context: $context.variables.snowplow_turn_id     # x-snowplow-turn-id
+   ```
+   With the extension present, the model never produces these values; the
+   platform injects them from the variables at call time.
+3. **Check**: in the simulator, set all three variables to a real,
+   freshly-browsed session (see §5) and confirm the tools actually receive
+   them — inspect the tool's request in the console's execution trace, not
+   just the agent's reply.
+
+## 5. Verify in the simulator
+
+1. Browse the deployed storefront to get a real, freshly-browsed
+   `domain_sessionid`.
+2. In the simulator, set the `snowplow_session_id` variable to that session id
+   (and, optionally, `snowplow_user_id` / `snowplow_turn_id` — see §4), then
+   open the chat.
+3. Confirm the agent's first response reflects that session's real context
+   (correct favourite designer, cart contents) without the user stating
+   anything, and any recommendation is a real, matching catalog item.
+4. Repeat with an unknown/made-up session id (or the variable unset). Confirm
+   the agent falls back to generic warm concierge behaviour per
+   `agent/instructions.md` — no mention of errors, missing data, or anything
+   technical.
+5. **Self-tracking check**: send one more turn and inspect the execution
+   trace for the tool calls the self-tracking protocol
+   (`agent/instructions.md` "Self-tracking protocol") requires that turn —
+   at minimum a `selfTracking_trackUserIntent` call, and a
+   `selfTracking_trackAgentDecision` call alongside any `searchCatalog` call.
+   Confirm the request body matches what you said in chat (e.g. the intent
+   category), and that the reply still arrived with no visible delay — the
+   simulator only proves the calls happened, not that an event reached
+   Snowplow; that needs the end-to-end check in §6.
+
+> Two setup gotchas worth pre-empting: the CES service agent needs
+> `secretmanager.secretAccessor` on the shared secret, and re-importing an
+> OpenAPI schema can detach the tools from the Root agent node (symptom: the
+> agent "calls" the right tool per its reasoning but the trace shows
+> `end_session` with placeholder args and the conversation silently ends).
+
+## 6. Embed the chat widget
+
+Embeds the widget in the storefront and wires the visitor's `domain_sessionid`
+into the agent session automatically, closing the loop from browse to chat.
+
+### Which widget component
+
+This repo pins the open-source
+[`ces-messenger`](https://github.com/GoogleCloudPlatform/ces-messenger) web
+component, **not** the gstatic-hosted `chat-messenger` build. Only
+`ces-messenger` documents `setQueryParameters({ key: value })`, where each key
+becomes readable in the agent session as `$context.variables.<key>` — the exact
+mechanism §4's `x-ces-session-context: $context.variables.snowplow_session_id`
+binding depends on. Note that each `setQueryParameters` call **replaces** the
+whole variable set rather than merging into it, so the storefront sends every
+identity variable in one call and resends the full set whenever it adds the
+per-turn id. The two builds are related but not kept in sync, so don't mix
+them.
+
+### Create the web-widget deployment
+
+1. On the agent, create a Web Widget deployment/channel.
+2. Configure it for public, unauthenticated access:
+   - Enable public access.
+   - Enable origin checking, and add your deployed storefront's exact origin
+     (`https://<your-storefront-url>`) to the allowed-origins list.
+   - Leave **Recaptcha OFF**. `ces-messenger` has no reCAPTCHA support; with the
+     toggle on, the widget calls `generateChatToken` without a `recaptcha_token`
+     and the broker rejects every session with `400 INVALID_ARGUMENT:
+     "Recaptcha token is missing."` Public access + origin verification is the
+     protection level for a short-lived demo. (The `enableRecaptcha` option in
+     Google's docs belongs to the other, `chat-messenger`, build.)
+3. Confirm the managed token broker option is selected — no separate broker
+   infrastructure is needed; `token-broker-url="MANAGED"` is backed by Google's
+   own `sessions.generateChatToken`.
+4. Note the deployment's full resource name (format
+   `projects/<project>/locations/<location>/apps/<app>/deployments/<deployment>`)
+   — this is the `NEXT_PUBLIC_CES_DEPLOYMENT_ID` value below.
+
+### Configure the storefront and redeploy
+
+1. In Vercel → Settings → Environment Variables (Production), add:
+
+   | Var | Client-exposed? | Notes |
+   |---|---|---|
+   | `NEXT_PUBLIC_CES_DEPLOYMENT_ID` | Yes, by design | the deployment resource name above |
+
+2. Redeploy.
+3. Re-run `npm run verify:deploy -- https://<your-storefront-url>`
+   (`AGENT_SHARED_SECRET` still required for the agent-endpoint checks) — it now
+   also asserts the homepage HTML includes both the `ces-messenger.js` script
+   and a `<ces-messenger>` element.
+
+### Embed snippet (reference)
+
+Nothing to hand-author —
+`storefront/src/components/Widget/CesMessengerWidget.tsx` renders this
+client-side when `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is set (and renders nothing if
+it's unset). For reference, the equivalent static markup:
+
+```html
+<script src="https://www.gstatic.com/ces-console/fast/ces-messenger/ces-messenger.js"></script>
+<ces-messenger
+  deployment-id="<NEXT_PUBLIC_CES_DEPLOYMENT_ID>"
+  chat-title="Atelier Concierge"
+  token-broker-url="MANAGED"
+  theme-id="dark"
+  audio-input-mode="NONE"
+  audio-output-mode="DISABLED"
+></ces-messenger>
+```
+
+Once the widget is ready (the `ces-messenger-loaded` event, dispatched on
+`window`), the component calls the equivalent of:
+
+```js
+const sessionId = getDomainSessionId(); // @snowplow/browser-tracker >= 4.9.0
+const userId = getDomainUserId(); // domain_userid from the same tracker cookie
+const params = {};
+if (sessionId) params.snowplow_session_id = sessionId;
+if (userId) params.snowplow_user_id = userId;
+if (Object.keys(params).length > 0) {
+  // One call: setQueryParameters replaces the whole set, it does not merge.
+  document.querySelector("ces-messenger").setQueryParameters(params);
+}
+```
+
+`getDomainSessionId()` returns `undefined` for a brand-new or cookieless
+visitor; in that case the component leaves `snowplow_session_id` unset rather
+than passing an empty value, so the agent's degraded-session instructions apply
+— the graceful cookieless fallback.
+
+`snowplow_turn_id` is armed separately by
+`useWidgetConversationTracking.ts` (the same hook that tracks
+`message_sent`/`message_received`): once at mount, and again right after
+every send, because `setQueryParameters` replaces the whole variable set and
+the widget's own send event fires only after the request is already gone.
+See [`agent/README.md`](../agent/README.md) "Identity headers and per-turn
+ids" for the full mechanism.
+
+### Verify end-to-end
+
+1. Confirm `verify:deploy` passes the widget-embed check (script/element served
+   in the HTML — not proof the widget renders; that needs a browser).
+2. Open the deployed storefront, browse a couple of products, add one to cart.
+3. Open the chat bubble; confirm no console errors and that the token-broker
+   request succeeds.
+4. Send a message. Confirm the reply references your real browsing/cart
+   behaviour unprompted.
+5. Freshness check: browse a product, then within a few seconds ask about it;
+   confirm the answer reflects that just-viewed product.
+6. In a fresh incognito window (no `_sp_id` cookie), open chat before browsing.
+   Confirm generic warm concierge behaviour — the cookieless-visitor path,
+   end-to-end.
+7. **Find the agent events in Console**: in BDP Console's event explorer (or
+   your own warehouse query), filter to the turn you just sent — agent events
+   are identified by app id (the `-agent` suffix on `AGENT_SNOWPLOW_APP_ID`,
+   default `${NEXT_PUBLIC_SNOWPLOW_APP_ID}-agent`) or by platform `srv`
+   (shopper browser events are `web`). Confirm you see a `tool_execution`
+   event per business tool call, the `user_intent_detected` /
+   `agent_decision_logged` events from the self-tracking check in §5, and
+   that `agent_context.invocation_id` on those events matches the `turn_id`
+   on the `message_sent`/`message_received` events for the same turn — see
+   [`agent/README.md`](../agent/README.md) "Identity headers and per-turn
+   ids". `analytics/agent-self-tracking.sql` in the repo has ready-made
+   BigQuery queries once events are loaded into the warehouse.
+
+## Troubleshooting
+
+- **CX Agent Studio tool test returns 401** — the API-key header name
+  isn't exactly `x-agent-api-key`, or the key value doesn't match the
+  deployed `AGENT_SHARED_SECRET` (the Vercel value from
+  [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §7, not a local
+  one).
+- **Tool test fails with "Failed to get secret ... please check that the
+  service account has the Secret Manager Secret Accessor role"** — the
+  Customer Engagement Suite service agent can't read the secret backing
+  the tool's API key. Grant it on that one secret (project *number*, not
+  ID, in the member):
+  ```
+  gcloud secrets add-iam-policy-binding <secret-name> \
+    --project=<project-id> \
+    --member="serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-ces.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+  ```
+- **Agent reasons about calling a tool but the trace shows `end_session`
+  with placeholder args, then the conversation silently ends** — the
+  OpenAPI tools are no longer attached to the Root agent node (re-importing
+  a tool schema can detach them, leaving only the built-in `end_session`).
+  On the agent canvas, re-attach `getUserContext`, `searchCatalog`, and the
+  `selfTracking` toolset via the node's **+** (§3); if the re-import created
+  duplicate tool entries, attach the copy whose schema carries the
+  `x-ces-session-context` line and delete the orphan.
+- **Tool tester returns the blank/degraded payload despite a session id in
+  the test input** — the tester only feeds model-produced parameters; with
+  `x-ces-session-context` present, `session_id` is context-injected and the
+  tester has no conversation context, so the request goes out without it.
+  Test injection in the simulator instead (§5), presetting the variable via
+  its "Set a default value at the start of the conversation" option (untick
+  it once verified — in production the widget populates the variable, and a
+  leftover default masks broken widget wiring).
+- **Simulator shows the agent asking the shopper who they are / to repeat
+  browsing** — the session-context variable binding from §4 isn't reaching
+  the tool; check the tool's request trace in the console for an empty
+  `session_id`. Confirm the console copy of the schema carries the
+  `x-ces-session-context: $context.variables.snowplow_session_id` line and
+  that the `snowplow_session_id` variable is declared on the agent and set
+  for the session.
+- **Widget renders but the chat never connects / token-broker errors in
+  the console** — check that §6's origin-check config includes the
+  deployed storefront's exact origin in `allowed_origins`.
+- **`verify:deploy`'s widget-embed check fails post-deploy** — confirms the
+  `<ces-messenger>` element or its script isn't in the served HTML; check
+  `NEXT_PUBLIC_CES_DEPLOYMENT_ID` is set in the Vercel environment (§6) and
+  that the deploy actually picked it up (the component renders nothing when
+  that var is unset, by design).
+- **Widget loads and authorizes but no chat bubble is visible** — check
+  for another `position: fixed` element occupying the bottom-right corner.
+  The launcher pins itself bottom-right via the widget's own shadow-DOM
+  styles (host-element classes don't move it); anything later in the DOM
+  at the same corner and z-index paints over it. Diagnose with
+  `document.querySelector("ces-messenger").shadowRoot` (launcher present?)
+  vs `document.elementFromPoint(...)` at the corner (who's on top?).
+- **"Start conversation" fails; console shows `No token received from
+  token broker` with `400 INVALID_ARGUMENT: "Recaptcha token is missing."`**
+  — the channel's Recaptcha toggle is on. Turn it off (§6); `ces-messenger`
+  cannot mint reCAPTCHA tokens. Takes effect without a redeploy.
+- **Agent replies with spoken audio / mic prompt appears despite the
+  channel's "Interaction type: Text"** — that console setting doesn't reach
+  a hand-authored embed; the component itself defaults to
+  `audio-output-mode="ALWAYS_ON"` and `audio-input-mode="DEFAULT_ON"`. The
+  embed in §6 (and `CesMessengerWidget.tsx`) pins both off
+  (`NONE`/`DISABLED`) for the text-only demo.
+- **Agent describes a different user's journey (wrong cart/browsing)** —
+  the agent is not receiving your real session id, and is reading whatever
+  the `snowplow_session_id` variable falls back to. Check three things in
+  order: (1) the browser console must log `[Signals Demo] Passed Snowplow
+  identity variables to ces-messenger` with your session id — if missing,
+  `setQueryParameters` was never called (the loaded event fires on `window`, not the element; fixed
+  in `CesMessengerWidget.tsx`, and §6's verification steps isolate this);
+  (2) the agent variable must have **no default value** in CX Agent Studio
+  (§4) — a default silently masks a missing session id with another
+  session's data; (3) the channel's pinned **Agent Version** must postdate
+  any console edits (§6) — the channel serves a version snapshot, not the
+  draft, so removing a default (or any agent edit) only reaches the widget
+  after you add a new version and point the channel at it. The simulator
+  (§5) tests the draft, the widget (§6) tests the pinned version — they can
+  disagree.
+
+## Handover checklist
+
+The human-run steps this integration needs, in order, from a clean org to a
+verified end-to-end turn. Every step links back to where it's covered in
+detail.
+
+1. Seed the tracking plan and publish the data structures —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §4.
+2. Regenerate the Snowtype helpers —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §4.
+3. Deploy the storefront —
+   [`setup-snowplow-trial.md`](./setup-snowplow-trial.md) §7.
+4. Import the OpenAPI tools and the `selfTracking` toolset — §3.
+5. Declare the session variables (`snowplow_session_id`, `snowplow_user_id`,
+   `snowplow_turn_id`) — §4.
+6. Paste the updated instructions and confirm every `selfTracking_*`
+   reference resolves with the `@` picker — §2, §3.
+7. Apply Terraform, if you're using it, to codify the console build —
+   [`../terraform/README.md`](../terraform/README.md).
+8. Publish a new app version so the pinned web-widget deployment actually
+   serves the change — §6 ("Agent Version must postdate any console edits"
+   in Troubleshooting above).
+9. Run the simulator check, including the self-tracking check — §5.
+10. Run the end-to-end check in Console, confirming both the personalised
+    reply and the agent events for that turn — §6 ("Verify end-to-end").

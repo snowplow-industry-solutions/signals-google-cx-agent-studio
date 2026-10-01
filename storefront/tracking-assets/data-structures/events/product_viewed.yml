@@ -1,0 +1,28 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: event
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: Marker event for viewing an individual product detail page.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: product_viewed
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    product_id:
+      type: string
+      maxLength: 128
+      description: Stable identifier of the viewed product.
+    product_name:
+      type: string
+      maxLength: 256
+      description: Human-readable name of the viewed product.
+  required:
+    - product_id
+    - product_name
+  additionalProperties: false

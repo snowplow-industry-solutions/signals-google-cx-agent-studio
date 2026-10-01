@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /storefront
+    schedule:
+      interval: monthly
+    groups:
+      all:
+        patterns: ["*"]
+  - package-ecosystem: terraform
+    directory: /terraform
+    schedule:
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

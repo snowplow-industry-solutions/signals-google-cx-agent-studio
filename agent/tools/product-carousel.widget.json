@@ -1,0 +1,42 @@
+{
+  "$comment": "Google's FIXED Parameters schema for the CX Agent Studio widget tool 'productCarousel' (Widget Type PRODUCT_CAROUSEL), captured verbatim from the live tool via the CES REST API. Nothing here is pasted into the console: typed widget tools (PRODUCT_CAROUSEL, PRODUCT_DETAILS) carry this Google-defined contract and the console's schema editor is read-only for them -- only the CUSTOM widget type accepts an author-defined schema. This file documents the contract the agent instructions map searchCatalog results onto: title<-name, subtitle<-designer, price<-price as a dollar string, productId<-the url slug, uri<-storefront base URL + url, imageUris<-[image]. See agent/instructions.md 'Rich response widgets'.",
+  "type": "OBJECT",
+  "properties": {
+    "productDetails": {
+      "type": "ARRAY",
+      "description": "Required. An ordered list of products to be displayed.",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "imageUris": {
+            "type": "ARRAY",
+            "description": "A list of direct URLs to images displaying the product.",
+            "items": {
+              "type": "STRING"
+            }
+          },
+          "price": {
+            "type": "STRING",
+            "description": "The current selling price of the product."
+          },
+          "productId": {
+            "type": "STRING",
+            "description": "The unique identifier for this specific product."
+          },
+          "uri": {
+            "type": "STRING",
+            "description": "The URL directing users to the full product detail page."
+          },
+          "subtitle": {
+            "type": "STRING",
+            "description": "A longer, secondary line of text for additional context."
+          },
+          "title": {
+            "type": "STRING",
+            "description": "Required. The primary name of the product as listed."
+          }
+        }
+      }
+    }
+  }
+}

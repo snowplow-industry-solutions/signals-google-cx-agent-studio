@@ -1,0 +1,43 @@
+node_modules/
+.env*
+!.env.example
+.next/
+.vercel/
+.DS_Store
+
+# Local agent/editor tooling and private notes — never part of the published repo
+.claude/
+.maki/
+.superpowers/
+.playwright-mcp/
+.sandcastle/
+.scratch/
+docs/superpowers/
+docs/agents/
+/package.json
+/package-lock.json
+CLAUDE.local.md
+AGENTS.local.md
+
+# Python bytecode
+**/__pycache__/
+
+# Terraform local state — .tf config files are tracked; tfvars hold live
+# resource IDs and stay local
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.bak-*
+terraform/crash.log
+terraform/crash.*.log
+tfplan
+*.tfplan
+*.tfplan.*
+
+# Verification-script output: JSON reports and screenshots from
+# scripts/verification/. Reports capture the console, including the CES
+# token broker's chatToken, so they never belong in the repo.
+scripts/verification/out/
+scripts/verification/__pycache__/
+scripts/verification/harness/__pycache__/

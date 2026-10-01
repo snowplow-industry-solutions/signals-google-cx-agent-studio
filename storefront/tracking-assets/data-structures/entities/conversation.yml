@@ -1,0 +1,53 @@
+apiVersion: v1
+resourceType: data-structure
+meta:
+  hidden: false
+  schemaType: entity
+  customData: {}
+data:
+  $schema: http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#
+  description: >
+    Chat conversation identity attached to every agent event, on both the
+    client (chat widget) and server (tool endpoints), so tool calls,
+    self-tracking events, and message events can be grouped into a
+    conversation.
+  self:
+    vendor: com.snowplow_demo.fashion
+    name: conversation
+    format: jsonschema
+    version: 1-0-0
+  type: object
+  properties:
+    chat_session_id:
+      type: [string, "null"]
+      maxLength: 128
+      description: >
+        CX Agent Studio chat session id threading this event to a
+        conversation. Null when no chat identity is available (e.g. the
+        simulator or tool tester).
+    turn_id:
+      type: [string, "null"]
+      maxLength: 128
+      description: >
+        Per-turn id minted by the chat widget at send time. Null when the
+        turn id did not reach this event (e.g. an older tool schema).
+    turn_index:
+      type: [integer, "null"]
+      minimum: 0
+      maximum: 100000
+      description: >
+        Position of this turn within the conversation. Only tracked
+        client-side by the chat widget; null on server-emitted events.
+    channel:
+      type: string
+      enum:
+        - web_widget
+        - simulator
+        - unknown
+      description: >
+        Where the conversation is happening. Server-emitted events cannot
+        distinguish a widget conversation from a simulator run, so they
+        always record "unknown".
+  required:
+    - channel
+  additionalProperties: false

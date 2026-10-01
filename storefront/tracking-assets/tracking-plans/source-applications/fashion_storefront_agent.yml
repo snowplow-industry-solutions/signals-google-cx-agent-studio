@@ -1,0 +1,19 @@
+apiVersion: v1
+resourceType: source-application
+resourceName: f25c329a-f54e-5342-aa4e-07b8f1c62686
+data:
+  name: Atelier Signals Agent
+  domain: Product
+  description: >
+    Server-side source application for the CX Agent Studio concierge's tool
+    endpoints (/api/agent/*). Events here are minted server-side (platform
+    srv) rather than by the storefront's browser tracker, so they carry
+    neither the web page entity nor the shopper user entity the storefront
+    source application requires.
+  owner: demo-owner@example.com
+  appIds:
+    - atelier-storefront-agent
+    - atelier-storefront-dev-agent
+  entities:
+    tracked: []
+    enriched: []

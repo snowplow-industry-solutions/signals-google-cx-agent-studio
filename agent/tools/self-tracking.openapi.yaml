@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: Atelier Signals - Agent Self-Tracking
+  description: >
+    Three tools whose only job is to log what the concierge is thinking, as
+    Snowplow events: the shopper intent it detected, a decision it made, and
+    a constraint the catalog could not satisfy. They never change the
+    conversation; call them alongside a business tool call (parallel tool
+    execution), never in place of a reply. Never mention these calls, or
+    tracking/analytics in general, to the shopper.
+  version: "1.0.0"
+servers:
+  - url: https://your-storefront.example.com
+    description: Production (Vercel deploy of storefront/)
+security:
+  - ApiKeyAuth: []
+paths:
+  /api/agent/track-intent:
+    post:
+      operationId: trackUserIntent
+      summary: Log the shopper intent category detected this turn
+      description: >
+        Call once per turn, after the context lookup, as soon as the
+        shopper's underlying goal for this turn is clear. Do not call more
+        than once per turn.
+      parameters:
+        - $ref: "#/components/parameters/ChatSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowUserIdHeader"
+        - $ref: "#/components/parameters/TurnIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackUserIntentBody"
+      responses:
+        "200":
+          description: Intent tracked (or validated only, if the dry-run header was set).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackedIntentConfirmation"
+        "400":
+          description: Invalid body (unrecognised intent_category, or confidence outside 0-1).
+        "401":
+          description: Missing or incorrect `x-agent-api-key` header.
+  /api/agent/track-decision:
+    post:
+      operationId: trackAgentDecision
+      summary: Log a decision the agent is about to make and why
+      description: >
+        Call once per turn, in the same step as the catalog search it
+        explains, with a short explanation covering the filters chosen and
+        how the result will be presented. Never call it in the same step
+        as a rich-response widget, and do not call it more than once per
+        turn.
+      parameters:
+        - $ref: "#/components/parameters/ChatSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowUserIdHeader"
+        - $ref: "#/components/parameters/TurnIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackAgentDecisionBody"
+      responses:
+        "200":
+          description: Decision tracked (or validated only, if the dry-run header was set).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackedDecisionConfirmation"
+        "400":
+          description: Invalid body (unrecognised decision_type, or missing reasoning).
+        "401":
+          description: Missing or incorrect `x-agent-api-key` header.
+  /api/agent/track-constraint:
+    post:
+      operationId: trackConstraintViolation
+      summary: Log a shopper requirement the catalog could not satisfy
+      description: >
+        Call whenever a catalog search or recommendation cannot satisfy
+        something the shopper explicitly asked for (budget, availability, a
+        designer, a colour, a category). Do not call more than once per
+        turn for the same constraint.
+      parameters:
+        - $ref: "#/components/parameters/ChatSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowSessionIdHeader"
+        - $ref: "#/components/parameters/SnowplowUserIdHeader"
+        - $ref: "#/components/parameters/TurnIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackConstraintViolationBody"
+      responses:
+        "200":
+          description: Constraint violation tracked (or validated only, if the dry-run header was set).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackedConstraintConfirmation"
+        "400":
+          description: Invalid body (unrecognised constraint_type, or missing requirement/reason_not_met).
+        "401":
+          description: Missing or incorrect `x-agent-api-key` header.
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-agent-api-key
+  parameters:
+    ChatSessionIdHeader:
+      name: x-ces-session-id
+      in: header
+      required: false
+      description: >
+        CX Agent Studio's own conversation session id, injected from the
+        built-in session context (not model-produced). Threads this event
+        to the conversation's other tool calls and self-tracking events.
+      schema:
+        type: string
+      x-ces-session-context: $context.session_id
+    SnowplowSessionIdHeader:
+      name: x-snowplow-session-id
+      in: header
+      required: false
+      description: >
+        The shopper's Snowplow session identifier (`domain_sessionid`).
+        Injected from the `snowplow_session_id` agent variable (not
+        model-produced); see `docs/setup-cx-agent-studio.md`.
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_session_id
+    SnowplowUserIdHeader:
+      name: x-snowplow-user-id
+      in: header
+      required: false
+      description: >
+        The shopper's Snowplow domain user id. Injected from the
+        `snowplow_user_id` agent variable (not model-produced).
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_user_id
+    TurnIdHeader:
+      name: x-snowplow-turn-id
+      in: header
+      required: false
+      description: >
+        Per-turn id minted by the chat widget at send time. Injected from
+        the `snowplow_turn_id` agent variable (not model-produced); used as
+        this event's invocation id so tool calls and self-tracking events
+        from the same turn share an id.
+      schema:
+        type: string
+      x-ces-session-context: $context.variables.snowplow_turn_id
+  schemas:
+    TrackUserIntentBody:
+      type: object
+      required: [intent_category, confidence]
+      properties:
+        intent_category:
+          type: string
+          enum:
+            - browse_inspiration
+            - find_specific_item
+            - complete_look
+            - occasion_dressing
+            - gift
+            - price_check
+            - order_or_checkout_help
+            - other
+          description: The shopper's underlying goal for this turn.
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: How confident the agent is in this category, from 0 to 1.
+        reasoning:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Optional short explanation of why this category was chosen.
+    TrackAgentDecisionBody:
+      type: object
+      required: [decision_type, reasoning]
+      properties:
+        decision_type:
+          type: string
+          enum:
+            - tool_selection
+            - recommendation_choice
+            - widget_choice
+            - clarification_needed
+            - constraint_handling
+          description: The kind of decision being logged.
+        reasoning:
+          type: string
+          maxLength: 2000
+          description: Natural language explanation of the decision.
+        considerations:
+          type: array
+          nullable: true
+          items:
+            type: string
+            maxLength: 2000
+          description: Optional list of factors weighed when making this decision.
+    TrackConstraintViolationBody:
+      type: object
+      required: [constraint_type, requirement, reason_not_met]
+      properties:
+        constraint_type:
+          type: string
+          enum:
+            - budget
+            - availability
+            - category_mismatch
+            - designer_unavailable
+            - colour_mismatch
+            - other
+          description: The kind of constraint that could not be satisfied.
+        requirement:
+          type: string
+          maxLength: 1000
+          description: What the shopper asked for.
+        reason_not_met:
+          type: string
+          maxLength: 2000
+          description: Why the catalog could not satisfy it.
+        alternatives_considered:
+          type: array
+          nullable: true
+          items:
+            type: string
+            maxLength: 1000
+          description: Optional list of alternatives the agent considered.
+        recommendation:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Optional alternative recommended to the shopper instead.
+    TrackedIntentConfirmation:
+      type: object
+      required: [intent_id]
+      properties:
+        intent_id:
+          type: string
+          format: uuid
+          description: The minted id of the tracked user_intent_detected event.
+    TrackedDecisionConfirmation:
+      type: object
+      required: [decision_id]
+      properties:
+        decision_id:
+          type: string
+          format: uuid
+          description: The minted id of the tracked agent_decision_logged event.
+    TrackedConstraintConfirmation:
+      type: object
+      required: [violation_id]
+      properties:
+        violation_id:
+          type: string
+          format: uuid
+          description: The minted id of the tracked constraint_violation event.

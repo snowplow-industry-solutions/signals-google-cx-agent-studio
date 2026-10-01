@@ -1,0 +1,66 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+.venv/
+.tmp-console-dp/
+.tmp-signals-venv/
+*.egg-info/
+**/__pycache__/
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env.local
+
+# Snowtype config and generated helpers are per-org: the config names an
+# organization ID and the event specification IDs derived from it, and
+# snowtype/ embeds those IDs. Regenerate with `npm run
+# snowtype:generate` (see snowtype.config.example.json) rather than committing
+# one org's IDs. Vercel CLI deploys upload these from the working tree — it
+# doesn't consult .gitignore — but a Git-integration deploy would need a
+# prebuild step that generates them.
+snowtype.config.json
+/snowtype/
+
+# Embedded Iglu repo rendered from tracking-assets/data-structures by
+# `npm run micro:schemas` for Snowplow Micro. Generated, not hand-copied, so
+# Micro never drifts from the tracking assets -- regenerate rather than
+# editing or committing.
+/micro/iglu-client-embedded/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.cursor/plans/
+.vscode/settings.json
+*.tmp*

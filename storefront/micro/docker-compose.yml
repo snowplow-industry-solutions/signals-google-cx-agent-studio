@@ -1,0 +1,29 @@
+# Snowplow Micro: a local pipeline (collector + real-time enrich + a
+# queryable good/bad event store) for validating agent-tracking payloads
+# against their schemas before any traffic reaches a live org.
+#
+# resolver.json (committed) routes the repo's own com.snowplow_demo.fashion
+# schemas to the embedded directory rendered by `npm run micro:schemas`
+# (gitignored, generated -- never hand-edited) and falls back to Iglu
+# Central over the network for everything else, including the
+# com.snowplow.agent.tracking vendor this repo doesn't own.
+#
+# Usage (from storefront/):
+#   npm run micro:schemas   # render tracking-assets into iglu-client-embedded/
+#   npm run micro:up        # start Micro on http://localhost:9090
+#
+# Point the dev server and the browser tracker at it:
+#   NEXT_PUBLIC_SNOWPLOW_COLLECTOR_URL=http://localhost:9090
+#
+# The image version is pinned deliberately -- bump it in a dedicated change
+# and re-run `npm run verify:micro` against the new version before merging.
+services:
+  micro:
+    image: snowplow/snowplow-micro:2.3.0
+    container_name: fashion-demo-micro
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./resolver.json:/config/iglu.json:ro
+      - ./iglu-client-embedded:/iglu-client-embedded:ro
+    command: ["--iglu", "/config/iglu.json"]

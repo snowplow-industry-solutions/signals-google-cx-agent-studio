@@ -1,0 +1,238 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { products } from "@/data/products";
+import type { SignalsAttributes } from "@/types/signals";
+
+const {
+  trackProductViewedSpecMock,
+  trackProductListViewedSpecMock,
+  addItemMock,
+} = vi.hoisted(() => ({
+  trackProductViewedSpecMock: vi.fn(),
+  trackProductListViewedSpecMock: vi.fn(),
+  addItemMock: vi.fn(),
+}));
+
+let attributesState: SignalsAttributes | null = null;
+let bootstrapReadyState = false;
+let trackerReadyPromise = Promise.resolve();
+let resolveTrackerReady: () => void = () => {};
+
+vi.mock("@/snowtype/snowplow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/snowtype/snowplow")>();
+
+  return {
+    ...actual,
+    trackProductViewedSpec: trackProductViewedSpecMock,
+    trackProductListViewedSpec: trackProductListViewedSpecMock,
+  };
+});
+
+vi.mock("@/components/Analytics/SnowplowProvider", () => ({
+  waitForSnowplowTracker: () => trackerReadyPromise,
+}));
+
+vi.mock("@/components/Cart/CartProvider", () => ({
+  useCart: () => ({
+    addItem: addItemMock,
+  }),
+}));
+
+vi.mock("@/components/Demo/DemoModeProvider", () => ({
+  useDemoMode: () => ({
+    highlightPersonalization: false,
+  }),
+}));
+
+vi.mock("@/components/Demo/SignalsDebugPanel", () => ({
+  SignalsDebugPanel: () => null,
+}));
+
+vi.mock("@/components/ProductCard", () => ({
+  ProductCard: ({ product }: { product: { id: string; name: string } }) => (
+    <div data-testid={`product-card-${product.id}`}>{product.name}</div>
+  ),
+}));
+
+vi.mock("@/components/Signals/SignalsProvider", () => ({
+  useSignals: () => ({
+    attributes: attributesState,
+    bootstrapReady: bootstrapReadyState,
+  }),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/products/ivory-silk-column-dress",
+}));
+
+import { ProductPage } from "@/components/ProductPage";
+
+describe("ProductPage", () => {
+  let container: HTMLDivElement;
+  let root: Root | null = null;
+
+  const product = products[3];
+  const relatedProducts = products.filter((candidate) => candidate.id !== product.id);
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    vi.clearAllMocks();
+    attributesState = null;
+    bootstrapReadyState = false;
+    trackerReadyPromise = new Promise<void>((resolve) => {
+      resolveTrackerReady = resolve;
+    });
+  });
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+
+    container.remove();
+    root = null;
+  });
+
+  it("does not track the product view until the Snowplow tracker is registered", async () => {
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductViewedSpecMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveTrackerReady();
+      await trackerReadyPromise;
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+    expect(trackProductViewedSpecMock.mock.calls[0]?.[0]).toMatchObject({
+      product_id: product.id,
+    });
+  });
+
+  it("tracks one product view per product across SPA navigation", async () => {
+    const otherProduct = relatedProducts[0];
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+      resolveTrackerReady();
+      await trackerReadyPromise;
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root?.render(
+        <ProductPage
+          product={otherProduct}
+          relatedProducts={products.filter((candidate) => candidate.id !== otherProduct.id)}
+        />
+      );
+    });
+
+    expect(trackProductViewedSpecMock).toHaveBeenCalledTimes(2);
+    expect(trackProductViewedSpecMock.mock.calls[1]?.[0]).toMatchObject({
+      product_id: otherProduct.id,
+    });
+  });
+
+  it("waits for bootstrap readiness before tracking the PDP product list impression", async () => {
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).not.toHaveBeenCalled();
+
+    bootstrapReadyState = true;
+    attributesState = {
+      favorite_designer: "Arc Studio",
+      favorite_occasion: "Evening",
+      high_intent_product_ids: ["p5"],
+    };
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retrack the PDP list when unrelated attributes change", async () => {
+    root = createRoot(container);
+    bootstrapReadyState = true;
+    attributesState = {
+      favorite_designer: "Arc Studio",
+      favorite_occasion: "Evening",
+      high_intent_product_ids: ["p5"],
+    };
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    attributesState = {
+      favorite_designer: "Arc Studio",
+      favorite_occasion: "Evening",
+      high_intent_product_ids: ["p5"],
+      cart_value_band: "luxury",
+    };
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("tracks the PDP list again when personalization changes the rendered order", async () => {
+    root = createRoot(container);
+    bootstrapReadyState = true;
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(1);
+
+    attributesState = {
+      favorite_designer: "Arc Studio",
+      favorite_occasion: "Evening",
+      high_intent_product_ids: ["p5"],
+    };
+
+    await act(async () => {
+      root?.render(<ProductPage product={product} relatedProducts={relatedProducts} />);
+    });
+
+    expect(trackProductListViewedSpecMock).toHaveBeenCalledTimes(2);
+
+    const firstCall = trackProductListViewedSpecMock.mock.calls[0]?.[0];
+    const secondCall = trackProductListViewedSpecMock.mock.calls[1]?.[0];
+
+    expect(firstCall?.context.map((entry: { data: { product_id: string } }) => entry.data.product_id)).not.toEqual(
+      secondCall?.context.map((entry: { data: { product_id: string } }) => entry.data.product_id)
+    );
+  });
+});
