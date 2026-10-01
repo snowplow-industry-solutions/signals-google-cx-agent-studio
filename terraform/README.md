@@ -154,7 +154,7 @@ feeds the rendered text to each `google_ces_toolset`. Consequences:
   value fails at plan time instead of creating tools that call a dead host.
 
 The manual console import in
-[`docs/setup-cx-agent-studio.md` §3](../docs/setup-cx-agent-studio.md#3-import-the-two-openapi-tools)
+[`docs/setup-cx-agent-studio.md` §3](../docs/setup-cx-agent-studio.md#3-import-the-openapi-tools-and-the-self-tracking-toolset)
 still needs the URL swapped into a local copy of each file, because the
 console reads the file verbatim.
 
